@@ -10,6 +10,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { SupportHoursModule } from './modules/supportHours/supportHours.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -26,6 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     ChatModule,
     SupportHoursModule,
+    DashboardModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

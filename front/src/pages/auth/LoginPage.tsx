@@ -10,8 +10,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Mientras se intenta restaurar la sesión con la cookie del refresh, mostrar el
-  // formulario haría parpadear el login a quien ya estaba adentro.
   if (status === 'checking') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-shell px-4">
@@ -21,15 +19,13 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/admin/reservations" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   const handleLogin = async (credentials: LoginCredentials) => {
     await login(credentials);
 
-    // `from` lo escribe ProtectedRoute cuando rebota una pantalla privada: se vuelve
-    // ahí después de entrar, y si se llegó al login de frente se va al panel de reservas.
-    const from = (location.state as { from?: string } | null)?.from ?? '/admin/reservations';
+    const from = (location.state as { from?: string } | null)?.from ?? '/admin';
     navigate(from, { replace: true });
   };
 

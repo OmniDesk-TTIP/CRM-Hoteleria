@@ -26,7 +26,6 @@ const GENERIC_FALLBACK = 'Disculpá, no pude procesar tu mensaje. ¿Podés refor
 export class TelegramUpdate {
   private readonly logger = new Logger(TelegramUpdate.name);
 
-  /** Lo que respondemos cuando el huésped acepta la oferta pero todavía no tenemos sus datos. */
   private static readonly ASK_GUEST_DATA =
     'Genial, te la reservo. Para tomarla necesito el nombre completo y el DNI del huésped que se aloja.';
 
@@ -44,8 +43,6 @@ export class TelegramUpdate {
     const greeting = '¡Hola! Soy Chamber , el asistente virtual del hotel. ¿En qué puedo ayudarte?';
 
     if (ctx.from) {
-      // Se registra la sesión ya en el /start para que la conversación aparezca en el panel
-      // aunque el huésped todavía no haya escrito nada.
       await this.withRequestContext(async () => {
         const session = await this.chatService.getOrCreateSession(ctx.from!.id.toString(), this.readProfile(ctx));
         await this.chatService.recordBotMessage(session, greeting);
@@ -68,11 +65,8 @@ export class TelegramUpdate {
     try {
       session = await this.chatService.getOrCreateSession(telegramUserId, this.readProfile(ctx));
 
-      // El mensaje del huésped se persiste y se publica antes de tocar la IA: en modo humano no
-      // hay respuesta que esperar, y aunque Gemini falle el mensaje no se puede perder.
       const incoming = await this.chatService.recordIncomingMessage(session, text);
 
-      // CA2: con un operador al mando, el bot ni siquiera muestra el "escribiendo...".
       if (this.chatService.isMuted(session)) {
         this.logger.log(`Chat ${session.id} en modo humano: el mensaje de ${telegramUserId} no se procesa`);
         return;
@@ -80,8 +74,6 @@ export class TelegramUpdate {
 
       await ctx.sendChatAction('typing');
 
-      // CA1, primera capa: si el pedido es explícito no hace falta gastar una llamada al modelo,
-      // y así la derivación sigue funcionando aunque Gemini esté caído.
       if (detectHumanRequest(text)) {
         await this.handleHandover(ctx, session, HandoverReason.GUEST_REQUEST);
         return;
@@ -90,7 +82,6 @@ export class TelegramUpdate {
       const activeBooking = await this.bookingProcessService.getActive(telegramUserId);
       const lastCompletedBooking = await this.bookingProcessService.getLastCompleted(telegramUserId);
 
-      // Se excluye el mensaje recién guardado: ya viaja aparte como pregunta del usuario.
       const previousMessages = await this.em.find(
         ChatMessage,
         { telegramUserId, id: { $ne: incoming.id } },
@@ -100,7 +91,6 @@ export class TelegramUpdate {
       const history = previousMessages.reverse();
       const aiResponse = await this.ragService.askQuestion(text, activeBooking, history, lastCompletedBooking);
 
-      // CA1, segunda capa: el modelo entendió un pedido indirecto ("no me estás ayudando").
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
         await this.handleHandover(ctx, session, HandoverReason.GUEST_REQUEST);
         return;
@@ -109,8 +99,6 @@ export class TelegramUpdate {
       const botReply = (await this.resolveBotReply(aiResponse, telegramUserId, activeBooking, text, history))
         || GENERIC_FALLBACK;
 
-      // askQuestion tarda segundos y en ese rato un operador puede haber tomado el control.
-      // Sin este chequeo el bot le contesta por encima al humano.
       if (await this.chatService.wasTakenOverMeanwhile(session)) {
         this.logger.log(`Se descarta la respuesta del bot para ${telegramUserId}: un operador tomó el control`);
         return;
@@ -118,11 +106,8 @@ export class TelegramUpdate {
 
       await this.chatService.recordBotMessage(session, botReply);
 
-      // El texto viaja como HTML para que el link de pago sea clickeable; todo lo que no armamos
-      // nosotros (texto de la IA) ya viene escapado desde resolveBotReply.
       await ctx.reply(botReply, { parse_mode: 'HTML' });
 
-      // Fallback prolongado: no silencia al bot, solo levanta la bandera para que el panel avise.
       if (isUnresolvedReply(botReply)) await this.chatService.registerBotFailure(session);
       else await this.chatService.resetBotFailures(session);
 
@@ -138,23 +123,14 @@ export class TelegramUpdate {
         }
     }
   }
-
-  /**
-   * CA1/CA5. El texto ya lo decide ChatService según el horario de atención: dentro de horario
-   * silencia al bot, fuera de horario encola el pedido y Chamber sigue respondiendo.
-   */
+  
   private async handleHandover(ctx: Context, session: ChatSession, reason: HandoverReason): Promise<void> {
     const { replyText, muted } = await this.chatService.requestHandover(session, reason);
     this.logger.log(`Handover de ${session.telegramUserId} (${reason}); bot silenciado: ${muted}`);
-
-    // Sin parse_mode: son mensajes nuestros, de texto plano, sin nada que interpretar como HTML.
     await ctx.reply(replyText);
   }
 
-  /**
-   * El contador de fallos es información secundaria: si el flush falla porque el EntityManager
-   * quedó sucio por el error original, no puede tapar la respuesta al huésped.
-   */
+
   private async registerFailureSafely(session: ChatSession): Promise<void> {
     try {
       await this.chatService.registerBotFailure(session);

@@ -133,8 +133,6 @@ export class ReservationService {
         `⏳ <b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
         '',
         '👉 Aboná la seña acá:',
-        // La etiqueta del link es la URL misma: se ve la dirección completa y además queda
-        // clickeable, sin depender de que el cliente de Telegram la detecte solo.
         htmlLink(paymentFormUrl, paymentFormUrl),
         '',
         'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
@@ -263,8 +261,6 @@ export class ReservationService {
 
         let runEnd = runStart;
         while (runEnd < free.length && free[runEnd]) runEnd++;
-
-        // Dentro del tramo libre nos quedamos con la ventana más pegada a la fecha pedida.
         const nights = Math.min(runEnd - runStart, maxNights);
         const start = Math.min(Math.max(requestedIndex, runStart), runEnd - nights);
         const block = { start, nights, room };
@@ -303,11 +299,6 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/**
- * Lleva una fecha de reserva al día calendario local. Las columnas `date` pueden llegar como
- * 'YYYY-MM-DD' o como Date a medianoche UTC o local según quién las guardó; sumar medio día antes
- * de tomar el día evita correrse una fecha por la zona horaria.
- */
 function toCalendarDay(value: Date | string): Date {
   if (typeof value === 'string') {
     const [year, month, day] = value.slice(0, 10).split('-').map(Number);

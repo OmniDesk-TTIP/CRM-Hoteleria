@@ -42,8 +42,6 @@ export class AuthService {
 
       return UserDto.fromEntity(user);
     } catch (error) {
-      // Dos registros simultáneos con el mismo email pasan los dos el chequeo previo:
-      // la defensa real es el índice único, así que se traduce acá su violación.
       if (error instanceof UniqueConstraintViolationException) {
         throw new ConflictException('Ya existe un usuario con ese email');
       }
@@ -52,10 +50,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Email inexistente, contraseña incorrecta y usuario desactivado devuelven exactamente
-   * el mismo error, para no confirmarle a nadie qué cuentas existen.
-   */
   async login(dto: LoginDto): Promise<LoginResult> {
     const user = await this.authRepository.findUserByEmail(dto.email);
 

@@ -11,7 +11,6 @@ import { ChatService } from '../chat/chat.service';
 import { Logger } from '@nestjs/common';
 import PDFDocument = require('pdfkit');
 
-/** Minutos que se le guarda la habitación al huésped antes de liberarla por falta de pago. */
 export const RESERVATION_HOLD_MINUTES = 30;
 
 @Injectable()
@@ -114,7 +113,6 @@ export class PaymentService {
       const session = await this.chatService.getOrCreateSession(telegramUserId);
       await this.chatService.recordSystemMessage(session, notice);
     } catch (error) {
-      // Dejar el hilo del panel sin el aviso es molesto; romper la confirmación del pago, grave.
       this.logger.warn(`No se pudo registrar el aviso de pago en el chat de ${telegramUserId}: ${error}`);
     }
   }

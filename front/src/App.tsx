@@ -9,6 +9,8 @@ import ReservationsPage from '@/pages/admin/ReservationsPage';
 import ChatsPage from '@/pages/admin/ChatsPage';
 import SupportHoursPage from '@/pages/admin/SupportHoursPage';
 import RoomsPage from '@/pages/admin/RoomsPage';
+import HomePage from '@/pages/admin/HomePage';
+import AppLayout from '@/components/layout/AppLayout';
 
 function App() {
   return (
@@ -30,17 +32,21 @@ function App() {
 
             {/* por ahora cualquier usuario logueado (ADMIN o EMPLOYEE) entra a todo el panel */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/admin/reservations" element={<ReservationsPage />} />
-              <Route path="/admin/rooms" element={<RoomsPage />} />
+              {/* todas las pantallas del panel comparten la sidebar y la barra de estado */}
+              <Route element={<AppLayout />}>
+                <Route path="/admin" element={<HomePage />} />
+                <Route path="/admin/reservations" element={<ReservationsPage />} />
+                <Route path="/admin/rooms" element={<RoomsPage />} />
 
-              {/* US-11: la conversación abierta va en la URL, igual que el id de la reserva */}
-              <Route path="/admin/chats" element={<ChatsPage />} />
-              <Route path="/admin/chats/:chatId" element={<ChatsPage />} />
-            </Route>
+                {/* US-11: la conversación abierta va en la URL, igual que el id de la reserva */}
+                <Route path="/admin/chats" element={<ChatsPage />} />
+                <Route path="/admin/chats/:chatId" element={<ChatsPage />} />
 
-            {/* configurar el horario de la recepción sí es cosa de ADMIN, como en el back */}
-            <Route element={<ProtectedRoute roles={['ADMIN']} />}>
-              <Route path="/admin/support-hours" element={<SupportHoursPage />} />
+                {/* configurar el horario de la recepción sí es cosa de ADMIN, como en el back */}
+                <Route element={<ProtectedRoute roles={['ADMIN']} />}>
+                  <Route path="/admin/support-hours" element={<SupportHoursPage />} />
+                </Route>
+              </Route>
             </Route>
 
             <Route path="*" element={<Navigate to="/login" replace />} />

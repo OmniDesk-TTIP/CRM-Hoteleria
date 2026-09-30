@@ -16,8 +16,6 @@ import { JwtAuthGuard } from './auth.guard';
       useFactory: (configService: ConfigService) => {
         const secret = configService.getOrThrow<string>('JWT_SECRET');
 
-        // Un secreto corto es el agujero más común y más silencioso de todos:
-        // mejor que la app no arranque a que firme tokens débiles.
         if (secret.length < 32) {
           throw new Error('JWT_SECRET es demasiado corto: usá al menos 32 caracteres.');
         }
@@ -38,7 +36,6 @@ import { JwtAuthGuard } from './auth.guard';
     AuthRepository,
     TokenService,
     AuthSeederService,
-    // Protege toda la app por defecto; se abre endpoint por endpoint con @Public().
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
   exports: [AuthService, JwtModule],

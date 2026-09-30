@@ -13,22 +13,13 @@ import type { ChatDetail, ChatMessage, ChatMessageEvent, ChatStatusEvent } from 
 
 const PAGE_SIZE = 50;
 
-/** El historial llega del más nuevo al más viejo; la pantalla lo lee al revés. */
 const toChronological = (messages: ChatMessage[]): ChatMessage[] => [...messages].reverse();
 
-/**
- * Agrega un mensaje sin repetirlo: el que manda el operador vuelve además por
- * `chat:message`, así que el mismo id puede llegar dos veces.
- */
 const upsertMessage = (messages: ChatMessage[], incoming: ChatMessage): ChatMessage[] =>
   messages.some((message) => message.id === incoming.id)
     ? messages.map((message) => (message.id === incoming.id ? incoming : message))
     : [...messages, incoming];
 
-/**
- * Una conversación abierta en el panel: detalle, historial con cursor y las acciones
- * de intervención (CA2, CA3, CA4). Se suscribe al room `chat:<id>` del gateway.
- */
 export function useChatConversation(chatId: string | undefined) {
   const { socket, isConnected, subscribeToChat } = useSocket();
   const { user } = useAuth();
@@ -43,14 +34,8 @@ export function useChatConversation(chatId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Evita pisar el estado con la respuesta de un chat que el operador ya cerró.
   const requestedChatId = useRef<string | undefined>(undefined);
 
-  /**
-   * El gateway emite cada evento dos veces al panel: una al room `chat:<id>` y otra al
-   * room `operators`, y quien tiene la conversación abierta está en los dos. El historial
-   * ya se deduplica por id, pero marcar como leído es un POST: sin esta guarda sale doble.
-   */
   const lastMarkedMessageId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -80,7 +65,6 @@ export function useChatConversation(chatId: string | undefined) {
         setMessages(toChronological(page.data));
         setCursor(page.nextCursor);
 
-        // Abrir la conversación la marca como leída; si falla no es motivo de error visible.
         void markChatAsRead(chatId).catch(() => undefined);
       } catch (err) {
         if (requestedChatId.current !== chatId) return;
@@ -97,8 +81,6 @@ export function useChatConversation(chatId: string | undefined) {
     void load();
   }, [chatId]);
 
-  // El room de la conversación entrega el texto completo de cada mensaje; el de
-  // `operators` solo alcanza para la bandeja.
   useEffect(() => {
     if (!chatId || !isConnected) return;
 
@@ -114,8 +96,6 @@ export function useChatConversation(chatId: string | undefined) {
       setMessages((prev) => upsertMessage(prev, event.message));
       setChat((prev) => (prev ? { ...prev, status: event.session.status } : prev));
 
-      // El operador lo está leyendo ahora mismo: sin esto la bandeja le marcaría
-      // sin leer el chat que tiene abierto en pantalla.
       if (event.message.role === 'USER' && lastMarkedMessageId.current !== event.message.id) {
         lastMarkedMessageId.current = event.message.id;
         void markChatAsRead(chatId).catch(() => undefined);

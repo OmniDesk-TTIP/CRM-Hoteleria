@@ -19,7 +19,6 @@ const DEFAULT_CLOSES_AT = '21:00';
 
 export interface SupportAvailability {
   isOpen: boolean;
-  /** Texto listo para meter en el mensaje al huésped: "mañana a las 09:00". */
   nextOpeningLabel: string | null;
 }
 
@@ -37,10 +36,13 @@ export class SupportHoursService {
     if (isValidTimeZone(configured)) {
       this.timeZone = configured;
     } else {
-      // Un typo en el .env no puede tumbar la app: se degrada a UTC y queda registrado.
       this.logger.warn(`SUPPORT_TIMEZONE="${configured}" no es una zona horaria válida. Se usa UTC.`);
       this.timeZone = 'UTC';
     }
+  }
+
+  getTimeZone(): string {
+    return this.timeZone;
   }
 
   async getSchedule(): Promise<SupportHoursDto> {
@@ -48,7 +50,6 @@ export class SupportHoursService {
     return { days: days.map((day) => SupportHoursDayDto.fromEntity(day)), timeZone: this.timeZone };
   }
 
-  /** PUT: la semana se reemplaza entera. Crea las filas que falten (base recién migrada). */
   async replaceSchedule(payload: UpdateSupportHoursDto): Promise<SupportHoursDto> {
     const weekdays = payload.days.map((day) => day.weekday);
     if (new Set(weekdays).size !== 7) {
@@ -77,10 +78,6 @@ export class SupportHoursService {
     return this.getSchedule();
   }
 
-  /**
-   * CA5. Si no hay ningún horario cargado se considera que se atiende siempre: una tabla vacía
-   * significa "no configurado", nunca "cerrado para siempre".
-   */
   async getAvailability(now: Date = new Date()): Promise<SupportAvailability> {
     const schedule = await this.loadSchedule();
     if (schedule.length === 0) return { isOpen: true, nextOpeningLabel: null };

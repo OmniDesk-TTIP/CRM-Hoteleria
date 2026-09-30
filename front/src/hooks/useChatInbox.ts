@@ -18,11 +18,6 @@ export const DEFAULT_CHAT_FILTERS: ChatListFilters = {
   status: 'ALL',
 };
 
-/**
- * Misma condición que aplica el back en `GET /chats`. Hace falta acá porque los eventos
- * del gateway llegan sin filtrar: sin esto, con "solo pendientes" activo aparecería
- * igual un chat nuevo que todavía está hablando con el bot.
- */
 const matchesFilters = (chat: ChatSummary, filters: ChatListFilters, operatorId?: string): boolean => {
   if (filters.status && filters.status !== 'ALL' && chat.status !== filters.status) return false;
   if (filters.pendingHandover && !chat.handoverRequestedAt) return false;
@@ -40,7 +35,6 @@ const matchesFilters = (chat: ChatSummary, filters: ChatListFilters, operatorId?
   return true;
 };
 
-/** Ordena por última actividad replicando el `NULLS LAST` del back. */
 const sortChats = (chats: ChatSummary[], sortDir: ChatListFilters['sortDir']): ChatSummary[] =>
   [...chats].sort((a, b) => {
     if (!a.lastMessageAt && !b.lastMessageAt) return 0;
@@ -51,11 +45,8 @@ const sortChats = (chats: ChatSummary[], sortDir: ChatListFilters['sortDir']): C
     return sortDir === 'asc' ? -diff : diff;
   });
 
-/**
- * Bandeja de conversaciones: lista paginada de `GET /chats` que se mantiene al día
- * con los eventos del room `operators` del gateway.
- */
-export function useChatInbox() {
+
+export function useChatInbox(initialFilters?: Partial<ChatListFilters>) {
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -63,7 +54,10 @@ export function useChatInbox() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<ChatListFilters>(DEFAULT_CHAT_FILTERS);
+  const [filters, setFilters] = useState<ChatListFilters>(() => ({
+    ...DEFAULT_CHAT_FILTERS,
+    ...initialFilters,
+  }));
 
   const fetchChats = useCallback(async () => {
     setIsLoading(true);
@@ -89,8 +83,6 @@ export function useChatInbox() {
     const operatorId = user?.id;
 
     const handleCreated = ({ chat }: ChatCreatedEvent) => {
-      // Un chat nuevo siempre es el más reciente, así que solo tiene sentido insertarlo
-      // en la primera página: en las demás correría las filas y ensuciaría la paginación.
       if (filters.page !== 1 || !matchesFilters(chat, filters, operatorId)) return;
 
       setChats((prev) => (prev.some((c) => c.id === chat.id) ? prev : sortChats([chat, ...prev], filters.sortDir)));
@@ -122,13 +114,6 @@ export function useChatInbox() {
       setChats((prev) => {
         const next = prev.map((chat) => {
           if (chat.id !== event.chatId) return chat;
-
-          /**
-           * El evento no trae `handoverRequestedAt`, pero se deduce: hay pedido pendiente
-           * mientras haya un motivo y nadie tenga el control. Cubre los tres casos del back
-           * (pedido en horario, pedido fuera de horario y fallback de la IA) y se apaga solo
-           * al tomar el control o al devolver el chat al bot.
-           */
           const isPending = event.reason !== null && event.status !== 'HUMAN';
 
           return {

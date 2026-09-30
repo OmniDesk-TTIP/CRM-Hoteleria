@@ -1,24 +1,24 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ChatList from '@/components/admin/chat/ChatList';
 import ChatWindow from '@/components/admin/chat/ChatWindow';
 import { useChatInbox } from '@/hooks/useChatInbox';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useSocket } from '@/context/socket.context';
 
-/**
- * US-11: bandeja de conversaciones y control manual del bot. La conversación abierta
- * vive en la URL (`/admin/chats/:chatId`) para poder compartir el link con otro operador.
- */
 export default function ChatsPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const navigate = useNavigate();
   const { isConnected } = useSocket();
 
-  const { chats, total, isLoading, error, filters, changeFilters, goToPage } = useChatInbox();
+  const [searchParams] = useSearchParams();
+  const { chats, total, isLoading, error, filters, changeFilters, goToPage } = useChatInbox({
+    pendingHandover: searchParams.get('pendingHandover') === 'true' || undefined,
+    assignedToMe: searchParams.get('assignedToMe') === 'true' || undefined,
+  });
   const conversation = useChatConversation(chatId);
 
   return (
-    <div className="mx-auto flex h-screen max-w-7xl flex-col gap-4 p-6">
+    <div className="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-text">Conversaciones</h1>
         <p className="flex items-center gap-2 text-xs text-textMuted">
@@ -31,7 +31,7 @@ export default function ChatsPage() {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-        {/* En pantallas chicas no entran los dos paneles: la bandeja cede el lugar al chat. */}
+
         <div className={`min-h-0 ${chatId ? 'hidden lg:block' : ''}`}>
           <ChatList
             chats={chats}

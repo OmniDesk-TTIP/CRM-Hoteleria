@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/auth.context';
 import { deactivateRoom, listRoomOptions, updateRoom } from '@/services/room.service';
 import type { RoomOption } from '@/config/types';
@@ -79,9 +78,6 @@ export default function RoomsPage() {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-text">Inventario de Habitaciones</h1>
-          <Link to="/admin/reservations" className="text-sm text-goldLight underline-offset-2 hover:underline">
-            ← Volver a Reservas
-          </Link>
         </div>
         {isAdmin && (
           <button

@@ -13,8 +13,6 @@ export class JwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Al ser APP_GUARD, Nest también lo corre en los handlers del bot (contexto 'telegraf'),
-    // que no tienen request HTTP ni token: el JWT solo protege la API.
     if (context.getType() !== 'http') {
       return true;
     }

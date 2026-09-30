@@ -19,12 +19,6 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * `path: '/auth'` deja la cookie acotada a este controller: no viaja en cada request
-   * a /payment o /rag. En desarrollo el front (:5173) y el back (:3000) son el mismo site
-   * —el puerto no cuenta para SameSite—, así que `lax` alcanza; en producción con dominios
-   * distintos hacen falta `none` + `secure`, y por eso salen de configuración.
-   */
   private cookieOptions(): CookieOptions {
     const ttlDays = Number(this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7);
 
@@ -48,10 +42,6 @@ export class AuthController {
     return { accessToken, expiresIn, user };
   }
 
-  /**
-   * Sin @Body(): el ValidationPipe global usa forbidNonWhitelisted, así que cualquier campo
-   * que mandara el front acá terminaría en un 400 confuso. La credencial es la cookie.
-   */
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)

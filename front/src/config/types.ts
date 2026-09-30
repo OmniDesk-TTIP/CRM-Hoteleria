@@ -323,3 +323,64 @@ export interface SupportHours {
   days: SupportHoursDay[];
   timeZone: string;
 }
+
+/* ───────── Home / dashboard ───────── */
+
+export type OccupancyCellState = 'free' | 'booked' | 'pending' | 'maintenance';
+
+export interface DashboardAttention {
+  /** Chats con un pedido de humano pendiente (mismo criterio que "solo pendientes" de la bandeja). */
+  waitingHuman: number;
+  myActiveChats: number;
+  pendingPayment: number;
+  checkInsToday: number;
+}
+
+export interface OccupancyRoom {
+  id: string;
+  roomNumber: string;
+  categoryName: string;
+  status: RoomStatus;
+  /** Un estado por cada día de `DashboardOccupancy.days`. */
+  cells: OccupancyCellState[];
+}
+
+export interface DashboardOccupancy {
+  /** Fechas YYYY-MM-DD, desde hoy. */
+  days: string[];
+  rooms: OccupancyRoom[];
+  occupancyPct: number;
+}
+
+export interface DashboardRevenue {
+  /** Mes corriente, YYYY-MM. */
+  month: string;
+  monthTotal: number;
+  /** Tarifa promedio por noche vendida en el mes. */
+  adr: number;
+  monthOccupancyPct: number;
+  byMonth: { month: string; total: number }[];
+}
+
+export interface DashboardSupport {
+  isOpen: boolean;
+  /** "mañana a las 09:00"; null si está abierto. */
+  nextOpeningLabel: string | null;
+}
+
+/** Respuesta de `GET /dashboard/summary`. */
+export interface DashboardSummary {
+  /** Hoy en la zona horaria del hotel, YYYY-MM-DD. */
+  today: string;
+  attention: DashboardAttention;
+  occupancy: DashboardOccupancy;
+  upcomingReservations: AdminReservation[];
+  revenue: DashboardRevenue;
+  support: DashboardSupport;
+}
+
+/** Respuesta de `GET /dashboard/status`: lo que necesita el layout en todas las páginas. */
+export interface DashboardStatus {
+  waitingHuman: number;
+  support: DashboardSupport;
+}

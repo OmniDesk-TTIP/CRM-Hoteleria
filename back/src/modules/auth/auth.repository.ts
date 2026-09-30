@@ -7,10 +7,6 @@ import { RefreshToken } from '../../infrastructure/database/entities/RefreshToke
 export class AuthRepository {
   constructor(private readonly em: EntityManager) {}
 
-  /**
-   * `disableIdentityMap` porque la config de MikroORM tiene allowGlobalContext activo:
-   * sin eso, el User quedaría cacheado en el identity map global y visible entre requests.
-   */
   async findUserByEmail(email: string): Promise<User | null> {
     return this.em.findOne(User, { email }, { disableIdentityMap: true });
   }
@@ -45,10 +41,6 @@ export class AuthRepository {
     return this.em.findOne(RefreshToken, { tokenHash }, { populate: ['user'], disableIdentityMap: true });
   }
 
-  /**
-   * El UPDATE condicional es atómico: si dos refresh con el mismo token entran a la vez,
-   * uno solo consigue revocarlo y el otro cae en la rama de reuso.
-   */
   async revokeToken(tokenHash: string, replacedByHash?: string): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       RefreshToken,
@@ -58,8 +50,7 @@ export class AuthRepository {
 
     return affected === 1;
   }
-
-  /** Se usa cuando se detecta un refresh token reusado: cierra todas las sesiones del usuario. */
+  
   async revokeAllForUser(userId: string): Promise<number> {
     return this.em.nativeUpdate(RefreshToken, { user: userId, revokedAt: null }, { revokedAt: new Date() });
   }

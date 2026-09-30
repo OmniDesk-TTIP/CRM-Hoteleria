@@ -8,10 +8,6 @@ const WEEKDAY_LABEL = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vi
 const inputClasses =
   'rounded-xl border border-goldLight/20 bg-surface px-3 py-2 text-sm text-text disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60';
 
-/**
- * CA5: horario de atención de la recepción. Cuando un huésped pide un humano fuera de
- * esta franja, Chamber no se silencia: le avisa que le responden al abrir y sigue ayudando.
- */
 export default function SupportHoursPage() {
   const [days, setDays] = useState<SupportHoursDay[]>([]);
   const [timeZone, setTimeZone] = useState('');
@@ -50,7 +46,6 @@ export default function SupportHoursPage() {
     setDays((prev) => prev.map((day) => (day.weekday === weekday ? { ...day, ...patch } : day)));
   };
 
-  // El back exige los 7 días en un único PUT: no hay guardado por fila.
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);

@@ -1,26 +1,39 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { listReservations, cancelReservation } from '@/services/reservation.service';
-import type { AdminReservation, ReservationListFilters, ReservationSortBy } from '@/config/types';
+import type { AdminReservation, ReservationListFilters, ReservationSortBy, ReservationStatus } from '@/config/types';
 import ReservationsTable from '@/components/admin/ReservationsTable';
 import ReservationFilters from '@/components/admin/ReservationFilters';
 import Pagination from '@/components/admin/Pagination';
 import ReservationFormModal from '@/components/admin/ReservationFormModal';
 import ConfirmCancelModal from '@/components/admin/ConfirmCancelModal';
 
+const RESERVATION_STATUSES: ReservationStatus[] = ['PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED'];
+const SORT_COLUMNS: ReservationSortBy[] = ['checkIn', 'createdAt', 'status'];
+
+const filtersFromParams = (params: URLSearchParams): ReservationListFilters => {
+  const status = params.get('status') as ReservationStatus | null;
+  const sortBy = params.get('sortBy') as ReservationSortBy | null;
+  const dateFrom = params.get('dateFrom');
+
+  return {
+    page: 1,
+    pageSize: 10,
+    sortBy: sortBy && SORT_COLUMNS.includes(sortBy) ? sortBy : 'createdAt',
+    sortDir: params.get('sortDir') === 'asc' ? 'asc' : 'desc',
+    status: status && RESERVATION_STATUSES.includes(status) ? status : 'ALL',
+    ...(dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) ? { dateFrom } : {}),
+  };
+};
+
 export default function ReservationsPage() {
+  const [searchParams] = useSearchParams();
   const [reservations, setReservations] = useState<AdminReservation[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<ReservationListFilters>({
-    page: 1,
-    pageSize: 10,
-    sortBy: 'createdAt',
-    sortDir: 'desc',
-    status: 'ALL',
-  });
+  const [filters, setFilters] = useState<ReservationListFilters>(() => filtersFromParams(searchParams));
 
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<AdminReservation | null>(null);
@@ -95,9 +108,6 @@ export default function ReservationsPage() {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold text-text">Gestión de Reservas</h1>
-          <Link to="/admin/rooms" className="text-sm text-goldLight underline-offset-2 hover:underline">
-            Ver inventario de habitaciones →
-          </Link>
         </div>
         <button
           onClick={handleCreate}

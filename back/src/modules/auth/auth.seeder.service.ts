@@ -4,10 +4,6 @@ import { AuthRepository } from './auth.repository';
 import { hashPassword } from './password.util';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
 
-/**
- * El registro está cerrado a rol ADMIN, así que sin esto no habría forma de crear el
- * primer usuario. Solo actúa con la base vacía: nunca pisa usuarios existentes.
- */
 @Injectable()
 export class AuthSeederService implements OnModuleInit {
   private readonly logger = new Logger(AuthSeederService.name);

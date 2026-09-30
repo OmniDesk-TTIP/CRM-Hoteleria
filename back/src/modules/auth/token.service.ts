@@ -22,12 +22,6 @@ export class TokenService {
     this.refreshTtlDays = Number(this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7);
   }
 
-  /**
-   * El refresh es un token opaco, no un JWT: la base ya es la fuente de verdad sobre si la
-   * sesión sigue viva, así que firmarlo no agregaría nada y un opaco no filtra claims.
-   * Se guarda solo el sha256; sha y no bcrypt porque el token ya trae 256 bits de entropía
-   * (no hay nada que fuerza-brutear) y hay que poder buscarlo por hash con un índice único.
-   */
   hashRefreshToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
@@ -52,11 +46,7 @@ export class TokenService {
       expiresIn: this.expiresIn,
     };
   }
-
-  /**
-   * Rota el par de tokens. Si llega un token que ya estaba revocado es señal de que alguien
-   * está reusando uno viejo, así que se cierran todas las sesiones de ese usuario.
-   */
+  
   async rotate(refreshToken: string): Promise<AuthTokens> {
     const tokenHash = this.hashRefreshToken(refreshToken);
     const stored = await this.authRepository.findRefreshToken(tokenHash);

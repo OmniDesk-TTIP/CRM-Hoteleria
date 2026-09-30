@@ -9,7 +9,6 @@ import type { AlternativeDates } from '../reservation/reservation.service';
 
 const CHAT_MODEL = 'gemini-flash-lite-latest';
 
-/** Cómo se le presenta cada rol de chat_messages al modelo dentro del historial. */
 const HISTORY_SPEAKERS: Record<string, string> = {
   USER: 'Usuario',
   BOT: 'Chamber',
@@ -135,11 +134,6 @@ export class RagService {
     return { action: ChatAction.REPLY, texto: chatResponse.response.text() };
   }
 
-  /**
-   * Redacta la respuesta cuando 'search_availability' no encontró lugar pero sí fechas cercanas.
-   * Gemini recibe el resultado de la búsqueda y, siguiendo la regla de fechas alternativas del
-   * system prompt, las ofrece con tono empático. Va sin tools para que no dispare otra función.
-   */
   async composeUnavailableReply(
     userQuestion: string,
     history: any[],
@@ -163,11 +157,6 @@ export class RagService {
     return chatResponse.response.text();
   }
 
-  /**
-   * Con el handover de la US-11 el historial ya no es solo "usuario vs. bot": puede traer
-   * mensajes escritos por un recepcionista y avisos del sistema. Atribuírselos a Chamber haría
-   * que, al recuperar el control, el modelo crea que él mismo prometió lo que prometió el humano.
-   */
   private formatHistory(history: any[]): string {
     return history.map(msg => `${HISTORY_SPEAKERS[msg.role] ?? 'Chamber'}: ${msg.content}`).join('\n');
   }
