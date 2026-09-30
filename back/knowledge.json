@@ -5,6 +5,11 @@
         "El hotel ofrece servicio de Late Check-out sujeto a disponibilidad. Extender la estadía hasta las 14:00 horas tiene un costo adicional del 30% de la tarifa diaria. Extenderla hasta las 18:00 horas tiene un costo del 50%.",
         "La recepción del hotel está abierta las 24 horas del día, los 7 días de la semana, con personal bilingüe (español e inglés) para asistencia continua.",
 
+        "El hotel cuenta con tres tipos de habitaciones: Individual, Doble y Suite, cada una con distinta capacidad y tarifa por noche.",
+        "La habitación Individual tiene capacidad para 1 persona y su tarifa es de $8000 por noche.",
+        "La habitación Doble tiene capacidad para 2 personas y su tarifa es de $12000 por noche.",
+        "La Suite tiene capacidad para hasta 4 personas y su tarifa es de $20000 por noche. Es la opción ideal para familias o grupos.",
+
         "El desayuno buffet está incluido en todas las tarifas. Se sirve de lunes a viernes de 07:00 a 10:00 horas, y los fines de semana y feriados de 07:30 a 11:00 horas en el salón de la planta baja.",
         "El hotel cuenta con un restaurante a la carta abierto para almuerzos y cenas de 12:30 a 23:00 horas. Ofrecemos menú infantil, opciones celíacas y vegetarianas bajo petición.",
         "El servicio de habitaciones (Room Service) funciona las 24 horas. El menú nocturno (de 23:00 a 06:00) está limitado a sándwiches, ensaladas y bebidas frías.",

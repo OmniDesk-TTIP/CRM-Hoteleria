@@ -1,26 +1,16 @@
 import { NestFactory } from '@nestjs/core';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import { createValidationPipe } from './validation.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    stopAtFirstError: true,
-    transform: true,
-    exceptionFactory: (errors) => {
-      const constraints = errors[0].constraints || {};
-      
-      const firstError = Object.values(constraints)[0] || 'Error de validación';
-      
-      return new BadRequestException({
-        message: firstError,
-        error: 'Bad Request',
-        statusCode: 400
-      });
-    }
-  }));
+  // El formulario de prepago corre en otro origen y consume /payment/:id/summary desde el navegador.
+  // `credentials` es lo que permite que viaje la cookie del refresh token; obliga a que
+  // `origin` sea una URL concreta, nunca '*'.
+  app.enableCors({ origin: process.env.FRONTEND_BASE_URL ?? 'http://localhost:5173', credentials: true });
+  app.use(cookieParser());
+  app.useGlobalPipes(createValidationPipe());
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

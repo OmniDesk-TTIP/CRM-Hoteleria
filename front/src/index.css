@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens de la paleta.
+ * En Tailwind v4 el prefijo del token define la utilidad que se genera:
+ *   --color-* -> bg-*, text-*, border-*, ring-*, etc.
+ *   --font-*  -> font-*
+ */
+@theme {
+  /* COLORS */
+  --color-shell: #0f1d28;
+  --color-surface: #1b3a40;
+  --color-card: #1e3d44;
+  --color-gold: #d4a94a;
+  --color-goldDark: #b4863a;
+  --color-goldLight: #e7dab0;
+  --color-text: #f2efe6;
+  --color-textMuted: #9db3b8;
+  --color-success: #3fae7f;
+  --color-successText: #a7e9c9;
+  --color-danger: #e06c5b;
+  --color-dangerText: #f5b9b0;
+
+  /* FONTS */
+  --font-poppins: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-shell text-text font-poppins antialiased;
+  }
+}
