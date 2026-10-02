@@ -25,10 +25,8 @@ jobs:
           cache: npm
           cache-dependency-path: back/package-lock.json
       - run: npm ci
-      # TODO: hoy hay ~10k errores de eslint/prettier en el back (la mayoría en specs).
-      # No bloquea el CI hasta limpiarlos; después sacar continue-on-error.
+      # Sin --fix: en CI tiene que fallar, no reescribir archivos
       - run: npx eslint "{src,apps,libs,test}/**/*.ts"
-        continue-on-error: true
       - run: npm run build
       - run: npm test
 
