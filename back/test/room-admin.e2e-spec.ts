@@ -79,7 +79,7 @@ describe('Admin Rooms CRUD (e2e)', () => {
         email: { $in: [admin.user.email, employee.user.email] },
       });
       if (app) await app.close();
-    } catch (e) {
+    } catch {
       // no-op: limpieza best-effort
     }
   });

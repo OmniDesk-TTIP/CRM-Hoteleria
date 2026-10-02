@@ -66,7 +66,9 @@ describe('RagModule - ingest (e2e)', () => {
       await em.nativeDelete(Document, { content: text });
       await em.nativeDelete(User, { id: adminId });
       if (app) await app.close();
-    } catch (e) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   it('POST /rag/ingest debería vectorizar el texto y persistirlo como Document en la base', async () => {

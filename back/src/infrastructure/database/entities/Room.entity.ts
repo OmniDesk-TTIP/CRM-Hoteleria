@@ -1,9 +1,7 @@
-import { Collection } from '@mikro-orm/core';
 import {
   Entity,
   PrimaryKey,
   Property,
-  OneToMany,
   ManyToOne,
   Enum,
 } from '@mikro-orm/decorators/legacy';
@@ -22,6 +20,8 @@ export class Room extends CustomBaseEntity {
   @PrimaryKey({ type: 'uuid' })
   id: string = v4();
 
+  // require() a propósito: evita el import circular con RoomCategory.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
   @ManyToOne(() => require('./RoomCategory.entity').RoomCategory)
   category!: RoomCategory;
 

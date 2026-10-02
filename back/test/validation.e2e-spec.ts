@@ -53,7 +53,9 @@ describe('ValidationPipe global (e2e)', () => {
     try {
       await em.nativeDelete(User, { id: adminId });
       if (app) await app.close();
-    } catch (e) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   it('rechaza POST /rag/ingest con un texto más corto que el mínimo (400)', async () => {

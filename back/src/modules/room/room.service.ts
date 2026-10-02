@@ -4,10 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RoomRepository } from './room.repository';
-import {
-  Room,
-  RoomStatus,
-} from '../../infrastructure/database/entities/Room.entity';
+import { RoomStatus } from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 import { CreateRoomDto } from './dto/createRoom.dto';
 import { UpdateRoomDto } from './dto/updateRoom.dto';

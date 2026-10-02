@@ -101,15 +101,19 @@ describe('ReservationService', () => {
     const givenHotel = (rooms: any[], reservations: any[]) => {
       jest
         .spyOn(reservationRepository, 'findOverlapping')
-        .mockImplementation(async (checkIn, checkOut) =>
-          reservations.filter(
-            (r) => r.checkIn < checkOut && r.checkOut > checkIn,
+        .mockImplementation((checkIn, checkOut) =>
+          Promise.resolve(
+            reservations.filter(
+              (r) => r.checkIn < checkOut && r.checkOut > checkIn,
+            ),
           ),
         );
       jest
         .spyOn(roomRepository, 'findByCapacityExcluding')
-        .mockImplementation(async (_capacity, excludedIds) =>
-          rooms.filter((room) => !excludedIds.includes(room.id)),
+        .mockImplementation((_capacity, excludedIds) =>
+          Promise.resolve(
+            rooms.filter((room) => !excludedIds.includes(room.id)),
+          ),
         );
     };
 

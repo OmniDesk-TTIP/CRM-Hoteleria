@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from './ws-jwt.guard';
-import { JwtPayload } from '../auth/auth.types';
+import { AuthUser, JwtPayload } from '../auth/auth.types';
 import { ChatMessageDto, ChatSummaryDto } from './dto/chat.dto';
 import {
   ChatSessionStatus,
@@ -69,12 +69,13 @@ export class ChatGateway implements OnGatewayConnection {
       const payload = await this.jwtService.verifyAsync<
         JwtPayload & { exp?: number }
       >(token ?? '');
-      client.data.user = {
+      const data = client.data as { user?: AuthUser; tokenExp?: number };
+      data.user = {
         id: payload.sub,
         email: payload.email,
         role: payload.role,
       };
-      client.data.tokenExp = payload.exp;
+      data.tokenExp = payload.exp;
       await client.join(OPERATORS_ROOM);
     } catch {
       client.emit('auth:error', { message: 'Token inválido o expirado' });

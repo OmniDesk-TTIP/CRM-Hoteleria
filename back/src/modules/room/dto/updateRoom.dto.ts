@@ -9,11 +9,12 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { toTrimmedString } from '../../../common/transforms';
 import { RoomStatus } from '../../../infrastructure/database/entities/Room.entity';
 
 export class UpdateRoomDto {
   @IsOptional()
-  @Transform(({ value }) => value?.toString().trim())
+  @Transform(toTrimmedString)
   @IsString({
     message: 'El número/nombre de la habitación debe ser una cadena de texto',
   })
@@ -26,7 +27,7 @@ export class UpdateRoomDto {
   roomNumber?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value?.toString().trim())
+  @Transform(toTrimmedString)
   @IsString({ message: 'El tipo de habitación debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'El tipo de habitación no puede estar vacío' })
   @MaxLength(60, { message: 'El tipo de habitación es demasiado largo' })

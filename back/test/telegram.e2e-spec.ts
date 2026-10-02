@@ -109,7 +109,9 @@ describe('Telegram Flow (e2e)', () => {
       await em.nativeDelete(RoomCategory, { id: seededCategory.id });
 
       if (app) await app.close();
-    } catch (e) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   it('Flujo completo: Debería consultar disponibilidad y luego confirmar la reserva en BD', async () => {

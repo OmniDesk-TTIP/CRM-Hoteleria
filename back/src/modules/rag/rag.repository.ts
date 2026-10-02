@@ -12,7 +12,7 @@ export class RagRepository {
 
     const document = this.em.create(Document, {
       content: text,
-      embedding: formattedEmbedding as any,
+      embedding: formattedEmbedding as unknown as number[],
     });
 
     this.em.persist(document);

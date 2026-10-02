@@ -79,7 +79,7 @@ export class ReservationRepository {
     const [items, total] = await this.em.findAndCount(Reservation, where, {
       populate: ['room', 'room.category'],
 
-      orderBy: { [filters.sortBy]: filters.sortDir } as any,
+      orderBy: { [filters.sortBy]: filters.sortDir },
       limit: filters.pageSize,
       offset: (filters.page - 1) * filters.pageSize,
     });

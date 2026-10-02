@@ -1,5 +1,6 @@
 import { IsString, IsNotEmpty, MinLength, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { trimString } from '../../../common/transforms';
 
 export class IngestDataDto {
   @IsString({ message: 'El texto debe ser una cadena de caracteres' })
@@ -16,7 +17,7 @@ export class IngestDataDto {
 }
 
 export class AskQuestionDto {
-  @Transform(({ value }) => value?.trim())
+  @Transform(trimString)
   @MaxLength(300, {
     message: 'La pregunta es demasiado larga (máximo 300 caracteres)',
   })

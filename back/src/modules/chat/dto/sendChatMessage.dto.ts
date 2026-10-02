@@ -1,8 +1,9 @@
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { trimString } from '../../../common/transforms';
 
 export class SendChatMessageDto {
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimString)
   @IsString({ message: 'El mensaje debe ser texto' })
   @IsNotEmpty({ message: 'El mensaje no puede estar vacío' })
   // 4096 es el límite duro de sendMessage en Telegram; se deja margen para no cortar al huésped.

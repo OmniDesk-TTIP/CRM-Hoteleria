@@ -49,7 +49,7 @@ describe('AskQuestionDto', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('recorta espacios al inicio y al final de la pregunta', async () => {
+  it('recorta espacios al inicio y al final de la pregunta', () => {
     const dto = plainToInstance(AskQuestionDto, { question: '  ¿Hay wifi?  ' });
 
     expect(dto.question).toBe('¿Hay wifi?');

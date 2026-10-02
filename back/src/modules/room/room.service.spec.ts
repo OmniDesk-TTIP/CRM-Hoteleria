@@ -4,7 +4,6 @@ import { RoomService } from './room.service';
 import { RoomRepository } from './room.repository';
 import { RoomStatus } from '../../infrastructure/database/entities/Room.entity';
 import { CreateRoomDto } from './dto/createRoom.dto';
-import { UpdateRoomDto } from './dto/updateRoom.dto';
 
 describe('RoomService', () => {
   let service: RoomService;

@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
-import { BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../infrastructure/database/entities/BookingProcess.entity';
+import { ChatMessage } from '../../infrastructure/database/entities/ChatMessage.entity';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import type { AlternativeDates } from '../reservation/reservation.service';
 
@@ -21,6 +25,13 @@ export enum ChatAction {
   CONFIRM_RESERVATION = 'CONFIRM_RESERVATION',
   REQUEST_HUMAN = 'REQUEST_HUMAN',
   REPLY = 'REPLY',
+}
+
+/** Lo que decidió el modelo: responder texto o disparar una acción con sus argumentos sin validar. */
+export interface AiResponse {
+  action: ChatAction;
+  datos?: unknown;
+  texto?: string;
 }
 
 @Injectable()
@@ -53,10 +64,10 @@ export class RagService {
 
   async askQuestion(
     userQuestion: string,
-    reservaActiva: any = null,
-    history: any[] = [],
-    ultimaCompletada: any = null,
-  ): Promise<any> {
+    reservaActiva: BookingProcess | null = null,
+    history: ChatMessage[] = [],
+    ultimaCompletada: BookingProcess | null = null,
+  ): Promise<AiResponse> {
     const embeddingModel = this.genAI.getGenerativeModel({
       model: 'gemini-embedding-2',
     });
@@ -178,7 +189,7 @@ export class RagService {
 
   async composeUnavailableReply(
     userQuestion: string,
-    history: any[],
+    history: ChatMessage[],
     search: SearchAvailabilityDto,
     alternatives: AlternativeDates[],
   ): Promise<string> {
@@ -203,7 +214,7 @@ export class RagService {
     return chatResponse.response.text();
   }
 
-  private formatHistory(history: any[]): string {
+  private formatHistory(history: ChatMessage[]): string {
     return history
       .map(
         (msg) => `${HISTORY_SPEAKERS[msg.role] ?? 'Chamber'}: ${msg.content}`,

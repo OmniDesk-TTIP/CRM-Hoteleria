@@ -31,7 +31,9 @@ describe('AppModule (e2e)', () => {
   afterAll(async () => {
     try {
       await app?.close();
-    } catch (error) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   it('debería levantar el servidor (GET /)', () => {

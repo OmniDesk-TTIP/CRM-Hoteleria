@@ -79,7 +79,9 @@ describe('Auth (e2e)', () => {
         },
       });
       if (app) await app.close();
-    } catch (e) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   describe('POST /auth/login', () => {

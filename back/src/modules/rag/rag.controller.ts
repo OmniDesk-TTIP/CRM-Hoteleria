@@ -4,7 +4,6 @@ import {
   Body,
   HttpCode,
   HttpStatus,
-  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { RagService } from './rag.service';

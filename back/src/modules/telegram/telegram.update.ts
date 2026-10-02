@@ -4,7 +4,7 @@ import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { RagService, ChatAction } from '../rag/rag.service';
+import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
 import {
   ReservationService,
   AlternativeDates,
@@ -158,12 +158,12 @@ export class TelegramUpdate {
       if (isUnresolvedReply(botReply))
         await this.chatService.registerBotFailure(session);
       else await this.chatService.resetBotFailures(session);
-    } catch (error: any) {
-      this.logger.error(`Error procesando el mensaje: ${error}`);
+    } catch (error: unknown) {
+      this.logger.error(`Error procesando el mensaje: ${String(error)}`);
 
       if (session) await this.registerFailureSafely(session);
 
-      if (error?.status === 503) {
+      if ((error as { status?: number } | null)?.status === 503) {
         await ctx.reply(
           'El sistema está experimentando alta demanda en este segundo. Dame un minutito y volvé a escribirme.',
         );
@@ -218,7 +218,7 @@ export class TelegramUpdate {
   }
 
   private async resolveBotReply(
-    aiResponse: any,
+    aiResponse: AiResponse,
     telegramUserId: string,
     activeBooking: BookingProcess | null,
     userText: string,

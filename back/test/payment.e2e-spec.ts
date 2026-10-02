@@ -93,7 +93,9 @@ describe('Payment Webhook (e2e)', () => {
       await em.nativeDelete(RoomCategory, { id: seededCategoryId });
 
       if (app) await app.close();
-    } catch (e) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   afterEach(() => {

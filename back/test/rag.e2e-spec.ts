@@ -36,7 +36,9 @@ describe('RagModule (e2e)', () => {
   afterAll(async () => {
     try {
       await app?.close();
-    } catch (error) {}
+    } catch {
+      // no-op: limpieza best-effort
+    }
   });
 
   it('/rag/ask (POST) debería procesar una pregunta y devolver una respuesta usando el flujo real', async () => {

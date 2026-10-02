@@ -139,7 +139,8 @@ describe('Chats / Handover (e2e)', () => {
       await em.nativeDelete(User, {
         email: { $in: [admin.user.email, employee.user.email] },
       });
-    } catch (e) {
+    } catch {
+      // no-op: limpieza best-effort
     } finally {
       // Fuera del try a propósito: si la limpieza falla, cerrar igual la app. Si no, el servidor
       // de socket.io y el pool de la base quedan vivos y jest no termina nunca.

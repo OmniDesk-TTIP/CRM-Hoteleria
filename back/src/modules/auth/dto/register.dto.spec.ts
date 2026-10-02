@@ -33,7 +33,7 @@ describe('RegisterDto', () => {
     expect(errors.some((e) => e.property === 'role')).toBe(true);
   });
 
-  it('normaliza el email y recorta el nombre', async () => {
+  it('normaliza el email y recorta el nombre', () => {
     const dto = plainToInstance(RegisterDto, {
       ...validPayload,
       email: '  Recepcion@OmniDesk.Local ',

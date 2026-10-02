@@ -99,6 +99,7 @@ export class ChatService {
   }
 
   isMuted(session: ChatSession): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison -- `status` viene tipado `ChatSessionStatus & Opt` (MikroORM)
     return session.status !== ChatSessionStatus.BOT;
   }
 
@@ -303,6 +304,7 @@ export class ChatService {
   ): Promise<ChatMessageDto> {
     const session = await this.requireSession(chatId);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison -- `status` viene tipado `ChatSessionStatus & Opt` (MikroORM)
     if (session.status !== ChatSessionStatus.HUMAN) {
       throw new ConflictException(
         'Tomá el control de la conversación antes de escribirle al huésped',
@@ -338,6 +340,7 @@ export class ChatService {
 
     // Repetir el click no tiene que volver a saludar al huésped.
     if (
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison -- `status` viene tipado `ChatSessionStatus & Opt` (MikroORM)
       previousStatus === ChatSessionStatus.HUMAN &&
       session.assignedOperator?.id === operator.id
     ) {

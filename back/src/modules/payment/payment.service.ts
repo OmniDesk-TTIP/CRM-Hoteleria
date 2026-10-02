@@ -14,6 +14,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PaymentRepository } from './payment.repository';
 import { ChatService } from '../chat/chat.service';
 import { Logger } from '@nestjs/common';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- pdfkit se exporta con `export =`
 import PDFDocument = require('pdfkit');
 
 export const RESERVATION_HOLD_MINUTES = 30;

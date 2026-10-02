@@ -34,7 +34,7 @@ export class RagSeederService implements OnModuleInit {
       const filePath = path.join(process.cwd(), 'knowledge.json');
 
       const fileContent = fs.readFileSync(filePath, 'utf-8');
-      const defaultKnowledge: string[] = JSON.parse(fileContent);
+      const defaultKnowledge: string[] = JSON.parse(fileContent) as string[];
 
       for (const text of defaultKnowledge) {
         await this.ragService.ingestDocument(text);

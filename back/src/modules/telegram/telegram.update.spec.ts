@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager, MikroORM } from '@mikro-orm/core';
-import { Context } from 'telegraf';
 import { TelegramUpdate } from './telegram.update';
 import { RagService, ChatAction } from '../rag/rag.service';
 import { ReservationService } from '../reservation/reservation.service';
@@ -126,7 +125,7 @@ describe('TelegramUpdate', () => {
     jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
       texto: 'Hola, soy Chamber',
       action: ChatAction.REPLY,
-    } as any);
+    });
 
     await update.onMessage('Hola', mockCtx);
 
@@ -148,7 +147,7 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.SEARCH_AVAILABILITY,
       datos: { checkIn: '10-10-2026', checkOut: '15-10-2026', capacity: 2 },
-    } as any);
+    });
 
     jest.spyOn(reservationService, 'searchAvailability').mockResolvedValue({
       available: true,
@@ -197,7 +196,7 @@ describe('TelegramUpdate', () => {
         texto: '',
         action: ChatAction.SEARCH_AVAILABILITY,
         datos,
-      } as any);
+      });
     });
 
     it('le pide a Gemini una respuesta empática con las alternativas y la escapa como HTML', async () => {
@@ -262,7 +261,7 @@ describe('TelegramUpdate', () => {
         checkOut: '15-10-2026',
         capacity: 2,
       },
-    } as any);
+    });
 
     await update.onMessage('Quiero reservar', mockCtx);
 
@@ -288,13 +287,15 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.CONFIRM_RESERVATION,
       datos: { fullName: 'Juan Pérez', dni: '30111222' },
-    } as any);
+    });
 
     jest
       .spyOn(reservationService, 'confirmReservation')
-      .mockImplementation(async (_telegramUserId, booking) => {
+      .mockImplementation((_telegramUserId, booking) => {
         booking.step = BookingProcessStep.COMPLETED;
-        return 'Te estoy guardando la Suite del 10-10-2026 al 15-10-2026. Todavía no está confirmada.';
+        return Promise.resolve(
+          'Te estoy guardando la Suite del 10-10-2026 al 15-10-2026. Todavía no está confirmada.',
+        );
       });
 
     await update.onMessage('Sí, confirmo', mockCtx);
@@ -326,7 +327,7 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.CONFIRM_RESERVATION,
       datos: { fullName: '', dni: 'no-es-un-dni' },
-    } as any);
+    });
 
     await update.onMessage('Sí, confirmo', mockCtx);
 
@@ -353,7 +354,7 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.CONFIRM_RESERVATION,
       datos: { fullName: 'Juan Pérez', dni: '30.111.222' },
-    } as any);
+    });
 
     await update.onMessage('Sí, confirmo', mockCtx);
 
@@ -380,7 +381,7 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.SEARCH_AVAILABILITY,
       datos: { checkIn: '10-10-2026', checkOut: '15-10-2026', capacity: 2 },
-    } as any);
+    });
 
     await update.onMessage('dale', mockCtx);
 
@@ -407,7 +408,7 @@ describe('TelegramUpdate', () => {
       texto: '',
       action: ChatAction.SEARCH_AVAILABILITY,
       datos: { checkIn: '20-10-2026', checkOut: '25-10-2026', capacity: 2 },
-    } as any);
+    });
     jest.spyOn(reservationService, 'searchAvailability').mockResolvedValue({
       available: true,
       reply:
@@ -466,7 +467,7 @@ describe('TelegramUpdate', () => {
       jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
         action: ChatAction.REQUEST_HUMAN,
         datos: { reason: 'El huésped está frustrado' },
-      } as any);
+      });
 
       await update.onMessage(
         'no me estás entendiendo nada de lo que te pido',
@@ -496,7 +497,7 @@ describe('TelegramUpdate', () => {
     it('guarda el mensaje del huésped ANTES de llamar a la IA', async () => {
       jest
         .spyOn(ragService, 'askQuestion')
-        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY } as any);
+        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY });
 
       await update.onMessage('Hola', mockCtx);
 
@@ -510,7 +511,7 @@ describe('TelegramUpdate', () => {
     it('descarta la respuesta si un operador tomó el control mientras la IA pensaba', async () => {
       jest
         .spyOn(ragService, 'askQuestion')
-        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY } as any);
+        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY });
       chatService.wasTakenOverMeanwhile.mockResolvedValue(true);
 
       await update.onMessage('Hola', mockCtx);
@@ -523,7 +524,7 @@ describe('TelegramUpdate', () => {
       jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
         texto: 'Lamentablemente no tengo esa información en este momento.',
         action: ChatAction.REPLY,
-      } as any);
+      });
 
       await update.onMessage('¿Aceptan mascotas exóticas?', mockCtx);
 
@@ -536,7 +537,7 @@ describe('TelegramUpdate', () => {
       jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
         texto: 'El desayuno se sirve de 7 a 10.',
         action: ChatAction.REPLY,
-      } as any);
+      });
 
       await update.onMessage('¿A qué hora es el desayuno?', mockCtx);
 
@@ -547,7 +548,7 @@ describe('TelegramUpdate', () => {
     it('excluye del historial el mensaje que se acaba de guardar', async () => {
       jest
         .spyOn(ragService, 'askQuestion')
-        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY } as any);
+        .mockResolvedValue({ texto: 'Hola', action: ChatAction.REPLY });
 
       await update.onMessage('Hola', mockCtx);
 

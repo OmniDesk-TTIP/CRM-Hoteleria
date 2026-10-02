@@ -15,7 +15,7 @@ describe('LoginDto', () => {
     expect(errors).toHaveLength(0);
   });
 
-  it('normaliza el email a minúsculas y sin espacios', async () => {
+  it('normaliza el email a minúsculas y sin espacios', () => {
     const dto = plainToInstance(LoginDto, {
       ...validPayload,
       email: '  Ana@OmniDesk.Local  ',

@@ -69,7 +69,8 @@ describe('Support Hours (e2e)', () => {
       await em.nativeDelete(User, {
         email: { $in: [admin.user.email, employee.user.email] },
       });
-    } catch (e) {
+    } catch {
+      // no-op: limpieza best-effort
     } finally {
       // Fuera del try: si la limpieza falla, la app se cierra igual y jest puede terminar.
       if (app) await app.close();
