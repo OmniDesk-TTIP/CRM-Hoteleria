@@ -1,4 +1,4 @@
-import {Opt } from '@mikro-orm/core';
+import { Opt } from '@mikro-orm/core';
 import { Entity, Property } from '@mikro-orm/decorators/legacy';
 
 @Entity({ abstract: true })

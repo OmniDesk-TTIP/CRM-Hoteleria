@@ -19,7 +19,9 @@ export class TokenService {
     private readonly authRepository: AuthRepository,
   ) {
     this.expiresIn = this.configService.get<string>('JWT_EXPIRES_IN') ?? '15m';
-    this.refreshTtlDays = Number(this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7);
+    this.refreshTtlDays = Number(
+      this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7,
+    );
   }
 
   hashRefreshToken(token: string): string {
@@ -27,7 +29,11 @@ export class TokenService {
   }
 
   private signAccessToken(user: User): Promise<string> {
-    const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
     return this.jwtService.signAsync(payload);
   }
 
@@ -38,7 +44,11 @@ export class TokenService {
   async issueTokens(user: User): Promise<AuthTokens> {
     const refreshToken = randomBytes(32).toString('base64url');
 
-    await this.authRepository.createRefreshToken(user, this.hashRefreshToken(refreshToken), this.refreshExpiryDate());
+    await this.authRepository.createRefreshToken(
+      user,
+      this.hashRefreshToken(refreshToken),
+      this.refreshExpiryDate(),
+    );
 
     return {
       accessToken: await this.signAccessToken(user),
@@ -46,7 +56,7 @@ export class TokenService {
       expiresIn: this.expiresIn,
     };
   }
-  
+
   async rotate(refreshToken: string): Promise<AuthTokens> {
     const tokenHash = this.hashRefreshToken(refreshToken);
     const stored = await this.authRepository.findRefreshToken(tokenHash);
@@ -56,7 +66,9 @@ export class TokenService {
     }
 
     if (stored.revokedAt) {
-      this.logger.warn(`Refresh token reusado del usuario ${stored.user.id}; se cierran todas sus sesiones`);
+      this.logger.warn(
+        `Refresh token reusado del usuario ${stored.user.id}; se cierran todas sus sesiones`,
+      );
       await this.authRepository.revokeAllForUser(stored.user.id);
       throw new UnauthorizedException('La sesión no es válida');
     }
@@ -79,7 +91,11 @@ export class TokenService {
       throw new UnauthorizedException('La sesión no es válida');
     }
 
-    await this.authRepository.createRefreshToken(stored.user, newHash, this.refreshExpiryDate());
+    await this.authRepository.createRefreshToken(
+      stored.user,
+      newHash,
+      this.refreshExpiryDate(),
+    );
 
     return {
       accessToken: await this.signAccessToken(stored.user),

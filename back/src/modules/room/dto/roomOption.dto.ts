@@ -1,4 +1,7 @@
-import { Room, RoomStatus } from '../../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../../infrastructure/database/entities/Room.entity';
 
 /** Respuesta de `GET /rooms`: espejo de `RoomOption` en el front. */
 export class RoomOptionDto {

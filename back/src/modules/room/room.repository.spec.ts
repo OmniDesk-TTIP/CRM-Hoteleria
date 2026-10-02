@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager } from '@mikro-orm/core';
 import { RoomRepository } from './room.repository';
-import { Room, RoomStatus } from '../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 
 describe('RoomRepository', () => {
@@ -50,7 +53,10 @@ describe('RoomRepository', () => {
 
       expect(em.find).toHaveBeenCalledWith(
         Room,
-        expect.objectContaining({ status: RoomStatus.ACTIVE, id: { $nin: ['room-1'] } }),
+        expect.objectContaining({
+          status: RoomStatus.ACTIVE,
+          id: { $nin: ['room-1'] },
+        }),
         { populate: ['category'] },
       );
     });
@@ -70,7 +76,10 @@ describe('RoomRepository', () => {
 
       await repository.findByRoomNumber('201', 'room-1');
 
-      expect(em.findOne).toHaveBeenCalledWith(Room, { roomNumber: '201', id: { $ne: 'room-1' } });
+      expect(em.findOne).toHaveBeenCalledWith(Room, {
+        roomNumber: '201',
+        id: { $ne: 'room-1' },
+      });
     });
   });
 
@@ -80,7 +89,9 @@ describe('RoomRepository', () => {
 
       await repository.findCategoryByName('doble');
 
-      expect(em.findOne).toHaveBeenCalledWith(RoomCategory, { name: { $ilike: 'doble' } });
+      expect(em.findOne).toHaveBeenCalledWith(RoomCategory, {
+        name: { $ilike: 'doble' },
+      });
     });
   });
 

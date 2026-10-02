@@ -45,14 +45,29 @@ describe('RoomSeederService', () => {
 
   it('siembra las categorías y habitaciones por defecto si no hay habitaciones cargadas', async () => {
     jest.spyOn(em, 'count').mockResolvedValue(0);
-    jest.spyOn(em, 'create').mockImplementation((_entity, data) => data as any);
+    jest.spyOn(em, 'create').mockImplementation((_entity, data) => data);
 
     await service.onModuleInit();
 
-    expect(em.create).toHaveBeenCalledWith(RoomCategory, { name: 'Individual', capacity: 1, basePrice: 8000 });
-    expect(em.create).toHaveBeenCalledWith(RoomCategory, { name: 'Doble', capacity: 2, basePrice: 12000 });
-    expect(em.create).toHaveBeenCalledWith(RoomCategory, { name: 'Suite', capacity: 4, basePrice: 20000 });
-    expect(em.create).toHaveBeenCalledWith(Room, expect.objectContaining({ roomNumber: '101' }));
+    expect(em.create).toHaveBeenCalledWith(RoomCategory, {
+      name: 'Individual',
+      capacity: 1,
+      basePrice: 8000,
+    });
+    expect(em.create).toHaveBeenCalledWith(RoomCategory, {
+      name: 'Doble',
+      capacity: 2,
+      basePrice: 12000,
+    });
+    expect(em.create).toHaveBeenCalledWith(RoomCategory, {
+      name: 'Suite',
+      capacity: 4,
+      basePrice: 20000,
+    });
+    expect(em.create).toHaveBeenCalledWith(
+      Room,
+      expect.objectContaining({ roomNumber: '101' }),
+    );
     expect(em.flush).toHaveBeenCalled();
   });
 

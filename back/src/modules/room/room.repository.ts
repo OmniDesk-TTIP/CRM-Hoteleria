@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { Room, RoomStatus } from '../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 
 interface CreateRoomData {
@@ -19,12 +22,21 @@ interface CreateCategoryData {
 export class RoomRepository {
   constructor(private readonly em: EntityManager) {}
 
-  async findByCapacityExcluding(capacity: number, excludedRoomIds: string[]): Promise<Room[]> {
-    return this.em.find(Room, {
-      status: RoomStatus.ACTIVE,
-      category: { capacity: { $gte: capacity } },
-      ...(excludedRoomIds.length > 0 ? { id: { $nin: excludedRoomIds } } : {}),
-    }, { populate: ['category'] });
+  async findByCapacityExcluding(
+    capacity: number,
+    excludedRoomIds: string[],
+  ): Promise<Room[]> {
+    return this.em.find(
+      Room,
+      {
+        status: RoomStatus.ACTIVE,
+        category: { capacity: { $gte: capacity } },
+        ...(excludedRoomIds.length > 0
+          ? { id: { $nin: excludedRoomIds } }
+          : {}),
+      },
+      { populate: ['category'] },
+    );
   }
 
   async findById(id: string): Promise<Room | null> {
@@ -32,10 +44,17 @@ export class RoomRepository {
   }
 
   async findAllWithCategory(): Promise<Room[]> {
-    return this.em.find(Room, {}, { populate: ['category'], orderBy: { roomNumber: 'asc' } });
+    return this.em.find(
+      Room,
+      {},
+      { populate: ['category'], orderBy: { roomNumber: 'asc' } },
+    );
   }
 
-  async findByRoomNumber(roomNumber: string, excludeRoomId?: string): Promise<Room | null> {
+  async findByRoomNumber(
+    roomNumber: string,
+    excludeRoomId?: string,
+  ): Promise<Room | null> {
     return this.em.findOne(Room, {
       roomNumber,
       ...(excludeRoomId ? { id: { $ne: excludeRoomId } } : {}),

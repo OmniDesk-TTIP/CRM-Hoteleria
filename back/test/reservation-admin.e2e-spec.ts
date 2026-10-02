@@ -9,10 +9,19 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { createValidationPipe } from '../src/validation.config';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
-import { Room, RoomStatus } from '../src/infrastructure/database/entities/Room.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../src/infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../src/infrastructure/database/entities/RoomCategory.entity';
-import { Reservation, ReservationStatus } from '../src/infrastructure/database/entities/Reservation.entity';
+import {
+  Reservation,
+  ReservationStatus,
+} from '../src/infrastructure/database/entities/Reservation.entity';
 
 describe('Admin Reservations CRUD (e2e)', () => {
   let app: INestApplication;
@@ -39,7 +48,13 @@ describe('Admin Reservations CRUD (e2e)', () => {
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -52,9 +67,21 @@ describe('Admin Reservations CRUD (e2e)', () => {
     employee = await seedUser(app, em, UserRole.EMPLOYEE);
 
     const uniqueSuffix = Date.now();
-    const category = em.create(RoomCategory, { name: `Doble E2E-${uniqueSuffix}`, capacity: 2, basePrice: 20000 });
-    const roomA = em.create(Room, { roomNumber: `A-${uniqueSuffix}`, category, status: RoomStatus.ACTIVE });
-    const roomB = em.create(Room, { roomNumber: `B-${uniqueSuffix}`, category, status: RoomStatus.ACTIVE });
+    const category = em.create(RoomCategory, {
+      name: `Doble E2E-${uniqueSuffix}`,
+      capacity: 2,
+      basePrice: 20000,
+    });
+    const roomA = em.create(Room, {
+      roomNumber: `A-${uniqueSuffix}`,
+      category,
+      status: RoomStatus.ACTIVE,
+    });
+    const roomB = em.create(Room, {
+      roomNumber: `B-${uniqueSuffix}`,
+      category,
+      status: RoomStatus.ACTIVE,
+    });
 
     const occupied = em.create(Reservation, {
       room: roomB,
@@ -81,9 +108,12 @@ describe('Admin Reservations CRUD (e2e)', () => {
       await em.nativeDelete(Reservation, { room: { $in: [roomAId, roomBId] } });
       await em.nativeDelete(Room, { id: { $in: [roomAId, roomBId] } });
       await em.nativeDelete(RoomCategory, { id: categoryId });
-      await em.nativeDelete(User, { email: { $in: [admin.user.email, employee.user.email] } });
+      await em.nativeDelete(User, {
+        email: { $in: [admin.user.email, employee.user.email] },
+      });
       if (app) await app.close();
-    } catch (e) {
+    } catch {
+      // no-op: limpieza best-effort
     }
   });
 
@@ -188,8 +218,14 @@ describe('Admin Reservations CRUD (e2e)', () => {
         .expect(200);
 
       expect(response.body).toMatchObject({ page: 1, pageSize: 10 });
-      expect(response.body.data.some((r: any) => r.id === occupiedReservationId)).toBe(true);
-      expect(response.body.data.every((r: any) => r.status === ReservationStatus.CONFIRMED)).toBe(true);
+      expect(
+        response.body.data.some((r: any) => r.id === occupiedReservationId),
+      ).toBe(true);
+      expect(
+        response.body.data.every(
+          (r: any) => r.status === ReservationStatus.CONFIRMED,
+        ),
+      ).toBe(true);
     });
   });
 
@@ -214,10 +250,18 @@ describe('Admin Reservations CRUD (e2e)', () => {
       const response = await request(app.getHttpServer())
         .patch(`/reservations/${reservationId}`)
         .set('Authorization', bearer(admin.accessToken))
-        .send(validPayload({ status: ReservationStatus.CONFIRMED, guestFullName: 'Juan Pérez (editado)' }))
+        .send(
+          validPayload({
+            status: ReservationStatus.CONFIRMED,
+            guestFullName: 'Juan Pérez (editado)',
+          }),
+        )
         .expect(200);
 
-      expect(response.body).toMatchObject({ status: ReservationStatus.CONFIRMED, guestFullName: 'Juan Pérez (editado)' });
+      expect(response.body).toMatchObject({
+        status: ReservationStatus.CONFIRMED,
+        guestFullName: 'Juan Pérez (editado)',
+      });
     });
 
     it('no choca contra sí misma al reeditar con las mismas fechas', async () => {

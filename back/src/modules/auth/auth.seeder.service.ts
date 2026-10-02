@@ -33,7 +33,9 @@ export class AuthSeederService implements OnModuleInit {
       return;
     }
 
-    const saltRounds = Number(this.configService.get<string>('BCRYPT_SALT_ROUNDS') ?? 10);
+    const saltRounds = Number(
+      this.configService.get<string>('BCRYPT_SALT_ROUNDS') ?? 10,
+    );
 
     await this.authRepository.createUser({
       email: email.trim().toLowerCase(),
@@ -42,6 +44,8 @@ export class AuthSeederService implements OnModuleInit {
       role: UserRole.ADMIN,
     });
 
-    this.logger.warn(`Administrador inicial creado: ${email}. Cambiá la contraseña cuanto antes.`);
+    this.logger.warn(
+      `Administrador inicial creado: ${email}. Cambiá la contraseña cuanto antes.`,
+    );
   }
 }

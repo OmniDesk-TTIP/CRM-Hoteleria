@@ -1,4 +1,11 @@
-import { IsIn, IsInt, IsOptional, IsDateString, Min, Max } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsDateString,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ReservationStatus } from '../../../infrastructure/database/entities/Reservation.entity';
 
@@ -8,11 +15,17 @@ export class ListReservationsQueryDto {
   status?: ReservationStatus;
 
   @IsOptional()
-  @IsDateString({}, { message: 'dateFrom debe ser una fecha válida (YYYY-MM-DD)' })
+  @IsDateString(
+    {},
+    { message: 'dateFrom debe ser una fecha válida (YYYY-MM-DD)' },
+  )
   dateFrom?: string;
 
   @IsOptional()
-  @IsDateString({}, { message: 'dateTo debe ser una fecha válida (YYYY-MM-DD)' })
+  @IsDateString(
+    {},
+    { message: 'dateTo debe ser una fecha válida (YYYY-MM-DD)' },
+  )
   dateTo?: string;
 
   // Los query params llegan como string; sin este @Type, @IsInt los rechaza directo.

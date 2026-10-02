@@ -24,12 +24,19 @@ describe('ReservationAdminController', () => {
       ],
     }).compile();
 
-    controller = module.get<ReservationAdminController>(ReservationAdminController);
+    controller = module.get<ReservationAdminController>(
+      ReservationAdminController,
+    );
     service = module.get<ReservationAdminService>(ReservationAdminService);
   });
 
   it('GET / delega en reservationAdminService.list con la query', () => {
-    const query: any = { page: 1, pageSize: 10, sortBy: 'checkIn', sortDir: 'desc' };
+    const query: any = {
+      page: 1,
+      pageSize: 10,
+      sortBy: 'checkIn',
+      sortDir: 'desc',
+    };
     controller.list(query);
     expect(service.list).toHaveBeenCalledWith(query);
   });

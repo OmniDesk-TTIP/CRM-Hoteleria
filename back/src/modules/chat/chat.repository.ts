@@ -1,7 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { EntityManager, FilterQuery, QueryOrder, UniqueConstraintViolationException } from '@mikro-orm/core';
-import { ChatSession, ChatSessionStatus } from '../../infrastructure/database/entities/ChatSession.entity';
-import { ChatMessage, MessageRole } from '../../infrastructure/database/entities/ChatMessage.entity';
+import {
+  EntityManager,
+  FilterQuery,
+  QueryOrder,
+  UniqueConstraintViolationException,
+} from '@mikro-orm/core';
+import {
+  ChatSession,
+  ChatSessionStatus,
+} from '../../infrastructure/database/entities/ChatSession.entity';
+import {
+  ChatMessage,
+  MessageRole,
+} from '../../infrastructure/database/entities/ChatMessage.entity';
 import { User } from '../../infrastructure/database/entities/User.entity';
 
 export interface TelegramProfile {
@@ -25,11 +36,21 @@ export class ChatRepository {
   constructor(private readonly em: EntityManager) {}
 
   async findById(id: string): Promise<ChatSession | null> {
-    return this.em.findOne(ChatSession, { id }, { populate: ['assignedOperator'] });
+    return this.em.findOne(
+      ChatSession,
+      { id },
+      { populate: ['assignedOperator'] },
+    );
   }
 
-  async findByTelegramUserId(telegramUserId: string): Promise<ChatSession | null> {
-    return this.em.findOne(ChatSession, { telegramUserId }, { populate: ['assignedOperator'] });
+  async findByTelegramUserId(
+    telegramUserId: string,
+  ): Promise<ChatSession | null> {
+    return this.em.findOne(
+      ChatSession,
+      { telegramUserId },
+      { populate: ['assignedOperator'] },
+    );
   }
 
   /**
@@ -38,7 +59,10 @@ export class ChatRepository {
    * telegram_user_id es la defensa, y el INSERT va en un EntityManager forkeado para que, si
    * pierde la carrera, el error no deje sucio el contexto compartido (allowGlobalContext).
    */
-  async getOrCreate(telegramUserId: string, profile?: TelegramProfile): Promise<{ session: ChatSession; created: boolean }> {
+  async getOrCreate(
+    telegramUserId: string,
+    profile?: TelegramProfile,
+  ): Promise<{ session: ChatSession; created: boolean }> {
     const existing = await this.findByTelegramUserId(telegramUserId);
     if (existing) {
       this.applyProfile(existing, profile);
@@ -46,7 +70,10 @@ export class ChatRepository {
     }
 
     const forked = this.em.fork();
-    forked.create(ChatSession, { telegramUserId, ...this.profileFields(profile) });
+    forked.create(ChatSession, {
+      telegramUserId,
+      ...this.profileFields(profile),
+    });
 
     try {
       await forked.flush();
@@ -55,18 +82,24 @@ export class ChatRepository {
     }
 
     const session = await this.findByTelegramUserId(telegramUserId);
-    if (!session) throw new Error(`No se pudo crear la sesión de chat de ${telegramUserId}`);
+    if (!session)
+      throw new Error(
+        `No se pudo crear la sesión de chat de ${telegramUserId}`,
+      );
 
     this.applyProfile(session, profile);
     return { session, created: true };
   }
 
-  async findManyPaginated(filters: ListChatsFilters): Promise<{ items: ChatSession[]; total: number }> {
+  async findManyPaginated(
+    filters: ListChatsFilters,
+  ): Promise<{ items: ChatSession[]; total: number }> {
     const where: FilterQuery<ChatSession> = {};
 
     if (filters.status) where.status = filters.status;
     if (filters.pendingHandover) where.handoverRequestedAt = { $ne: null };
-    if (filters.assignedOperatorId) where.assignedOperator = filters.assignedOperatorId;
+    if (filters.assignedOperatorId)
+      where.assignedOperator = filters.assignedOperatorId;
 
     if (filters.search) {
       const term = `%${filters.search}%`;
@@ -79,7 +112,10 @@ export class ChatRepository {
 
     // NULLS LAST explícito: en Postgres un DESC pone los nulos primero, y una conversación sin
     // mensajes encabezando la bandeja no tiene ningún sentido.
-    const order = filters.sortDir === 'asc' ? QueryOrder.ASC_NULLS_LAST : QueryOrder.DESC_NULLS_LAST;
+    const order =
+      filters.sortDir === 'asc'
+        ? QueryOrder.ASC_NULLS_LAST
+        : QueryOrder.DESC_NULLS_LAST;
 
     const [items, total] = await this.em.findAndCount(ChatSession, where, {
       populate: ['assignedOperator'],
@@ -95,7 +131,11 @@ export class ChatRepository {
    * Historial hacia atrás desde `before` (keyset). Devuelve `limit + 1` filas para saber si
    * quedan más sin pagar un count aparte.
    */
-  async findMessagesBefore(telegramUserId: string, before: Date | undefined, limit: number): Promise<ChatMessage[]> {
+  async findMessagesBefore(
+    telegramUserId: string,
+    before: Date | undefined,
+    limit: number,
+  ): Promise<ChatMessage[]> {
     const where: FilterQuery<ChatMessage> = { telegramUserId };
     if (before) where.createdAt = { $lt: before };
 
@@ -106,13 +146,22 @@ export class ChatRepository {
     });
   }
 
-  createMessage(data: { telegramUserId: string; role: MessageRole; content: string; sentBy?: User }): ChatMessage {
+  createMessage(data: {
+    telegramUserId: string;
+    role: MessageRole;
+    content: string;
+    sentBy?: User;
+  }): ChatMessage {
     return this.em.create(ChatMessage, data);
   }
 
   /** Relee el estado desde la base salteando el identity map. Se usa para detectar que un operador tomó el control mientras la IA pensaba. */
   async readFreshStatus(id: string): Promise<ChatSessionStatus | null> {
-    const session = await this.em.findOne(ChatSession, { id }, { refresh: true });
+    const session = await this.em.findOne(
+      ChatSession,
+      { id },
+      { refresh: true },
+    );
     return session?.status ?? null;
   }
 
@@ -127,14 +176,22 @@ export class ChatRepository {
   private applyProfile(session: ChatSession, profile?: TelegramProfile): void {
     if (!profile) return;
     const fields = this.profileFields(profile);
-    if (fields.guestDisplayName) session.guestDisplayName = fields.guestDisplayName;
-    if (fields.telegramUsername) session.telegramUsername = fields.telegramUsername;
+    if (fields.guestDisplayName)
+      session.guestDisplayName = fields.guestDisplayName;
+    if (fields.telegramUsername)
+      session.telegramUsername = fields.telegramUsername;
   }
 
-  private profileFields(profile?: TelegramProfile): { guestDisplayName?: string; telegramUsername?: string } {
+  private profileFields(profile?: TelegramProfile): {
+    guestDisplayName?: string;
+    telegramUsername?: string;
+  } {
     if (!profile) return {};
 
-    const displayName = [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim();
+    const displayName = [profile.firstName, profile.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
     return {
       guestDisplayName: displayName || undefined,
       telegramUsername: profile.username || undefined,

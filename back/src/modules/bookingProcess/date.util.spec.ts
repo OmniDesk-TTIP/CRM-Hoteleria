@@ -11,11 +11,15 @@ describe('date.util', () => {
     });
 
     it('lanza un error si el formato no es DD-MM-YYYY', () => {
-      expect(() => parseDate('2026-03-15')).toThrow('Fecha "2026-03-15" no tiene el formato DD-MM-YYYY');
+      expect(() => parseDate('2026-03-15')).toThrow(
+        'Fecha "2026-03-15" no tiene el formato DD-MM-YYYY',
+      );
     });
 
     it('lanza un error si el valor no tiene forma de fecha', () => {
-      expect(() => parseDate('mañana')).toThrow('no tiene el formato DD-MM-YYYY');
+      expect(() => parseDate('mañana')).toThrow(
+        'no tiene el formato DD-MM-YYYY',
+      );
     });
   });
 

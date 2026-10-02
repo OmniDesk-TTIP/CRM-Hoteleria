@@ -17,9 +17,25 @@ export interface NextOpening {
   opensAt: string;
 }
 
-export const WEEKDAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export const WEEKDAY_NAMES = [
+  'domingo',
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+];
 
-const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
 
 export function toMinutes(time: string): number {
   const [hours, minutes] = time.split(':');
@@ -36,7 +52,8 @@ export function zonedNow(date: Date, timeZone: string): ZonedNow {
     hourCycle: 'h23',
   }).formatToParts(date);
 
-  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
 
   return {
     weekday: WEEKDAY_INDEX[read('weekday')] ?? 0,
@@ -53,7 +70,10 @@ export function isValidTimeZone(timeZone: string): boolean {
   }
 }
 
-export function isOpenAt({ weekday, minutes }: ZonedNow, schedule: DaySchedule[]): boolean {
+export function isOpenAt(
+  { weekday, minutes }: ZonedNow,
+  schedule: DaySchedule[],
+): boolean {
   const today = schedule.find((day) => day.weekday === weekday);
   if (!today || today.isClosed) return false;
 
@@ -65,7 +85,10 @@ export function isOpenAt({ weekday, minutes }: ZonedNow, schedule: DaySchedule[]
   return minutes >= opens && minutes < closes;
 }
 
-export function findNextOpening({ weekday, minutes }: ZonedNow, schedule: DaySchedule[]): NextOpening | null {
+export function findNextOpening(
+  { weekday, minutes }: ZonedNow,
+  schedule: DaySchedule[],
+): NextOpening | null {
   for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
     const targetWeekday = (weekday + dayOffset) % 7;
     const day = schedule.find((entry) => entry.weekday === targetWeekday);

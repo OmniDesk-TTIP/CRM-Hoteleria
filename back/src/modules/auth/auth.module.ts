@@ -17,13 +17,16 @@ import { JwtAuthGuard } from './auth.guard';
         const secret = configService.getOrThrow<string>('JWT_SECRET');
 
         if (secret.length < 32) {
-          throw new Error('JWT_SECRET es demasiado corto: usá al menos 32 caracteres.');
+          throw new Error(
+            'JWT_SECRET es demasiado corto: usá al menos 32 caracteres.',
+          );
         }
 
         return {
           secret,
           signOptions: {
-            expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '15m') as JwtSignOptions['expiresIn'],
+            expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ??
+              '15m') as JwtSignOptions['expiresIn'],
           },
         };
       },

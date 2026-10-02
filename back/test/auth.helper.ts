@@ -3,7 +3,10 @@ import { EntityManager } from '@mikro-orm/core';
 import { JwtService } from '@nestjs/jwt';
 import { hashPassword } from '../src/modules/auth/password.util';
 import { JwtPayload } from '../src/modules/auth/auth.types';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
 
 export interface SeededUser {
   user: User;
@@ -35,7 +38,11 @@ export async function seedUser(
   em.persist(user);
   await em.flush();
 
-  const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
+  const payload: JwtPayload = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  };
   const accessToken = await app.get(JwtService).signAsync(payload);
 
   return { user, password, accessToken };

@@ -9,10 +9,23 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { createValidationPipe } from '../src/validation.config';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
-import { ChatSession, ChatSessionStatus, HandoverReason } from '../src/infrastructure/database/entities/ChatSession.entity';
-import { ChatMessage, MessageRole } from '../src/infrastructure/database/entities/ChatMessage.entity';
-import { RELEASE_NOTICE, takeOverGreeting } from '../src/modules/chat/chat.service';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
+import {
+  ChatSession,
+  ChatSessionStatus,
+  HandoverReason,
+} from '../src/infrastructure/database/entities/ChatSession.entity';
+import {
+  ChatMessage,
+  MessageRole,
+} from '../src/infrastructure/database/entities/ChatMessage.entity';
+import {
+  RELEASE_NOTICE,
+  takeOverGreeting,
+} from '../src/modules/chat/chat.service';
 
 const UNKNOWN_UUID = '11111111-2222-4333-8444-555555555555';
 
@@ -36,7 +49,11 @@ describe('Chats / Handover (e2e)', () => {
   const guestWithHistory = `70${suffix}`;
   const guestPendingHandover = `71${suffix}`;
   const guestTakenOver = `72${suffix}`;
-  const telegramUserIds = [guestWithHistory, guestPendingHandover, guestTakenOver];
+  const telegramUserIds = [
+    guestWithHistory,
+    guestPendingHandover,
+    guestTakenOver,
+  ];
 
   let chatWithHistoryId: string;
   let chatPendingHandoverId: string;
@@ -68,7 +85,10 @@ describe('Chats / Handover (e2e)', () => {
     admin = await seedUser(app, em, UserRole.ADMIN);
     employee = await seedUser(app, em, UserRole.EMPLOYEE);
 
-    const withHistory = em.create(ChatSession, { telegramUserId: guestWithHistory, guestDisplayName: 'Ana Gómez' });
+    const withHistory = em.create(ChatSession, {
+      telegramUserId: guestWithHistory,
+      guestDisplayName: 'Ana Gómez',
+    });
     const pending = em.create(ChatSession, {
       telegramUserId: guestPendingHandover,
       status: ChatSessionStatus.WAITING_HUMAN,
@@ -82,9 +102,24 @@ describe('Chats / Handover (e2e)', () => {
     });
 
     // Tres mensajes con createdAt explícito para que la paginación por cursor sea determinista.
-    em.create(ChatMessage, { telegramUserId: guestWithHistory, role: MessageRole.USER, content: 'Hola, ¿tienen lugar?', createdAt: new Date('2026-09-21T10:00:00Z') });
-    em.create(ChatMessage, { telegramUserId: guestWithHistory, role: MessageRole.BOT, content: '¡Hola! ¿Para qué fechas?', createdAt: new Date('2026-09-21T11:00:00Z') });
-    em.create(ChatMessage, { telegramUserId: guestWithHistory, role: MessageRole.USER, content: 'Del 10 al 12', createdAt: new Date('2026-09-21T12:00:00Z') });
+    em.create(ChatMessage, {
+      telegramUserId: guestWithHistory,
+      role: MessageRole.USER,
+      content: 'Hola, ¿tienen lugar?',
+      createdAt: new Date('2026-09-21T10:00:00Z'),
+    });
+    em.create(ChatMessage, {
+      telegramUserId: guestWithHistory,
+      role: MessageRole.BOT,
+      content: '¡Hola! ¿Para qué fechas?',
+      createdAt: new Date('2026-09-21T11:00:00Z'),
+    });
+    em.create(ChatMessage, {
+      telegramUserId: guestWithHistory,
+      role: MessageRole.USER,
+      content: 'Del 10 al 12',
+      createdAt: new Date('2026-09-21T12:00:00Z'),
+    });
 
     await em.flush();
 
@@ -95,10 +130,17 @@ describe('Chats / Handover (e2e)', () => {
 
   afterAll(async () => {
     try {
-      await em.nativeDelete(ChatMessage, { telegramUserId: { $in: telegramUserIds } });
-      await em.nativeDelete(ChatSession, { telegramUserId: { $in: telegramUserIds } });
-      await em.nativeDelete(User, { email: { $in: [admin.user.email, employee.user.email] } });
-    } catch (e) {
+      await em.nativeDelete(ChatMessage, {
+        telegramUserId: { $in: telegramUserIds },
+      });
+      await em.nativeDelete(ChatSession, {
+        telegramUserId: { $in: telegramUserIds },
+      });
+      await em.nativeDelete(User, {
+        email: { $in: [admin.user.email, employee.user.email] },
+      });
+    } catch {
+      // no-op: limpieza best-effort
     } finally {
       // Fuera del try a propósito: si la limpieza falla, cerrar igual la app. Si no, el servidor
       // de socket.io y el pool de la base quedan vivos y jest no termina nunca.
@@ -142,7 +184,13 @@ describe('Chats / Handover (e2e)', () => {
 
       expect(body).toMatchObject({ page: 1, pageSize: 50 });
       const ids = body.data.map((chat: any) => chat.id);
-      expect(ids).toEqual(expect.arrayContaining([chatWithHistoryId, chatPendingHandoverId, chatTakenOverId]));
+      expect(ids).toEqual(
+        expect.arrayContaining([
+          chatWithHistoryId,
+          chatPendingHandoverId,
+          chatTakenOverId,
+        ]),
+      );
     });
 
     it('filtra por estado', async () => {
@@ -176,7 +224,9 @@ describe('Chats / Handover (e2e)', () => {
         .set('Authorization', bearer(admin.accessToken))
         .expect(200);
 
-      expect(body.data.map((chat: any) => chat.id)).toContain(chatWithHistoryId);
+      expect(body.data.map((chat: any) => chat.id)).toContain(
+        chatWithHistoryId,
+      );
     });
 
     it('rechaza un pageSize mayor al permitido', async () => {
@@ -225,7 +275,10 @@ describe('Chats / Handover (e2e)', () => {
         .expect(200);
 
       // Orden cronológico inverso: lo último dicho primero.
-      expect(first.body.data.map((m: any) => m.content)).toEqual(['Del 10 al 12', '¡Hola! ¿Para qué fechas?']);
+      expect(first.body.data.map((m: any) => m.content)).toEqual([
+        'Del 10 al 12',
+        '¡Hola! ¿Para qué fechas?',
+      ]);
       expect(first.body.nextCursor).toBeTruthy();
 
       const second = await request(app.getHttpServer())
@@ -234,7 +287,9 @@ describe('Chats / Handover (e2e)', () => {
         .set('Authorization', bearer(admin.accessToken))
         .expect(200);
 
-      expect(second.body.data.map((m: any) => m.content)).toEqual(['Hola, ¿tienen lugar?']);
+      expect(second.body.data.map((m: any) => m.content)).toEqual([
+        'Hola, ¿tienen lugar?',
+      ]);
       expect(second.body.nextCursor).toBeNull();
     });
 
@@ -262,7 +317,10 @@ describe('Chats / Handover (e2e)', () => {
       });
 
       // Sin parse_mode y con el texto crudo: dos argumentos, ni uno más.
-      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(guestTakenOver, 'Hola, soy Lucrecia de recepción');
+      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(
+        guestTakenOver,
+        'Hola, soy Lucrecia de recepción',
+      );
       expect(botMock.telegram.sendMessage.mock.calls[0]).toHaveLength(2);
     });
 
@@ -284,7 +342,9 @@ describe('Chats / Handover (e2e)', () => {
     });
 
     it('502 si Telegram rechaza el mensaje, y no lo guarda', async () => {
-      botMock.telegram.sendMessage.mockRejectedValueOnce(new Error('403: bot was blocked by the user'));
+      botMock.telegram.sendMessage.mockRejectedValueOnce(
+        new Error('403: bot was blocked by the user'),
+      );
 
       await request(app.getHttpServer())
         .post(`/chats/${chatTakenOverId}/messages`)
@@ -292,7 +352,10 @@ describe('Chats / Handover (e2e)', () => {
         .send({ text: 'Mensaje que no llega' })
         .expect(502);
 
-      const saved = await em.fork().find(ChatMessage, { telegramUserId: guestTakenOver, content: 'Mensaje que no llega' });
+      const saved = await em.fork().find(ChatMessage, {
+        telegramUserId: guestTakenOver,
+        content: 'Mensaje que no llega',
+      });
       expect(saved).toHaveLength(0);
     });
 
@@ -325,9 +388,15 @@ describe('Chats / Handover (e2e)', () => {
       expect(body.guestNotified).toBe(true);
       // El huésped se entera de que ahora lo atiende una persona.
       const greeting = takeOverGreeting(employee.user.fullName);
-      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(guestPendingHandover, greeting);
+      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(
+        guestPendingHandover,
+        greeting,
+      );
 
-      const saved = await em.fork().find(ChatMessage, { telegramUserId: guestPendingHandover, content: greeting });
+      const saved = await em.fork().find(ChatMessage, {
+        telegramUserId: guestPendingHandover,
+        content: greeting,
+      });
       expect(saved).toHaveLength(1);
       expect(saved[0].role).toBe(MessageRole.OPERATOR);
     });
@@ -345,11 +414,16 @@ describe('Chats / Handover (e2e)', () => {
         consecutiveBotFailures: 0,
         guestNotified: true,
       });
-      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(guestPendingHandover, RELEASE_NOTICE);
+      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(
+        guestPendingHandover,
+        RELEASE_NOTICE,
+      );
 
       // Lo de arriba sale de la entidad en memoria. Esto comprueba que la columna quedó en NULL:
       // MikroORM solo escribe NULL si el valor es estrictamente null, nunca con undefined.
-      const persisted = await em.fork().findOne(ChatSession, { id: chatPendingHandoverId });
+      const persisted = await em
+        .fork()
+        .findOne(ChatSession, { id: chatPendingHandoverId });
       expect(persisted?.assignedOperator).toBeNull();
       expect(persisted?.status).toBe(ChatSessionStatus.BOT);
       expect(persisted?.releasedAt).toBeInstanceOf(Date);
@@ -369,7 +443,10 @@ describe('Chats / Handover (e2e)', () => {
         .send({})
         .expect(200);
 
-      expect(body).toMatchObject({ status: ChatSessionStatus.BOT, guestNotified: false });
+      expect(body).toMatchObject({
+        status: ChatSessionStatus.BOT,
+        guestNotified: false,
+      });
     });
 
     it('rechaza un closeActiveBooking que no sea booleano', async () => {

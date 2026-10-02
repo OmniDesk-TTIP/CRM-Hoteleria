@@ -17,7 +17,9 @@ export class SupportHoursSeederService implements OnModuleInit {
     const count = await this.supportHoursRepository.count();
     if (count > 0) return;
 
-    this.logger.log('No hay horarios de atención cargados. Sembrando la semana por defecto...');
+    this.logger.log(
+      'No hay horarios de atención cargados. Sembrando la semana por defecto...',
+    );
     await this.supportHoursService.seedDefaultSchedule();
     this.logger.log('Horarios de atención por defecto sembrados exitosamente.');
   }

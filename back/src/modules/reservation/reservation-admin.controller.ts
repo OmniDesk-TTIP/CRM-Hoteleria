@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ReservationAdminService } from './reservation-admin.service';
 import { ListReservationsQueryDto } from './dto/listReservations.dto';
 import { SaveReservationDto } from './dto/saveReservation.dto';
@@ -7,7 +19,9 @@ import { SaveReservationDto } from './dto/saveReservation.dto';
 // por ahora cualquier usuario autenticado, ADMIN o EMPLOYEE, puede gestionar reservas.
 @Controller('reservations')
 export class ReservationAdminController {
-  constructor(private readonly reservationAdminService: ReservationAdminService) {}
+  constructor(
+    private readonly reservationAdminService: ReservationAdminService,
+  ) {}
 
   // CA1: listado con paginación, orden y filtros por estado/fecha.
   @Get()
@@ -23,7 +37,10 @@ export class ReservationAdminController {
 
   // CA3: edición, con la misma validación de disponibilidad que el alta.
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() body: SaveReservationDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: SaveReservationDto,
+  ) {
     return this.reservationAdminService.update(id, body);
   }
 
