@@ -1,4 +1,8 @@
-import { Reservation, ReservationOrigin, ReservationStatus } from '../../../infrastructure/database/entities/Reservation.entity';
+import {
+  Reservation,
+  ReservationOrigin,
+  ReservationStatus,
+} from '../../../infrastructure/database/entities/Reservation.entity';
 
 export class AdminReservationDto {
   id!: string;

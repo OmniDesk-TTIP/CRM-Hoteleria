@@ -7,7 +7,10 @@ import { AppModule } from './../src/app.module';
 import { createValidationPipe } from '../src/validation.config';
 import { Document } from '../src/infrastructure/database/entities/Document.entity';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
 
 jest.mock('@google/generative-ai', () => {
   const actual = jest.requireActual('@google/generative-ai');
@@ -15,7 +18,9 @@ jest.mock('@google/generative-ai', () => {
     ...actual,
     GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
       getGenerativeModel: jest.fn().mockReturnValue({
-        embedContent: jest.fn().mockResolvedValue({ embedding: { values: Array(3072).fill(0.001) } }),
+        embedContent: jest.fn().mockResolvedValue({
+          embedding: { values: Array(3072).fill(0.001) },
+        }),
       }),
     })),
   };
@@ -35,7 +40,13 @@ describe('RagModule - ingest (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -55,8 +66,7 @@ describe('RagModule - ingest (e2e)', () => {
       await em.nativeDelete(Document, { content: text });
       await em.nativeDelete(User, { id: adminId });
       if (app) await app.close();
-    } catch (e) {
-    }
+    } catch (e) {}
   });
 
   it('POST /rag/ingest debería vectorizar el texto y persistirlo como Document en la base', async () => {

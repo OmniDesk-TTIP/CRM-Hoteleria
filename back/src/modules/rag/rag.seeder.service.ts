@@ -15,20 +15,24 @@ export class RagSeederService implements OnModuleInit {
 
   async onModuleInit() {
     const count = await this.ragRepository.countDocuments();
-    
+
     if (count === 0) {
-      this.logger.log('Base de datos vacía. Iniciando inyección de conocimiento por defecto...');
+      this.logger.log(
+        'Base de datos vacía. Iniciando inyección de conocimiento por defecto...',
+      );
       await this.seedDefaultKnowledge();
       this.logger.log('Conocimiento base inyectado exitosamente. RAG listo.');
     } else {
-      this.logger.log(`El RAG ya cuenta con ${count} fragmentos de conocimiento en memoria.`);
+      this.logger.log(
+        `El RAG ya cuenta con ${count} fragmentos de conocimiento en memoria.`,
+      );
     }
   }
 
   private async seedDefaultKnowledge() {
     try {
       const filePath = path.join(process.cwd(), 'knowledge.json');
-      
+
       const fileContent = fs.readFileSync(filePath, 'utf-8');
       const defaultKnowledge: string[] = JSON.parse(fileContent);
 
@@ -36,8 +40,10 @@ export class RagSeederService implements OnModuleInit {
         await this.ragService.ingestDocument(text);
       }
     } catch (error) {
-      this.logger.error('Error al intentar leer o procesar knowledge.json', error);
+      this.logger.error(
+        'Error al intentar leer o procesar knowledge.json',
+        error,
+      );
     }
   }
-
 }

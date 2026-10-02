@@ -9,7 +9,10 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { createValidationPipe } from '../src/validation.config';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
 import { SupportHours } from '../src/infrastructure/database/entities/SupportHours.entity';
 
 describe('Support Hours (e2e)', () => {
@@ -39,7 +42,13 @@ describe('Support Hours (e2e)', () => {
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -57,7 +66,9 @@ describe('Support Hours (e2e)', () => {
       // La semana que crea el PUT no puede sobrevivir a esta suite: si queda, el handover de
       // telegram.e2e cae en "fuera de horario" y deja de silenciar al bot.
       await em.nativeDelete(SupportHours, { weekday: { $gte: 0 } });
-      await em.nativeDelete(User, { email: { $in: [admin.user.email, employee.user.email] } });
+      await em.nativeDelete(User, {
+        email: { $in: [admin.user.email, employee.user.email] },
+      });
     } catch (e) {
     } finally {
       // Fuera del try: si la limpieza falla, la app se cierra igual y jest puede terminar.
@@ -68,7 +79,10 @@ describe('Support Hours (e2e)', () => {
   describe('Autorización', () => {
     it('sin token responde 401', async () => {
       await request(app.getHttpServer()).get('/support-hours').expect(401);
-      await request(app.getHttpServer()).put('/support-hours').send({ days: week }).expect(401);
+      await request(app.getHttpServer())
+        .put('/support-hours')
+        .send({ days: week })
+        .expect(401);
     });
 
     it('cualquier operador puede leerlos, solo un Administrador puede editarlos', async () => {
@@ -90,12 +104,18 @@ describe('Support Hours (e2e)', () => {
       const { body } = await request(app.getHttpServer())
         .put('/support-hours')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ days: week.map((day) => (day.weekday === 0 ? { ...day, isClosed: true } : day)) })
+        .send({
+          days: week.map((day) =>
+            day.weekday === 0 ? { ...day, isClosed: true } : day,
+          ),
+        })
         .expect(200);
 
       expect(body.days).toHaveLength(7);
       expect(body.timeZone).toBeTruthy();
-      expect(body.days.find((day: any) => day.weekday === 0)).toMatchObject({ isClosed: true });
+      expect(body.days.find((day: any) => day.weekday === 0)).toMatchObject({
+        isClosed: true,
+      });
     });
 
     it('es idempotente: un segundo PUT actualiza las filas en vez de duplicarlas', async () => {
@@ -120,7 +140,11 @@ describe('Support Hours (e2e)', () => {
       await request(app.getHttpServer())
         .put('/support-hours')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ days: week.map((day) => (day.weekday === 2 ? { ...day, opensAt: '9am' } : day)) })
+        .send({
+          days: week.map((day) =>
+            day.weekday === 2 ? { ...day, opensAt: '9am' } : day,
+          ),
+        })
         .expect(400);
     });
 
@@ -128,7 +152,13 @@ describe('Support Hours (e2e)', () => {
       await request(app.getHttpServer())
         .put('/support-hours')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ days: week.map((day) => (day.weekday === 3 ? { ...day, opensAt: '10:00', closesAt: '10:00' } : day)) })
+        .send({
+          days: week.map((day) =>
+            day.weekday === 3
+              ? { ...day, opensAt: '10:00', closesAt: '10:00' }
+              : day,
+          ),
+        })
         .expect(400);
     });
   });

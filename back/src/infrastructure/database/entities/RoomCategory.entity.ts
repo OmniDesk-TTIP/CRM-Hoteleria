@@ -1,5 +1,12 @@
-import { Collection } from '@mikro-orm/core'; 
-import { Entity, PrimaryKey, Property, OneToMany, ManyToOne, Enum } from '@mikro-orm/decorators/legacy';
+import { Collection } from '@mikro-orm/core';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  OneToMany,
+  ManyToOne,
+  Enum,
+} from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import type { Room } from './Room.entity';
 import { CustomBaseEntity } from './CustomBase.entity';

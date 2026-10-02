@@ -6,9 +6,15 @@ import { AppModule } from './../src/app.module';
 import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { MikroORM, EntityManager } from '@mikro-orm/core';
-import { Room, RoomStatus } from '../src/infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../src/infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../src/infrastructure/database/entities/RoomCategory.entity';
-import { Reservation, ReservationStatus } from '../src/infrastructure/database/entities/Reservation.entity';
+import {
+  Reservation,
+  ReservationStatus,
+} from '../src/infrastructure/database/entities/Reservation.entity';
 
 describe('Payment Webhook (e2e)', () => {
   let app: INestApplication;
@@ -34,7 +40,14 @@ describe('Payment Webhook (e2e)', () => {
       .overrideProvider(PaymentService)
       .useValue(paymentServiceMock)
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn(), telegram: { sendMessage: jest.fn() } })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+        telegram: { sendMessage: jest.fn() },
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -44,8 +57,16 @@ describe('Payment Webhook (e2e)', () => {
     em = orm.em.fork();
 
     const uniqueSuffix = Date.now();
-    const category = em.create(RoomCategory, { name: `Suite Pago E2E-${uniqueSuffix}`, capacity: 2, basePrice: 15000 });
-    const room = em.create(Room, { roomNumber: `202-${uniqueSuffix}`, category, status: RoomStatus.ACTIVE });
+    const category = em.create(RoomCategory, {
+      name: `Suite Pago E2E-${uniqueSuffix}`,
+      capacity: 2,
+      basePrice: 15000,
+    });
+    const room = em.create(Room, {
+      roomNumber: `202-${uniqueSuffix}`,
+      category,
+      status: RoomStatus.ACTIVE,
+    });
 
     const reservation = em.create(Reservation, {
       room,
@@ -72,8 +93,7 @@ describe('Payment Webhook (e2e)', () => {
       await em.nativeDelete(RoomCategory, { id: seededCategoryId });
 
       if (app) await app.close();
-    } catch (e) {
-    }
+    } catch (e) {}
   });
 
   afterEach(() => {
@@ -95,7 +115,11 @@ describe('Payment Webhook (e2e)', () => {
 
   it('POST /payment/webhook confirma la reserva cuando el pago está aprobado', async () => {
     paymentServiceMock.verifyWebhookSignature.mockReturnValue(true);
-    paymentServiceMock.getPayment.mockResolvedValue({ id: 987654, status: 'approved', external_reference: reservationId });
+    paymentServiceMock.getPayment.mockResolvedValue({
+      id: 987654,
+      status: 'approved',
+      external_reference: reservationId,
+    });
 
     await request(app.getHttpServer())
       .post('/payment/webhook')
@@ -109,11 +133,17 @@ describe('Payment Webhook (e2e)', () => {
     const reservation = await em.findOne(Reservation, { id: reservationId });
     expect(reservation?.status).toBe(ReservationStatus.CONFIRMED);
     expect(reservation?.mpPaymentId).toBe('987654');
-    expect(paymentServiceMock.notifyPaymentApproved).toHaveBeenCalledWith('555444333', reservation?.checkIn, reservation?.checkOut);
+    expect(paymentServiceMock.notifyPaymentApproved).toHaveBeenCalledWith(
+      '555444333',
+      reservation?.checkIn,
+      reservation?.checkOut,
+    );
   });
 
   it('GET /payment/:reservationId/summary devuelve los datos de la reserva', async () => {
-    const response = await request(app.getHttpServer()).get(`/payment/${reservationId}/summary`).expect(200);
+    const response = await request(app.getHttpServer())
+      .get(`/payment/${reservationId}/summary`)
+      .expect(200);
 
     expect(response.body).toMatchObject({
       id: reservationId,
@@ -124,6 +154,8 @@ describe('Payment Webhook (e2e)', () => {
   });
 
   it('GET /payment/:reservationId/summary devuelve 404 si la reserva no existe', async () => {
-    await request(app.getHttpServer()).get('/payment/00000000-0000-0000-0000-000000000000/summary').expect(404);
+    await request(app.getHttpServer())
+      .get('/payment/00000000-0000-0000-0000-000000000000/summary')
+      .expect(404);
   });
 });

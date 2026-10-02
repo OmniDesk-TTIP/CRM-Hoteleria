@@ -12,13 +12,22 @@ describe('RagModule (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-    .overrideProvider(RagService)
-    .useValue({
-      askQuestion: jest.fn().mockResolvedValue({ texto: 'Respuesta de prueba', action: ChatAction.REPLY })
-    })
-    .overrideProvider(getBotToken())
-    .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
-    .compile();
+      .overrideProvider(RagService)
+      .useValue({
+        askQuestion: jest.fn().mockResolvedValue({
+          texto: 'Respuesta de prueba',
+          action: ChatAction.REPLY,
+        }),
+      })
+      .overrideProvider(getBotToken())
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -27,15 +36,14 @@ describe('RagModule (e2e)', () => {
   afterAll(async () => {
     try {
       await app?.close();
-    } catch (error) {
-    }
+    } catch (error) {}
   });
 
   it('/rag/ask (POST) debería procesar una pregunta y devolver una respuesta usando el flujo real', async () => {
     const response = await request(app.getHttpServer())
-      .post('/rag/ask') 
+      .post('/rag/ask')
       .send({ question: '¿Cuáles son los horarios del hotel?' })
       .expect(200);
-      expect(response.body).toBeDefined();
+    expect(response.body).toBeDefined();
   });
 });

@@ -1,14 +1,26 @@
-import { ConflictException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import { AuthRepository } from './auth.repository';
 import { TokenService } from './token.service';
-import { burnPasswordComparison, hashPassword, verifyPassword } from './password.util';
+import {
+  burnPasswordComparison,
+  hashPassword,
+  verifyPassword,
+} from './password.util';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UserDto } from './dto/user.dto';
 import { AuthTokens } from './auth.types';
-import { User, UserRole } from '../../infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../../infrastructure/database/entities/User.entity';
 
 export interface LoginResult extends AuthTokens {
   user: UserDto;
@@ -24,7 +36,9 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly configService: ConfigService,
   ) {
-    this.saltRounds = Number(this.configService.get<string>('BCRYPT_SALT_ROUNDS') ?? 10);
+    this.saltRounds = Number(
+      this.configService.get<string>('BCRYPT_SALT_ROUNDS') ?? 10,
+    );
   }
 
   async register(dto: RegisterDto): Promise<UserDto> {
@@ -58,7 +72,10 @@ export class AuthService {
       throw new UnauthorizedException('Email o contraseña incorrectos');
     }
 
-    const passwordMatches = await verifyPassword(dto.password, user.passwordHash);
+    const passwordMatches = await verifyPassword(
+      dto.password,
+      user.passwordHash,
+    );
 
     if (!passwordMatches || !user.isActive) {
       throw new UnauthorizedException('Email o contraseña incorrectos');

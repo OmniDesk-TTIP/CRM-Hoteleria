@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager, FilterQuery } from '@mikro-orm/core';
-import { Reservation, ReservationOrigin, ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
+import {
+  Reservation,
+  ReservationOrigin,
+  ReservationStatus,
+} from '../../infrastructure/database/entities/Reservation.entity';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
 
 interface CreateReservationData {
@@ -40,21 +44,32 @@ export class ReservationRepository {
   constructor(private readonly em: EntityManager) {}
 
   async findOverlapping(checkIn: Date, checkOut: Date): Promise<Reservation[]> {
-    return this.em.find(Reservation, {
-      status: { $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED] },
-      $and: [{ checkIn: { $lt: checkOut } }, { checkOut: { $gt: checkIn } }],
-    }, { populate: ['room'] });
+    return this.em.find(
+      Reservation,
+      {
+        status: {
+          $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED],
+        },
+        $and: [{ checkIn: { $lt: checkOut } }, { checkOut: { $gt: checkIn } }],
+      },
+      { populate: ['room'] },
+    );
   }
 
   create(data: CreateReservationData): Reservation {
-    return this.em.create(Reservation, { ...data, status: ReservationStatus.PENDING_PAYMENT });
+    return this.em.create(Reservation, {
+      ...data,
+      status: ReservationStatus.PENDING_PAYMENT,
+    });
   }
 
   persist(reservation: Reservation): void {
     this.em.persist(reservation);
   }
 
-  async findManyPaginated(filters: AdminReservationFilters): Promise<{ items: Reservation[]; total: number }> {
+  async findManyPaginated(
+    filters: AdminReservationFilters,
+  ): Promise<{ items: Reservation[]; total: number }> {
     const where: FilterQuery<Reservation> = {
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.dateFrom ? { checkIn: { $gte: filters.dateFrom } } : {}),
@@ -63,7 +78,7 @@ export class ReservationRepository {
 
     const [items, total] = await this.em.findAndCount(Reservation, where, {
       populate: ['room', 'room.category'],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- clave de orden dinámica según sortBy
+
       orderBy: { [filters.sortBy]: filters.sortDir } as any,
       limit: filters.pageSize,
       offset: (filters.page - 1) * filters.pageSize,
@@ -73,7 +88,11 @@ export class ReservationRepository {
   }
 
   async findById(id: string): Promise<Reservation | null> {
-    return this.em.findOne(Reservation, { id }, { populate: ['room', 'room.category'] });
+    return this.em.findOne(
+      Reservation,
+      { id },
+      { populate: ['room', 'room.category'] },
+    );
   }
 
   async isRoomOccupied(
@@ -84,7 +103,9 @@ export class ReservationRepository {
   ): Promise<boolean> {
     const count = await this.em.count(Reservation, {
       room: roomId,
-      status: { $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED] },
+      status: {
+        $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED],
+      },
       $and: [{ checkIn: { $lt: checkOut } }, { checkOut: { $gt: checkIn } }],
       ...(excludeReservationId ? { id: { $ne: excludeReservationId } } : {}),
     });
@@ -93,7 +114,10 @@ export class ReservationRepository {
   }
 
   createManual(data: ManualReservationData): Reservation {
-    return this.em.create(Reservation, { ...data, origin: ReservationOrigin.MANUAL });
+    return this.em.create(Reservation, {
+      ...data,
+      origin: ReservationOrigin.MANUAL,
+    });
   }
 
   async saveNew(reservation: Reservation): Promise<void> {
@@ -101,7 +125,10 @@ export class ReservationRepository {
     await this.em.flush();
   }
 
-  async applyUpdate(reservation: Reservation, data: ManualReservationData): Promise<void> {
+  async applyUpdate(
+    reservation: Reservation,
+    data: ManualReservationData,
+  ): Promise<void> {
     reservation.room = data.room;
     reservation.guestFullName = data.guestFullName;
     reservation.guestDni = data.guestDni;

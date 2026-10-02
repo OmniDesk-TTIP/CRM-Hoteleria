@@ -6,7 +6,10 @@ import { AuthService } from './auth.service';
 import { AuthRepository } from './auth.repository';
 import { TokenService } from './token.service';
 import { hashPassword } from './password.util';
-import { User, UserRole } from '../../infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../../infrastructure/database/entities/User.entity';
 
 const SALT_ROUNDS = 4; // bajo a propósito: los tests no necesitan el costo real
 
@@ -18,7 +21,11 @@ describe('AuthService', () => {
     createUser: jest.Mock;
     touchLastLogin: jest.Mock;
   };
-  let tokenServiceMock: { issueTokens: jest.Mock; rotate: jest.Mock; revoke: jest.Mock };
+  let tokenServiceMock: {
+    issueTokens: jest.Mock;
+    rotate: jest.Mock;
+    revoke: jest.Mock;
+  };
 
   const buildUser = async (overrides: Partial<User> = {}): Promise<User> =>
     ({
@@ -40,7 +47,11 @@ describe('AuthService', () => {
       touchLastLogin: jest.fn().mockResolvedValue(undefined),
     };
     tokenServiceMock = {
-      issueTokens: jest.fn().mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', expiresIn: '15m' }),
+      issueTokens: jest.fn().mockResolvedValue({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresIn: '15m',
+      }),
       rotate: jest.fn(),
       revoke: jest.fn().mockResolvedValue(undefined),
     };
@@ -50,7 +61,10 @@ describe('AuthService', () => {
         AuthService,
         { provide: AuthRepository, useValue: authRepositoryMock },
         { provide: TokenService, useValue: tokenServiceMock },
-        { provide: ConfigService, useValue: { get: jest.fn(() => String(SALT_ROUNDS)) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => String(SALT_ROUNDS)) },
+        },
       ],
     }).compile();
 
@@ -59,7 +73,9 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('guarda la contraseña hasheada y nunca la devuelve', async () => {
-      authRepositoryMock.createUser.mockImplementation(async (data) => buildUser(data));
+      authRepositoryMock.createUser.mockImplementation(async (data) =>
+        buildUser(data),
+      );
 
       const result = await service.register({
         email: 'nueva@omnidesk.local',
@@ -73,11 +89,19 @@ describe('AuthService', () => {
     });
 
     it('usa EMPLOYEE cuando no se especifica el rol', async () => {
-      authRepositoryMock.createUser.mockImplementation(async (data) => buildUser(data));
+      authRepositoryMock.createUser.mockImplementation(async (data) =>
+        buildUser(data),
+      );
 
-      await service.register({ email: 'nueva@omnidesk.local', password: 'unaClaveLarga123', fullName: 'Nueva' });
+      await service.register({
+        email: 'nueva@omnidesk.local',
+        password: 'unaClaveLarga123',
+        fullName: 'Nueva',
+      });
 
-      expect(authRepositoryMock.createUser.mock.calls[0][0].role).toBe(UserRole.EMPLOYEE);
+      expect(authRepositoryMock.createUser.mock.calls[0][0].role).toBe(
+        UserRole.EMPLOYEE,
+      );
     });
 
     it('traduce la violación del índice único en un 409', async () => {
@@ -86,7 +110,11 @@ describe('AuthService', () => {
       );
 
       await expect(
-        service.register({ email: 'ana@omnidesk.local', password: 'unaClaveLarga123', fullName: 'Ana' }),
+        service.register({
+          email: 'ana@omnidesk.local',
+          password: 'unaClaveLarga123',
+          fullName: 'Ana',
+        }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
   });
@@ -95,7 +123,10 @@ describe('AuthService', () => {
     it('devuelve los tokens y el usuario con credenciales válidas', async () => {
       authRepositoryMock.findUserByEmail.mockResolvedValue(await buildUser());
 
-      const result = await service.login({ email: 'ana@omnidesk.local', password: 'unaClaveLarga123' });
+      const result = await service.login({
+        email: 'ana@omnidesk.local',
+        password: 'unaClaveLarga123',
+      });
 
       expect(result.accessToken).toBe('access');
       expect(result.refreshToken).toBe('refresh');
@@ -110,7 +141,9 @@ describe('AuthService', () => {
         .catch((e) => e);
 
       authRepositoryMock.findUserByEmail.mockResolvedValue(await buildUser());
-      const claveMala = await service.login({ email: 'ana@omnidesk.local', password: 'incorrecta' }).catch((e) => e);
+      const claveMala = await service
+        .login({ email: 'ana@omnidesk.local', password: 'incorrecta' })
+        .catch((e) => e);
 
       expect(inexistente).toBeInstanceOf(UnauthorizedException);
       expect(claveMala).toBeInstanceOf(UnauthorizedException);
@@ -118,25 +151,38 @@ describe('AuthService', () => {
     });
 
     it('rechaza a un usuario desactivado con el mismo mensaje genérico', async () => {
-      authRepositoryMock.findUserByEmail.mockResolvedValue(await buildUser({ isActive: false }));
-
-      await expect(service.login({ email: 'ana@omnidesk.local', password: 'unaClaveLarga123' })).rejects.toThrow(
-        'Email o contraseña incorrectos',
+      authRepositoryMock.findUserByEmail.mockResolvedValue(
+        await buildUser({ isActive: false }),
       );
+
+      await expect(
+        service.login({
+          email: 'ana@omnidesk.local',
+          password: 'unaClaveLarga123',
+        }),
+      ).rejects.toThrow('Email o contraseña incorrectos');
       expect(tokenServiceMock.issueTokens).not.toHaveBeenCalled();
     });
   });
 
   describe('refresh y logout', () => {
     it('rechaza el refresh cuando no llegó la cookie', async () => {
-      await expect(service.refresh(undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.refresh(undefined)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
       expect(tokenServiceMock.rotate).not.toHaveBeenCalled();
     });
 
     it('delega la rotación en el TokenService', async () => {
-      tokenServiceMock.rotate.mockResolvedValue({ accessToken: 'nuevo', refreshToken: 'r2', expiresIn: '15m' });
+      tokenServiceMock.rotate.mockResolvedValue({
+        accessToken: 'nuevo',
+        refreshToken: 'r2',
+        expiresIn: '15m',
+      });
 
-      await expect(service.refresh('refresh-viejo')).resolves.toMatchObject({ accessToken: 'nuevo' });
+      await expect(service.refresh('refresh-viejo')).resolves.toMatchObject({
+        accessToken: 'nuevo',
+      });
       expect(tokenServiceMock.rotate).toHaveBeenCalledWith('refresh-viejo');
     });
 
@@ -148,9 +194,13 @@ describe('AuthService', () => {
 
   describe('findById', () => {
     it('rechaza a un usuario que fue desactivado después de emitir el token', async () => {
-      authRepositoryMock.findUserById.mockResolvedValue(await buildUser({ isActive: false }));
+      authRepositoryMock.findUserById.mockResolvedValue(
+        await buildUser({ isActive: false }),
+      );
 
-      await expect(service.findById('user-1')).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(service.findById('user-1')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 });

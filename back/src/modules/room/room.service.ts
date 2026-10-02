@@ -1,6 +1,13 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { RoomRepository } from './room.repository';
-import { Room, RoomStatus } from '../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 import { CreateRoomDto } from './dto/createRoom.dto';
 import { UpdateRoomDto } from './dto/updateRoom.dto';
@@ -16,12 +23,18 @@ export class RoomService {
   }
 
   async create(payload: CreateRoomDto): Promise<RoomOptionDto> {
-    const existing = await this.roomRepository.findByRoomNumber(payload.roomNumber);
+    const existing = await this.roomRepository.findByRoomNumber(
+      payload.roomNumber,
+    );
     if (existing) {
       throw new ConflictException('Ya existe una habitación con ese número');
     }
 
-    const category = await this.resolveCategory(payload.categoryName, payload.capacity, payload.basePrice);
+    const category = await this.resolveCategory(
+      payload.categoryName,
+      payload.capacity,
+      payload.basePrice,
+    );
 
     const room = this.roomRepository.create({
       roomNumber: payload.roomNumber,
@@ -40,14 +53,19 @@ export class RoomService {
     }
 
     if (payload.roomNumber && payload.roomNumber !== room.roomNumber) {
-      const conflict = await this.roomRepository.findByRoomNumber(payload.roomNumber, id);
+      const conflict = await this.roomRepository.findByRoomNumber(
+        payload.roomNumber,
+        id,
+      );
       if (conflict) {
         throw new ConflictException('Ya existe una habitación con ese número');
       }
       room.roomNumber = payload.roomNumber;
     }
 
-    const changesType = payload.categoryName !== undefined && payload.categoryName.toLowerCase() !== room.category.name.toLowerCase();
+    const changesType =
+      payload.categoryName !== undefined &&
+      payload.categoryName.toLowerCase() !== room.category.name.toLowerCase();
 
     if (changesType) {
       room.category = await this.resolveCategory(
@@ -56,8 +74,10 @@ export class RoomService {
         payload.basePrice ?? room.category.basePrice,
       );
     } else {
-      if (payload.capacity !== undefined) room.category.capacity = payload.capacity;
-      if (payload.basePrice !== undefined) room.category.basePrice = payload.basePrice;
+      if (payload.capacity !== undefined)
+        room.category.capacity = payload.capacity;
+      if (payload.basePrice !== undefined)
+        room.category.basePrice = payload.basePrice;
     }
 
     if (payload.status !== undefined) {
@@ -77,10 +97,18 @@ export class RoomService {
     //si existe pero no se pudo desactivar es porque ya estaba inactiva
   }
 
-  private async resolveCategory(categoryName: string, capacity: number, basePrice: number): Promise<RoomCategory> {
+  private async resolveCategory(
+    categoryName: string,
+    capacity: number,
+    basePrice: number,
+  ): Promise<RoomCategory> {
     const existing = await this.roomRepository.findCategoryByName(categoryName);
     if (existing) return existing;
 
-    return this.roomRepository.createCategory({ name: categoryName, capacity, basePrice });
+    return this.roomRepository.createCategory({
+      name: categoryName,
+      capacity,
+      basePrice,
+    });
   }
 }

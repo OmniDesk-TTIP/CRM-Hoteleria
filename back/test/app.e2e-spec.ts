@@ -31,13 +31,10 @@ describe('AppModule (e2e)', () => {
   afterAll(async () => {
     try {
       await app?.close();
-    } catch (error) {
-    }
+    } catch (error) {}
   });
 
   it('debería levantar el servidor (GET /)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200); 
+    return request(app.getHttpServer()).get('/').expect(200);
   });
 });

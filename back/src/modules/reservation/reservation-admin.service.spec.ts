@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ReservationAdminService } from './reservation-admin.service';
 import { ReservationRepository } from './reservation.repository';
 import { RoomRepository } from '../room/room.repository';
@@ -12,9 +16,15 @@ describe('ReservationAdminService', () => {
   let reservationRepository: ReservationRepository;
   let roomRepository: RoomRepository;
 
-  const mockRoom: any = { id: 'room-1', roomNumber: '101', category: { id: 'cat-1', name: 'Doble' } };
+  const mockRoom: any = {
+    id: 'room-1',
+    roomNumber: '101',
+    category: { id: 'cat-1', name: 'Doble' },
+  };
 
-  const buildPayload = (overrides: Partial<SaveReservationDto> = {}): SaveReservationDto => ({
+  const buildPayload = (
+    overrides: Partial<SaveReservationDto> = {},
+  ): SaveReservationDto => ({
     guestFullName: 'Juan Pérez',
     guestDni: '30111222',
     roomId: 'room-1',
@@ -52,7 +62,9 @@ describe('ReservationAdminService', () => {
     }).compile();
 
     service = module.get<ReservationAdminService>(ReservationAdminService);
-    reservationRepository = module.get<ReservationRepository>(ReservationRepository);
+    reservationRepository = module.get<ReservationRepository>(
+      ReservationRepository,
+    );
     roomRepository = module.get<RoomRepository>(RoomRepository);
   });
 
@@ -72,7 +84,9 @@ describe('ReservationAdminService', () => {
         createdAt: new Date('2026-09-01'),
       };
 
-      jest.spyOn(reservationRepository, 'findManyPaginated').mockResolvedValue({ items: [reservation], total: 1 });
+      jest
+        .spyOn(reservationRepository, 'findManyPaginated')
+        .mockResolvedValue({ items: [reservation], total: 1 });
 
       const query: ListReservationsQueryDto = {
         status: ReservationStatus.CONFIRMED,
@@ -107,10 +121,12 @@ describe('ReservationAdminService', () => {
   describe('create', () => {
     it('crea la reserva cuando la habitación está libre en esas fechas (CA2)', async () => {
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(mockRoom);
-      jest.spyOn(reservationRepository, 'isRoomOccupied').mockResolvedValue(false);
-      jest.spyOn(reservationRepository, 'createManual').mockImplementation(
-        (data: any) => ({ ...data, id: 'res-nueva' } as any),
-      );
+      jest
+        .spyOn(reservationRepository, 'isRoomOccupied')
+        .mockResolvedValue(false);
+      jest
+        .spyOn(reservationRepository, 'createManual')
+        .mockImplementation((data: any) => ({ ...data, id: 'res-nueva' }));
 
       const result = await service.create(buildPayload());
 
@@ -122,7 +138,10 @@ describe('ReservationAdminService', () => {
         undefined,
       );
       expect(reservationRepository.createManual).toHaveBeenCalledWith(
-        expect.objectContaining({ room: mockRoom, guestFullName: 'Juan Pérez' }),
+        expect.objectContaining({
+          room: mockRoom,
+          guestFullName: 'Juan Pérez',
+        }),
       );
       expect(reservationRepository.saveNew).toHaveBeenCalled();
       expect(result.id).toBe('res-nueva');
@@ -130,9 +149,13 @@ describe('ReservationAdminService', () => {
 
     it('rechaza con 409 si la habitación ya está ocupada para esas fechas (CA3)', async () => {
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(mockRoom);
-      jest.spyOn(reservationRepository, 'isRoomOccupied').mockResolvedValue(true);
+      jest
+        .spyOn(reservationRepository, 'isRoomOccupied')
+        .mockResolvedValue(true);
 
-      await expect(service.create(buildPayload())).rejects.toThrow(ConflictException);
+      await expect(service.create(buildPayload())).rejects.toThrow(
+        ConflictException,
+      );
       expect(reservationRepository.createManual).not.toHaveBeenCalled();
       expect(reservationRepository.saveNew).not.toHaveBeenCalled();
     });
@@ -140,13 +163,17 @@ describe('ReservationAdminService', () => {
     it('rechaza con 404 si la habitación no existe', async () => {
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(null);
 
-      await expect(service.create(buildPayload())).rejects.toThrow(NotFoundException);
+      await expect(service.create(buildPayload())).rejects.toThrow(
+        NotFoundException,
+      );
       expect(reservationRepository.isRoomOccupied).not.toHaveBeenCalled();
     });
 
     it('rechaza con 400 si el check-out no es posterior al check-in', async () => {
       await expect(
-        service.create(buildPayload({ checkIn: '2026-10-15', checkOut: '2026-10-10' })),
+        service.create(
+          buildPayload({ checkIn: '2026-10-15', checkOut: '2026-10-10' }),
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(roomRepository.findById).not.toHaveBeenCalled();
     });
@@ -157,9 +184,14 @@ describe('ReservationAdminService', () => {
       const existing: any = { id: 'res-1', room: mockRoom };
       jest.spyOn(reservationRepository, 'findById').mockResolvedValue(existing);
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(mockRoom);
-      jest.spyOn(reservationRepository, 'isRoomOccupied').mockResolvedValue(false);
+      jest
+        .spyOn(reservationRepository, 'isRoomOccupied')
+        .mockResolvedValue(false);
 
-      await service.update('res-1', buildPayload({ status: ReservationStatus.CONFIRMED }));
+      await service.update(
+        'res-1',
+        buildPayload({ status: ReservationStatus.CONFIRMED }),
+      );
 
       expect(reservationRepository.isRoomOccupied).toHaveBeenCalledWith(
         'room-1',
@@ -176,7 +208,9 @@ describe('ReservationAdminService', () => {
     it('rechaza con 404 si la reserva a editar no existe', async () => {
       jest.spyOn(reservationRepository, 'findById').mockResolvedValue(null);
 
-      await expect(service.update('no-existe', buildPayload())).rejects.toThrow(NotFoundException);
+      await expect(service.update('no-existe', buildPayload())).rejects.toThrow(
+        NotFoundException,
+      );
       expect(reservationRepository.applyUpdate).not.toHaveBeenCalled();
     });
   });
@@ -193,7 +227,9 @@ describe('ReservationAdminService', () => {
 
     it('es idempotente: si ya estaba cancelada no rompe (una doble confirmación no debe fallar)', async () => {
       jest.spyOn(reservationRepository, 'cancel').mockResolvedValue(false);
-      jest.spyOn(reservationRepository, 'findById').mockResolvedValue({ id: 'res-1' } as any);
+      jest
+        .spyOn(reservationRepository, 'findById')
+        .mockResolvedValue({ id: 'res-1' } as any);
 
       await expect(service.cancel('res-1')).resolves.toBeUndefined();
     });
@@ -202,7 +238,9 @@ describe('ReservationAdminService', () => {
       jest.spyOn(reservationRepository, 'cancel').mockResolvedValue(false);
       jest.spyOn(reservationRepository, 'findById').mockResolvedValue(null);
 
-      await expect(service.cancel('no-existe')).rejects.toThrow(NotFoundException);
+      await expect(service.cancel('no-existe')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

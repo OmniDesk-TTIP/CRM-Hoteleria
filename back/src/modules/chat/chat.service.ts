@@ -1,4 +1,10 @@
-import { BadGatewayException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectBot } from 'nestjs-telegraf';
 import { Context, Telegraf } from 'telegraf';
@@ -6,11 +12,23 @@ import { ChatRepository, TelegramProfile } from './chat.repository';
 import { ChatGateway } from './chat.gateway';
 import { SupportHoursService } from '../supportHours/supportHours.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
-import { ChatSession, ChatSessionStatus, HandoverReason } from '../../infrastructure/database/entities/ChatSession.entity';
-import { ChatMessage, MessageRole } from '../../infrastructure/database/entities/ChatMessage.entity';
+import {
+  ChatSession,
+  ChatSessionStatus,
+  HandoverReason,
+} from '../../infrastructure/database/entities/ChatSession.entity';
+import {
+  ChatMessage,
+  MessageRole,
+} from '../../infrastructure/database/entities/ChatMessage.entity';
 import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
 import { User } from '../../infrastructure/database/entities/User.entity';
-import { ChatDetailDto, ChatMessageDto, ChatSummaryDto, CursorPageDto } from './dto/chat.dto';
+import {
+  ChatDetailDto,
+  ChatMessageDto,
+  ChatSummaryDto,
+  CursorPageDto,
+} from './dto/chat.dto';
 import { PaginatedResultDto } from '../reservation/dto/adminReservation.dto';
 import { ListChatsQueryDto } from './dto/listChats.dto';
 import { ListChatMessagesQueryDto } from './dto/listChatMessages.dto';
@@ -21,7 +39,8 @@ import { AuthUser } from '../auth/auth.types';
 const PREVIEW_MAX_LENGTH = 200;
 const DEFAULT_FALLBACK_THRESHOLD = 3;
 
-export const HANDOVER_REPLY = 'Te pongo en contacto con un recepcionista, aguardá un momento por favor.';
+export const HANDOVER_REPLY =
+  'Te pongo en contacto con un recepcionista, aguardá un momento por favor.';
 
 export const RELEASE_NOTICE =
   'El operador cerró la consulta. Chamber vuelve a estar a tu disposición; si necesitás hablar con una persona otra vez, pedímelo cuando quieras.';
@@ -29,7 +48,9 @@ export const RELEASE_NOTICE =
 /** Lo primero que recibe el huésped cuando un operador toma la conversación. */
 export function takeOverGreeting(operatorFullName?: string | null): string {
   const firstName = operatorFullName?.trim().split(/\s+/)[0];
-  const who = firstName ? `soy ${firstName} de la recepción` : 'te escribo de la recepción';
+  const who = firstName
+    ? `soy ${firstName} de la recepción`
+    : 'te escribo de la recepción';
   return `Hola, ${who}. Ya estoy con vos, ¿en qué te puedo ayudar?`;
 }
 
@@ -53,24 +74,39 @@ export class ChatService {
     configService: ConfigService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {
-    const configured = Number(configService.get<string>('HANDOVER_FALLBACK_THRESHOLD'));
-    this.fallbackThreshold = Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_FALLBACK_THRESHOLD;
+    const configured = Number(
+      configService.get<string>('HANDOVER_FALLBACK_THRESHOLD'),
+    );
+    this.fallbackThreshold =
+      Number.isInteger(configured) && configured > 0
+        ? configured
+        : DEFAULT_FALLBACK_THRESHOLD;
   }
 
   // Lado Telegram
 
-  async getOrCreateSession(telegramUserId: string, profile?: TelegramProfile): Promise<ChatSession> {
-    const { session, created } = await this.chatRepository.getOrCreate(telegramUserId, profile);
-    if (created) this.chatGateway.emitChatCreated(ChatSummaryDto.fromEntity(session));
+  async getOrCreateSession(
+    telegramUserId: string,
+    profile?: TelegramProfile,
+  ): Promise<ChatSession> {
+    const { session, created } = await this.chatRepository.getOrCreate(
+      telegramUserId,
+      profile,
+    );
+    if (created)
+      this.chatGateway.emitChatCreated(ChatSummaryDto.fromEntity(session));
     return session;
   }
 
   isMuted(session: ChatSession): boolean {
     return session.status !== ChatSessionStatus.BOT;
   }
- 
+
   //Persiste y publica el mensaje del huésped ANTES de llamar a la IA.
-  async recordIncomingMessage(session: ChatSession, text: string): Promise<ChatMessage> {
+  async recordIncomingMessage(
+    session: ChatSession,
+    text: string,
+  ): Promise<ChatMessage> {
     const message = this.chatRepository.createMessage({
       telegramUserId: session.telegramUserId,
       role: MessageRole.USER,
@@ -85,13 +121,25 @@ export class ChatService {
     return message;
   }
 
-  async recordBotMessage(session: ChatSession, text: string): Promise<ChatMessage> {
+  async recordBotMessage(
+    session: ChatSession,
+    text: string,
+  ): Promise<ChatMessage> {
     return this.recordOutgoingMessage(session, MessageRole.BOT, text);
   }
 
-
-  async recordSystemMessage(session: ChatSession, text: string, updatePreview = true): Promise<ChatMessage> {
-    return this.recordOutgoingMessage(session, MessageRole.SYSTEM, text, undefined, updatePreview);
+  async recordSystemMessage(
+    session: ChatSession,
+    text: string,
+    updatePreview = true,
+  ): Promise<ChatMessage> {
+    return this.recordOutgoingMessage(
+      session,
+      MessageRole.SYSTEM,
+      text,
+      undefined,
+      updatePreview,
+    );
   }
 
   /*
@@ -99,12 +147,17 @@ export class ChatService {
    * Fuera de horario NO se silencia al bot.
    * Se encola el pedido (handoverRequestedAt) y Chamber sigue intentando ayudar.
    */
-  async requestHandover(session: ChatSession, reason: HandoverReason): Promise<HandoverResult> {
+  async requestHandover(
+    session: ChatSession,
+    reason: HandoverReason,
+  ): Promise<HandoverResult> {
     const availability = await this.supportHoursService.getAvailability();
     const previousStatus = session.status;
 
     if (!availability.isOpen) {
-      const when = availability.nextOpeningLabel ? `te van a escribir ${availability.nextOpeningLabel}` : 'te van a escribir apenas abran';
+      const when = availability.nextOpeningLabel
+        ? `te van a escribir ${availability.nextOpeningLabel}`
+        : 'te van a escribir apenas abran';
       const replyText = `En este momento la recepción no está disponible. Ya dejé tu pedido anotado y ${when}. Mientras tanto puedo intentar ayudarte yo.`;
 
       session.handoverRequestedAt = new Date();
@@ -140,7 +193,9 @@ export class ChatService {
       session.handoverReason = HandoverReason.AI_FALLBACK;
       await this.chatRepository.flush();
       this.emitStatus(session, previousStatus);
-      this.logger.warn(`El chat ${session.id} acumuló ${session.consecutiveBotFailures} respuestas sin resolver`);
+      this.logger.warn(
+        `El chat ${session.id} acumuló ${session.consecutiveBotFailures} respuestas sin resolver`,
+      );
       return true;
     }
 
@@ -153,7 +208,9 @@ export class ChatService {
    * fallback, también se baja. Un pedido explícito del huésped no se pisa nunca.
    */
   async resetBotFailures(session: ChatSession): Promise<void> {
-    const hadFallbackFlag = session.handoverReason === HandoverReason.AI_FALLBACK && !!session.handoverRequestedAt;
+    const hadFallbackFlag =
+      session.handoverReason === HandoverReason.AI_FALLBACK &&
+      !!session.handoverRequestedAt;
     if (session.consecutiveBotFailures === 0 && !hadFallbackFlag) return;
 
     const previousStatus = session.status;
@@ -179,7 +236,10 @@ export class ChatService {
 
   // Lado panel
 
-  async list(query: ListChatsQueryDto, operator: AuthUser): Promise<PaginatedResultDto<ChatSummaryDto>> {
+  async list(
+    query: ListChatsQueryDto,
+    operator: AuthUser,
+  ): Promise<PaginatedResultDto<ChatSummaryDto>> {
     const { items, total } = await this.chatRepository.findManyPaginated({
       status: query.status,
       pendingHandover: query.pendingHandover,
@@ -200,15 +260,25 @@ export class ChatService {
 
   async getDetail(chatId: string): Promise<ChatDetailDto> {
     const session = await this.requireSession(chatId);
-    return ChatDetailDto.fromSession(session, await this.findActiveBooking(session));
+    return ChatDetailDto.fromSession(
+      session,
+      await this.findActiveBooking(session),
+    );
   }
 
   //historial completo para que el operador entienda qué venía hablando el bot.
-  async getMessages(chatId: string, query: ListChatMessagesQueryDto): Promise<CursorPageDto<ChatMessageDto>> {
+  async getMessages(
+    chatId: string,
+    query: ListChatMessagesQueryDto,
+  ): Promise<CursorPageDto<ChatMessageDto>> {
     const session = await this.requireSession(chatId);
     const before = query.before ? new Date(query.before) : undefined;
 
-    const rows = await this.chatRepository.findMessagesBefore(session.telegramUserId, before, query.limit);
+    const rows = await this.chatRepository.findMessagesBefore(
+      session.telegramUserId,
+      before,
+      query.limit,
+    );
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const oldest = page[page.length - 1];
@@ -226,18 +296,34 @@ export class ChatService {
    * Solo se escribe con el control tomado: así el huésped siempre recibe primero el saludo del
    * operador y la bandeja sabe quién atiende cada conversación.
    */
-  async sendOperatorMessage(chatId: string, operator: AuthUser, payload: SendChatMessageDto): Promise<ChatMessageDto> {
+  async sendOperatorMessage(
+    chatId: string,
+    operator: AuthUser,
+    payload: SendChatMessageDto,
+  ): Promise<ChatMessageDto> {
     const session = await this.requireSession(chatId);
 
     if (session.status !== ChatSessionStatus.HUMAN) {
-      throw new ConflictException('Tomá el control de la conversación antes de escribirle al huésped');
+      throw new ConflictException(
+        'Tomá el control de la conversación antes de escribirle al huésped',
+      );
     }
 
-    const delivered = await this.sendToGuest(session.telegramUserId, payload.text);
-    if (!delivered) throw new BadGatewayException('No se pudo entregar el mensaje al huésped');
+    const delivered = await this.sendToGuest(
+      session.telegramUserId,
+      payload.text,
+    );
+    if (!delivered)
+      throw new BadGatewayException(
+        'No se pudo entregar el mensaje al huésped',
+      );
 
     const author = await this.chatRepository.findOperatorById(operator.id);
-    const message = await this.recordOperatorMessage(session, author, payload.text);
+    const message = await this.recordOperatorMessage(
+      session,
+      author,
+      payload.text,
+    );
 
     return ChatMessageDto.fromEntity(message);
   }
@@ -251,25 +337,47 @@ export class ChatService {
     const previousStatus = session.status;
 
     // Repetir el click no tiene que volver a saludar al huésped.
-    if (previousStatus === ChatSessionStatus.HUMAN && session.assignedOperator?.id === operator.id) {
-      return ChatDetailDto.fromSession(session, await this.findActiveBooking(session));
+    if (
+      previousStatus === ChatSessionStatus.HUMAN &&
+      session.assignedOperator?.id === operator.id
+    ) {
+      return ChatDetailDto.fromSession(
+        session,
+        await this.findActiveBooking(session),
+      );
     }
 
     const author = await this.chatRepository.findOperatorById(operator.id);
     this.assignToOperator(session, author);
 
-    await this.recordSystemMessage(session, `${operator.email} tomó el control de la conversación.`, false);
+    await this.recordSystemMessage(
+      session,
+      `${operator.email} tomó el control de la conversación.`,
+      false,
+    );
     this.emitStatus(session, previousStatus);
 
     const greeting = takeOverGreeting(author?.fullName);
-    const guestNotified = await this.sendToGuest(session.telegramUserId, greeting);
-    if (guestNotified) await this.recordOperatorMessage(session, author, greeting);
+    const guestNotified = await this.sendToGuest(
+      session.telegramUserId,
+      greeting,
+    );
+    if (guestNotified)
+      await this.recordOperatorMessage(session, author, greeting);
 
-    return ChatDetailDto.fromSession(session, await this.findActiveBooking(session), guestNotified);
+    return ChatDetailDto.fromSession(
+      session,
+      await this.findActiveBooking(session),
+      guestNotified,
+    );
   }
 
   //Libera el chat al bot
-  async releaseToBot(chatId: string, operator: AuthUser, payload: ReleaseChatDto = {}): Promise<ChatDetailDto> {
+  async releaseToBot(
+    chatId: string,
+    operator: AuthUser,
+    payload: ReleaseChatDto = {},
+  ): Promise<ChatDetailDto> {
     const session = await this.requireSession(chatId);
     const previousStatus = session.status;
 
@@ -286,16 +394,28 @@ export class ChatService {
     }
 
     const notice = await this.recordSystemMessage(session, RELEASE_NOTICE);
-    const guestNotified = await this.sendToGuest(session.telegramUserId, RELEASE_NOTICE);
+    const guestNotified = await this.sendToGuest(
+      session.telegramUserId,
+      RELEASE_NOTICE,
+    );
 
     this.emitStatus(session, previousStatus);
     this.emitMessage(session, notice);
-    this.logger.log(`El chat ${session.id} vuelve al bot por pedido de ${operator.email}`);
+    this.logger.log(
+      `El chat ${session.id} vuelve al bot por pedido de ${operator.email}`,
+    );
 
-    return ChatDetailDto.fromSession(session, payload.closeActiveBooking ? null : activeBooking, guestNotified);
+    return ChatDetailDto.fromSession(
+      session,
+      payload.closeActiveBooking ? null : activeBooking,
+      guestNotified,
+    );
   }
 
-  async markAsRead(chatId: string, operator: AuthUser): Promise<{ unreadCount: number }> {
+  async markAsRead(
+    chatId: string,
+    operator: AuthUser,
+  ): Promise<{ unreadCount: number }> {
     const session = await this.requireSession(chatId);
 
     if (session.unreadCount !== 0) {
@@ -304,7 +424,10 @@ export class ChatService {
     }
 
     const reader = await this.chatRepository.findOperatorById(operator.id);
-    this.chatGateway.emitRead(session.id, { id: operator.id, fullName: reader?.fullName ?? operator.email });
+    this.chatGateway.emitRead(session.id, {
+      id: operator.id,
+      fullName: reader?.fullName ?? operator.email,
+    });
 
     return { unreadCount: 0 };
   }
@@ -334,7 +457,11 @@ export class ChatService {
     return message;
   }
 
-  private async recordOperatorMessage(session: ChatSession, author: User | null, text: string): Promise<ChatMessage> {
+  private async recordOperatorMessage(
+    session: ChatSession,
+    author: User | null,
+    text: string,
+  ): Promise<ChatMessage> {
     const message = this.chatRepository.createMessage({
       telegramUserId: session.telegramUserId,
       role: MessageRole.OPERATOR,
@@ -356,12 +483,17 @@ export class ChatService {
     session.handoverRequestedAt = undefined;
   }
 
-  private async sendToGuest(telegramUserId: string, text: string): Promise<boolean> {
+  private async sendToGuest(
+    telegramUserId: string,
+    text: string,
+  ): Promise<boolean> {
     try {
       await this.bot.telegram.sendMessage(telegramUserId, text);
       return true;
     } catch (error) {
-      this.logger.error(`No se pudo enviar el mensaje a ${telegramUserId}: ${error}`);
+      this.logger.error(
+        `No se pudo enviar el mensaje a ${telegramUserId}: ${error}`,
+      );
       return false;
     }
   }
@@ -373,28 +505,40 @@ export class ChatService {
   }
 
   private emitMessage(session: ChatSession, message: ChatMessage): void {
-    this.chatGateway.emitMessage(session.id, ChatMessageDto.fromEntity(message), {
-      status: session.status,
-      unreadCount: session.unreadCount,
-      lastMessageAt: session.lastMessageAt ?? null,
-      lastMessagePreview: session.lastMessagePreview ?? null,
-    });
+    this.chatGateway.emitMessage(
+      session.id,
+      ChatMessageDto.fromEntity(message),
+      {
+        status: session.status,
+        unreadCount: session.unreadCount,
+        lastMessageAt: session.lastMessageAt ?? null,
+        lastMessagePreview: session.lastMessagePreview ?? null,
+      },
+    );
   }
 
-  private emitStatus(session: ChatSession, previousStatus: ChatSessionStatus): void {
+  private emitStatus(
+    session: ChatSession,
+    previousStatus: ChatSessionStatus,
+  ): void {
     this.chatGateway.emitStatus({
       chatId: session.id,
       status: session.status,
       previousStatus,
       assignedOperator: session.assignedOperator
-        ? { id: session.assignedOperator.id, fullName: session.assignedOperator.fullName ?? '' }
+        ? {
+            id: session.assignedOperator.id,
+            fullName: session.assignedOperator.fullName ?? '',
+          }
         : null,
       reason: session.handoverReason ?? null,
       changedAt: new Date(),
     });
   }
 
-  private async findActiveBooking(session: ChatSession): Promise<BookingProcess | null> {
+  private async findActiveBooking(
+    session: ChatSession,
+  ): Promise<BookingProcess | null> {
     return this.bookingProcessService.getActive(session.telegramUserId);
   }
 

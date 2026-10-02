@@ -1,4 +1,12 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, BadRequestException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
 import { RagService } from './rag.service';
 import { IngestDataDto, AskQuestionDto } from './dto/rag.dto';
 import { Public, Roles } from '../auth/auth.decorators';
@@ -16,10 +24,10 @@ export class RagController {
   @HttpCode(HttpStatus.OK)
   async ingestData(@Body() ingestDataDto: IngestDataDto) {
     await this.ragService.ingestDocument(ingestDataDto.text);
-        
-    return { 
+
+    return {
       message: 'Documento particionado, vectorizado y guardado con éxito.',
-      status: 'success'
+      status: 'success',
     };
   }
 
@@ -29,8 +37,8 @@ export class RagController {
   @HttpCode(HttpStatus.OK)
   async askQuestion(@Body() askQuestionDto: AskQuestionDto) {
     const answer = await this.ragService.askQuestion(askQuestionDto.question);
-    
-    return { 
+
+    return {
       question: askQuestionDto.question,
       answer,
     };

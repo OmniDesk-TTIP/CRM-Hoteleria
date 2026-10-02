@@ -7,7 +7,10 @@ import { BookingProcessService } from '../bookingProcess/bookingProcess.service'
 import { RoomRepository } from '../room/room.repository';
 import { ReservationRepository } from './reservation.repository';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
-import { PaymentService, RESERVATION_HOLD_MINUTES } from '../payment/payment.service';
+import {
+  PaymentService,
+  RESERVATION_HOLD_MINUTES,
+} from '../payment/payment.service';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { ConfirmReservationDto } from './dto/confirmReservation.dto';
 
@@ -65,14 +68,25 @@ export class ReservationService {
     activeBooking: BookingProcess | null,
     bookingData: SearchAvailabilityDto,
   ): Promise<AvailabilityResult> {
-    const booking = this.bookingProcessService.startSearch(telegramUserId, activeBooking, bookingData);
+    const booking = this.bookingProcessService.startSearch(
+      telegramUserId,
+      activeBooking,
+      bookingData,
+    );
 
-    const roomFound = await this.findAvailableRoom(bookingData.checkIn, bookingData.checkOut, bookingData.capacity);
+    const roomFound = await this.findAvailableRoom(
+      bookingData.checkIn,
+      bookingData.checkOut,
+      bookingData.capacity,
+    );
 
     if (roomFound) {
       this.bookingProcessService.markPendingConfirmation(booking);
 
-      const nights = this.calculateNights(bookingData.checkIn, bookingData.checkOut);
+      const nights = this.calculateNights(
+        bookingData.checkIn,
+        bookingData.checkOut,
+      );
       const totalAmount = roomFound.category.basePrice * nights;
       const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
 
@@ -81,16 +95,28 @@ export class ReservationService {
     }
 
     this.bookingProcessService.markInProgress(booking);
-    const alternatives = await this.findAlternativeDates(bookingData.checkIn, bookingData.checkOut, bookingData.capacity);
+    const alternatives = await this.findAlternativeDates(
+      bookingData.checkIn,
+      bookingData.checkOut,
+      bookingData.capacity,
+    );
     return { available: false, alternatives };
   }
 
-  async confirmReservation(telegramUserId: string, activeBooking: BookingProcess, guestData: ConfirmReservationDto): Promise<string> {
+  async confirmReservation(
+    telegramUserId: string,
+    activeBooking: BookingProcess,
+    guestData: ConfirmReservationDto,
+  ): Promise<string> {
     const savedCheckIn = activeBooking.checkIn as string;
     const savedCheckOut = activeBooking.checkOut as string;
     const capacity = activeBooking.capacity as number;
 
-    const roomToBook = await this.findAvailableRoom(savedCheckIn, savedCheckOut, capacity);
+    const roomToBook = await this.findAvailableRoom(
+      savedCheckIn,
+      savedCheckOut,
+      capacity,
+    );
 
     let botReply: string;
     if (roomToBook) {
@@ -114,14 +140,16 @@ export class ReservationService {
       this.reservationRepository.persist(newReservation);
       this.bookingProcessService.markCompleted(activeBooking);
 
-      const { preferenceId, initPoint } = await this.paymentService.createPreference(newReservation, guestData);
+      const { preferenceId, initPoint } =
+        await this.paymentService.createPreference(newReservation, guestData);
       newReservation.mpPreferenceId = preferenceId;
       newReservation.mpInitPoint = initPoint;
 
       // Link al formulario de prepago del front, que muestra el resumen y de ahí manda al
       // checkout de Mercado Pago. En dev, con FRONTEND_BASE_URL apuntando a localhost, Telegram
       // descarta el href y la URL queda como texto para copiar; con un dominio real es clickeable.
-      const frontendBaseUrl = this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
+      const frontendBaseUrl =
+        this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
       const paymentFormUrl = `${frontendBaseUrl}/payment/form/${newReservation.id}`;
 
       botReply = [
@@ -149,11 +177,22 @@ export class ReservationService {
     return daysBetween(parseDate(checkIn), parseDate(checkOut));
   }
 
-  private async findAvailableRoom(checkIn: string, checkOut: string, capacity: number): Promise<Room | null> {
-    const overlappingReservations = await this.reservationRepository.findOverlapping(parseDate(checkIn), parseDate(checkOut));
-    const reservedRoomIds = overlappingReservations.map(r => r.room.id);
+  private async findAvailableRoom(
+    checkIn: string,
+    checkOut: string,
+    capacity: number,
+  ): Promise<Room | null> {
+    const overlappingReservations =
+      await this.reservationRepository.findOverlapping(
+        parseDate(checkIn),
+        parseDate(checkOut),
+      );
+    const reservedRoomIds = overlappingReservations.map((r) => r.room.id);
 
-    const availableRooms = await this.roomRepository.findByCapacityExcluding(capacity, reservedRoomIds);
+    const availableRooms = await this.roomRepository.findByCapacityExcluding(
+      capacity,
+      reservedRoomIds,
+    );
 
     return availableRooms.length > 0 ? availableRooms[0] : null;
   }
@@ -164,13 +203,20 @@ export class ReservationService {
    * después bloques con las mismas noches corridos hasta ±7 días. Hace solo dos consultas (las
    * reservas de toda la ventana y las habitaciones candidatas) y resuelve el resto en memoria.
    */
-  private async findAlternativeDates(checkIn: string, checkOut: string, capacity: number): Promise<AlternativeDates[]> {
+  private async findAlternativeDates(
+    checkIn: string,
+    checkOut: string,
+    capacity: number,
+  ): Promise<AlternativeDates[]> {
     const requestedStart = parseDate(checkIn);
     const requestedNights = daysBetween(requestedStart, parseDate(checkOut));
 
     // Los índices de noche arrancan en windowStart, así que la fecha pedida cae siempre en el índice WINDOW_DAYS.
     const windowStart = addDays(requestedStart, -ALTERNATIVE_DATES_WINDOW_DAYS);
-    const windowEnd = addDays(parseDate(checkOut), ALTERNATIVE_DATES_WINDOW_DAYS);
+    const windowEnd = addDays(
+      parseDate(checkOut),
+      ALTERNATIVE_DATES_WINDOW_DAYS,
+    );
     const windowNights = daysBetween(windowStart, windowEnd);
     const requestedIndex = ALTERNATIVE_DATES_WINDOW_DAYS;
 
@@ -184,18 +230,35 @@ export class ReservationService {
     const firstBookableNight = daysBetween(windowStart, startOfToday());
 
     const freeNightsByRoom: RoomFreeNights[] = rooms.map((room) => {
-      const free = Array.from({ length: windowNights }, (_, night) => night >= firstBookableNight);
+      const free = Array.from(
+        { length: windowNights },
+        (_, night) => night >= firstBookableNight,
+      );
       for (const reservation of reservations) {
         if (reservation.room.id !== room.id) continue;
-        const from = Math.max(0, daysBetween(windowStart, toCalendarDay(reservation.checkIn)));
-        const to = Math.min(windowNights, daysBetween(windowStart, toCalendarDay(reservation.checkOut)));
+        const from = Math.max(
+          0,
+          daysBetween(windowStart, toCalendarDay(reservation.checkIn)),
+        );
+        const to = Math.min(
+          windowNights,
+          daysBetween(windowStart, toCalendarDay(reservation.checkOut)),
+        );
         for (let night = from; night < to; night++) free[night] = false;
       }
       return { room, free };
     });
 
-    const fullStays = this.findFullStays(freeNightsByRoom, requestedIndex, requestedNights);
-    const shorterStays = this.findShorterStays(freeNightsByRoom, requestedIndex, requestedNights);
+    const fullStays = this.findFullStays(
+      freeNightsByRoom,
+      requestedIndex,
+      requestedNights,
+    );
+    const shorterStays = this.findShorterStays(
+      freeNightsByRoom,
+      requestedIndex,
+      requestedNights,
+    );
 
     const ordered = [
       ...shorterStays.slice(0, MAX_SHORTER_ALTERNATIVES),
@@ -225,12 +288,26 @@ export class ReservationService {
   }
 
   /** Bloques con las mismas noches pedidas, corridos de a un día (+1, −1, +2, −2, …) hasta el borde de la ventana. */
-  private findFullStays(freeNightsByRoom: RoomFreeNights[], requestedIndex: number, requestedNights: number): CandidateBlock[] {
+  private findFullStays(
+    freeNightsByRoom: RoomFreeNights[],
+    requestedIndex: number,
+    requestedNights: number,
+  ): CandidateBlock[] {
     const blocks: CandidateBlock[] = [];
-    for (let distance = 1; distance <= ALTERNATIVE_DATES_WINDOW_DAYS; distance++) {
-      for (const start of [requestedIndex + distance, requestedIndex - distance]) {
-        const match = freeNightsByRoom.find(({ free }) => isRangeFree(free, start, requestedNights));
-        if (match) blocks.push({ start, nights: requestedNights, room: match.room });
+    for (
+      let distance = 1;
+      distance <= ALTERNATIVE_DATES_WINDOW_DAYS;
+      distance++
+    ) {
+      for (const start of [
+        requestedIndex + distance,
+        requestedIndex - distance,
+      ]) {
+        const match = freeNightsByRoom.find(({ free }) =>
+          isRangeFree(free, start, requestedNights),
+        );
+        if (match)
+          blocks.push({ start, nights: requestedNights, room: match.room });
       }
     }
     return blocks;
@@ -241,14 +318,22 @@ export class ReservationService {
    * huésped conserva al menos parte de su viaje. Se ordenan por noches en común con lo pedido,
    * después por largo y después por cercanía del check-in.
    */
-  private findShorterStays(freeNightsByRoom: RoomFreeNights[], requestedIndex: number, requestedNights: number): CandidateBlock[] {
+  private findShorterStays(
+    freeNightsByRoom: RoomFreeNights[],
+    requestedIndex: number,
+    requestedNights: number,
+  ): CandidateBlock[] {
     const maxNights = requestedNights - 1;
-    const minNights = Math.max(MIN_SHORTER_STAY_NIGHTS, Math.ceil(requestedNights / 2));
+    const minNights = Math.max(
+      MIN_SHORTER_STAY_NIGHTS,
+      Math.ceil(requestedNights / 2),
+    );
     if (minNights > maxNights) return [];
 
     const requestedEnd = requestedIndex + requestedNights;
     const overlapWithRequest = (block: CandidateBlock) =>
-      Math.min(block.start + block.nights, requestedEnd) - Math.max(block.start, requestedIndex);
+      Math.min(block.start + block.nights, requestedEnd) -
+      Math.max(block.start, requestedIndex);
 
     const candidates: CandidateBlock[] = [];
     for (const { room, free } of freeNightsByRoom) {
@@ -262,18 +347,23 @@ export class ReservationService {
         let runEnd = runStart;
         while (runEnd < free.length && free[runEnd]) runEnd++;
         const nights = Math.min(runEnd - runStart, maxNights);
-        const start = Math.min(Math.max(requestedIndex, runStart), runEnd - nights);
+        const start = Math.min(
+          Math.max(requestedIndex, runStart),
+          runEnd - nights,
+        );
         const block = { start, nights, room };
-        if (nights >= minNights && overlapWithRequest(block) > 0) candidates.push(block);
+        if (nights >= minNights && overlapWithRequest(block) > 0)
+          candidates.push(block);
 
         runStart = runEnd;
       }
     }
 
-    return candidates.sort((a, b) =>
-      overlapWithRequest(b) - overlapWithRequest(a)
-      || b.nights - a.nights
-      || Math.abs(a.start - requestedIndex) - Math.abs(b.start - requestedIndex),
+    return candidates.sort(
+      (a, b) =>
+        overlapWithRequest(b) - overlapWithRequest(a) ||
+        b.nights - a.nights ||
+        Math.abs(a.start - requestedIndex) - Math.abs(b.start - requestedIndex),
     );
   }
 }

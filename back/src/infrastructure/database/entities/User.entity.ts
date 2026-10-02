@@ -1,5 +1,11 @@
 import { Opt } from '@mikro-orm/core';
-import { Entity, PrimaryKey, Property, Enum, Unique } from '@mikro-orm/decorators/legacy';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  Enum,
+  Unique,
+} from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { CustomBaseEntity } from './CustomBase.entity';
 

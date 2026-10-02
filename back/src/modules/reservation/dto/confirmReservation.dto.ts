@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class ConfirmReservationDto {
@@ -10,6 +16,8 @@ export class ConfirmReservationDto {
   fullName!: string;
 
   @Transform(({ value }) => value?.toString().trim())
-  @Matches(/^\d{7,9}$/, { message: 'El DNI debe contener entre 7 y 9 dígitos numéricos' })
+  @Matches(/^\d{7,9}$/, {
+    message: 'El DNI debe contener entre 7 y 9 dígitos numéricos',
+  })
   dni!: string;
 }

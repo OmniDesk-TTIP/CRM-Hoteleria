@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MercadoPagoConfig, Preference, Payment, WebhookSignatureValidator } from 'mercadopago';
+import {
+  MercadoPagoConfig,
+  Preference,
+  Payment,
+  WebhookSignatureValidator,
+} from 'mercadopago';
 import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf, Context } from 'telegraf';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
@@ -25,10 +30,14 @@ export class PaymentService {
     private readonly chatService: ChatService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {
-    const accessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+    const accessToken = this.configService.get<string>(
+      'MERCADOPAGO_ACCESS_TOKEN',
+    );
     if (!accessToken) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN');
 
-    const webhookSecret = this.configService.get<string>('MERCADOPAGO_WEBHOOK_SECRET');
+    const webhookSecret = this.configService.get<string>(
+      'MERCADOPAGO_WEBHOOK_SECRET',
+    );
     if (!webhookSecret) throw new Error('Falta MERCADOPAGO_WEBHOOK_SECRET');
 
     this.webhookSecret = webhookSecret;
@@ -37,19 +46,27 @@ export class PaymentService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async releaseExpiredReservations(): Promise<void> {
-    const cutoffDate = new Date(Date.now() - RESERVATION_HOLD_MINUTES * 60 * 1000);
+    const cutoffDate = new Date(
+      Date.now() - RESERVATION_HOLD_MINUTES * 60 * 1000,
+    );
 
-    const expired = await this.paymentRepository.findExpiredPendingReservations(cutoffDate);
+    const expired =
+      await this.paymentRepository.findExpiredPendingReservations(cutoffDate);
 
     if (expired.length === 0) {
       return;
     }
 
     await this.paymentRepository.cancelExpiredReservations(expired);
-    this.logger.log(`Canceladas ${expired.length} reserva(s) vencidas por falta de pago`);
+    this.logger.log(
+      `Canceladas ${expired.length} reserva(s) vencidas por falta de pago`,
+    );
   }
 
-  async createPreference(reservation: Reservation, guestData: ConfirmReservationDto): Promise<{ preferenceId: string; initPoint: string }> {
+  async createPreference(
+    reservation: Reservation,
+    guestData: ConfirmReservationDto,
+  ): Promise<{ preferenceId: string; initPoint: string }> {
     const baseUrl = this.configService.get<string>('APP_BASE_URL');
 
     const preference = await new Preference(this.client).create({
@@ -70,7 +87,9 @@ export class PaymentService {
         external_reference: reservation.id,
         notification_url: baseUrl ? `${baseUrl}/payment/webhook` : undefined,
         back_urls: {
-          success: baseUrl ? `${baseUrl}/payment/success?reservationId=${reservation.id}` : undefined,
+          success: baseUrl
+            ? `${baseUrl}/payment/success?reservationId=${reservation.id}`
+            : undefined,
         },
         auto_return: 'approved',
       },
@@ -87,7 +106,11 @@ export class PaymentService {
     return new Payment(this.client).get({ id: paymentId });
   }
 
-  verifyWebhookSignature(xSignature: string, xRequestId: string, dataId: string): boolean {
+  verifyWebhookSignature(
+    xSignature: string,
+    xRequestId: string,
+    dataId: string,
+  ): boolean {
     try {
       WebhookSignatureValidator.validate({
         xSignature,
@@ -101,8 +124,11 @@ export class PaymentService {
     }
   }
 
-
-  async notifyPaymentApproved(telegramUserId: string, checkIn: Date | string, checkOut: Date | string): Promise<void> {
+  async notifyPaymentApproved(
+    telegramUserId: string,
+    checkIn: Date | string,
+    checkOut: Date | string,
+  ): Promise<void> {
     const checkInText = new Date(checkIn).toLocaleDateString('es-AR');
     const checkOutText = new Date(checkOut).toLocaleDateString('es-AR');
     const notice = `✅ ¡Recibimos tu pago! Ahora sí, tu reserva del ${checkInText} al ${checkOutText} quedó CONFIRMADA. ¡Te esperamos!`;
@@ -113,13 +139,15 @@ export class PaymentService {
       const session = await this.chatService.getOrCreateSession(telegramUserId);
       await this.chatService.recordSystemMessage(session, notice);
     } catch (error) {
-      this.logger.warn(`No se pudo registrar el aviso de pago en el chat de ${telegramUserId}: ${error}`);
+      this.logger.warn(
+        `No se pudo registrar el aviso de pago en el chat de ${telegramUserId}: ${error}`,
+      );
     }
   }
 
-
   async generateReceiptPDF(reservationId: string): Promise<Buffer> {
-    const reservation = await this.paymentRepository.findReservationById(reservationId);
+    const reservation =
+      await this.paymentRepository.findReservationById(reservationId);
     if (!reservation) throw new Error('Reserva no encontrada');
 
     return new Promise((resolve, reject) => {
@@ -133,15 +161,22 @@ export class PaymentService {
       doc.fontSize(20).text('Comprobante de Reserva', { align: 'center' });
       doc.moveDown();
       doc.fontSize(12).text(`ID de Reserva: ${reservation.id}`);
-      doc.text(`Huésped: ${reservation.guestFullName} (DNI: ${reservation.guestDni})`);
+      doc.text(
+        `Huésped: ${reservation.guestFullName} (DNI: ${reservation.guestDni})`,
+      );
       doc.text(`Habitación: ${reservation.room?.category?.name ?? 'Estándar'}`);
-      doc.text(`Check-in: ${new Date(reservation.checkIn).toLocaleDateString('es-AR')}`);
-      doc.text(`Check-out: ${new Date(reservation.checkOut).toLocaleDateString('es-AR')}`);
+      doc.text(
+        `Check-in: ${new Date(reservation.checkIn).toLocaleDateString('es-AR')}`,
+      );
+      doc.text(
+        `Check-out: ${new Date(reservation.checkOut).toLocaleDateString('es-AR')}`,
+      );
       doc.moveDown();
-      doc.fontSize(14).text(`Seña abonada: $${reservation.depositAmount} ARS`, { underline: true });
+      doc.fontSize(14).text(`Seña abonada: $${reservation.depositAmount} ARS`, {
+        underline: true,
+      });
 
       doc.end();
     });
   }
-  
 }

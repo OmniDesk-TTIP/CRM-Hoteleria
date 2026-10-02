@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  back:
+    name: Back (lint, build, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: back
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: back/package-lock.json
+      - run: npm ci
+      # TODO: hoy hay ~10k errores de eslint/prettier en el back (la mayoría en specs).
+      # No bloquea el CI hasta limpiarlos; después sacar continue-on-error.
+      - run: npx eslint "{src,apps,libs,test}/**/*.ts"
+        continue-on-error: true
+      - run: npm run build
+      - run: npm test
+
+  front:
+    name: Front (lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

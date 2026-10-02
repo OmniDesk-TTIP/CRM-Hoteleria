@@ -12,9 +12,13 @@ import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from './ws-jwt.guard';
 import { JwtPayload } from '../auth/auth.types';
 import { ChatMessageDto, ChatSummaryDto } from './dto/chat.dto';
-import { ChatSessionStatus, HandoverReason } from '../../infrastructure/database/entities/ChatSession.entity';
+import {
+  ChatSessionStatus,
+  HandoverReason,
+} from '../../infrastructure/database/entities/ChatSession.entity';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Room con todos los operadores conectados: recibe lo que afecta a la bandeja. */
 export const OPERATORS_ROOM = 'operators';
@@ -41,7 +45,10 @@ export interface ChatStatusEvent {
 @WebSocketGateway({
   namespace: '/ws/chats',
   cors: {
-    origin: (_origin: string | undefined, callback: (err: Error | null, origin?: string) => void) =>
+    origin: (
+      _origin: string | undefined,
+      callback: (err: Error | null, origin?: string) => void,
+    ) =>
       callback(null, process.env.FRONTEND_BASE_URL ?? 'http://localhost:5173'),
     credentials: true,
   },
@@ -55,11 +62,18 @@ export class ChatGateway implements OnGatewayConnection {
   constructor(private readonly jwtService: JwtService) {}
 
   async handleConnection(client: Socket): Promise<void> {
-    const token = (client.handshake.auth as { token?: string } | undefined)?.token;
+    const token = (client.handshake.auth as { token?: string } | undefined)
+      ?.token;
 
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload & { exp?: number }>(token ?? '');
-      client.data.user = { id: payload.sub, email: payload.email, role: payload.role };
+      const payload = await this.jwtService.verifyAsync<
+        JwtPayload & { exp?: number }
+      >(token ?? '');
+      client.data.user = {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role,
+      };
       client.data.tokenExp = payload.exp;
       await client.join(OPERATORS_ROOM);
     } catch {
@@ -70,7 +84,10 @@ export class ChatGateway implements OnGatewayConnection {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('chat:subscribe')
-  async subscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { chatId?: string }): Promise<{ ok: boolean }> {
+  async subscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chatId?: string },
+  ): Promise<{ ok: boolean }> {
     if (!body?.chatId || !UUID_REGEX.test(body.chatId)) return { ok: false };
 
     await client.join(chatRoom(body.chatId));
@@ -79,7 +96,10 @@ export class ChatGateway implements OnGatewayConnection {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('chat:unsubscribe')
-  async unsubscribe(@ConnectedSocket() client: Socket, @MessageBody() body: { chatId?: string }): Promise<{ ok: boolean }> {
+  async unsubscribe(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chatId?: string },
+  ): Promise<{ ok: boolean }> {
     if (!body?.chatId || !UUID_REGEX.test(body.chatId)) return { ok: false };
 
     await client.leave(chatRoom(body.chatId));
@@ -90,7 +110,11 @@ export class ChatGateway implements OnGatewayConnection {
     this.emit(OPERATORS_ROOM, 'chat:created', { chat });
   }
 
-  emitMessage(chatId: string, message: ChatMessageDto, session: ChatSessionSummaryPatch): void {
+  emitMessage(
+    chatId: string,
+    message: ChatMessageDto,
+    session: ChatSessionSummaryPatch,
+  ): void {
     const payload = { chatId, message, session };
     this.emit(chatRoom(chatId), 'chat:message', payload);
     this.emit(OPERATORS_ROOM, 'chat:message', payload);

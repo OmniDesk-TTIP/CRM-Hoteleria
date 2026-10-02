@@ -18,13 +18,17 @@ describe('RegisterDto', () => {
   });
 
   it('acepta un rol explícito válido', async () => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...validPayload, role: UserRole.ADMIN }));
+    const errors = await validate(
+      plainToInstance(RegisterDto, { ...validPayload, role: UserRole.ADMIN }),
+    );
 
     expect(errors).toHaveLength(0);
   });
 
   it('rechaza un rol inventado', async () => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...validPayload, role: 'SUPERADMIN' }));
+    const errors = await validate(
+      plainToInstance(RegisterDto, { ...validPayload, role: 'SUPERADMIN' }),
+    );
 
     expect(errors.some((e) => e.property === 'role')).toBe(true);
   });
@@ -41,19 +45,28 @@ describe('RegisterDto', () => {
   });
 
   it('rechaza una contraseña de menos de 8 caracteres', async () => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...validPayload, password: 'corta1' }));
+    const errors = await validate(
+      plainToInstance(RegisterDto, { ...validPayload, password: 'corta1' }),
+    );
 
     expect(errors.some((e) => e.property === 'password')).toBe(true);
   });
 
   it('rechaza una contraseña de más de 72 caracteres, el límite real de bcrypt', async () => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...validPayload, password: 'a'.repeat(73) }));
+    const errors = await validate(
+      plainToInstance(RegisterDto, {
+        ...validPayload,
+        password: 'a'.repeat(73),
+      }),
+    );
 
     expect(errors.some((e) => e.property === 'password')).toBe(true);
   });
 
   it('rechaza un nombre completo muy corto', async () => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...validPayload, fullName: 'Al' }));
+    const errors = await validate(
+      plainToInstance(RegisterDto, { ...validPayload, fullName: 'Al' }),
+    );
 
     expect(errors.some((e) => e.property === 'fullName')).toBe(true);
   });

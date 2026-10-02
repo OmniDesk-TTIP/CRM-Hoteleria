@@ -3,8 +3,7 @@ import { CustomBaseEntity } from './CustomBase.entity';
 
 @Entity()
 export class Document extends CustomBaseEntity {
-
-  @PrimaryKey({type: 'integer', autoincrement: true})
+  @PrimaryKey({ type: 'integer', autoincrement: true })
   id!: number;
 
   @Property({ type: 'text' })
@@ -12,4 +11,4 @@ export class Document extends CustomBaseEntity {
 
   @Property({ type: 'vector', columnType: 'vector(3072)' })
   embedding!: number[];
-}  
+}

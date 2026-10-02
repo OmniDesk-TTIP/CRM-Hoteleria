@@ -1,4 +1,10 @@
-import { Entity, PrimaryKey, Property, ManyToOne, Unique } from '@mikro-orm/decorators/legacy';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  ManyToOne,
+  Unique,
+} from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { User } from './User.entity';
 import { CustomBaseEntity } from './CustomBase.entity';

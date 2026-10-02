@@ -10,10 +10,22 @@ describe('RoomService', () => {
   let service: RoomService;
   let roomRepository: RoomRepository;
 
-  const mockCategory: any = { id: 'cat-1', name: 'Doble', capacity: 2, basePrice: 12000 };
-  const mockRoom: any = { id: 'room-1', roomNumber: '201', status: RoomStatus.ACTIVE, category: mockCategory };
+  const mockCategory: any = {
+    id: 'cat-1',
+    name: 'Doble',
+    capacity: 2,
+    basePrice: 12000,
+  };
+  const mockRoom: any = {
+    id: 'room-1',
+    roomNumber: '201',
+    status: RoomStatus.ACTIVE,
+    category: mockCategory,
+  };
 
-  const buildCreatePayload = (overrides: Partial<CreateRoomDto> = {}): CreateRoomDto => ({
+  const buildCreatePayload = (
+    overrides: Partial<CreateRoomDto> = {},
+  ): CreateRoomDto => ({
     roomNumber: '204',
     categoryName: 'Doble',
     capacity: 2,
@@ -48,7 +60,9 @@ describe('RoomService', () => {
 
   describe('list', () => {
     it('devuelve el inventario completo con precio, capacidad y estado (CA1)', async () => {
-      jest.spyOn(roomRepository, 'findAllWithCategory').mockResolvedValue([mockRoom]);
+      jest
+        .spyOn(roomRepository, 'findAllWithCategory')
+        .mockResolvedValue([mockRoom]);
 
       const result = await service.list();
 
@@ -68,19 +82,29 @@ describe('RoomService', () => {
 
   describe('create', () => {
     it('rechaza con 409 si ya existe una habitación con ese número (CA2)', async () => {
-      jest.spyOn(roomRepository, 'findByRoomNumber').mockResolvedValue(mockRoom);
+      jest
+        .spyOn(roomRepository, 'findByRoomNumber')
+        .mockResolvedValue(mockRoom);
 
-      await expect(service.create(buildCreatePayload({ roomNumber: '201' }))).rejects.toThrow(ConflictException);
+      await expect(
+        service.create(buildCreatePayload({ roomNumber: '201' })),
+      ).rejects.toThrow(ConflictException);
       expect(roomRepository.create).not.toHaveBeenCalled();
       expect(roomRepository.saveNew).not.toHaveBeenCalled();
     });
 
     it('reutiliza el tipo existente si ya hay una categoría con ese nombre (sin pisar su precio/capacidad)', async () => {
       jest.spyOn(roomRepository, 'findByRoomNumber').mockResolvedValue(null);
-      jest.spyOn(roomRepository, 'findCategoryByName').mockResolvedValue(mockCategory);
-      jest.spyOn(roomRepository, 'create').mockImplementation((data: any) => ({ ...data, id: 'room-nueva' }) as any);
+      jest
+        .spyOn(roomRepository, 'findCategoryByName')
+        .mockResolvedValue(mockCategory);
+      jest
+        .spyOn(roomRepository, 'create')
+        .mockImplementation((data: any) => ({ ...data, id: 'room-nueva' }));
 
-      const result = await service.create(buildCreatePayload({ capacity: 99, basePrice: 999999 }));
+      const result = await service.create(
+        buildCreatePayload({ capacity: 99, basePrice: 999999 }),
+      );
 
       expect(roomRepository.createCategory).not.toHaveBeenCalled();
       expect(roomRepository.create).toHaveBeenCalledWith({
@@ -93,15 +117,32 @@ describe('RoomService', () => {
     });
 
     it('crea un tipo nuevo cuando no existe una categoría con ese nombre', async () => {
-      const newCategory: any = { id: 'cat-2', name: 'Familiar', capacity: 5, basePrice: 25000 };
+      const newCategory: any = {
+        id: 'cat-2',
+        name: 'Familiar',
+        capacity: 5,
+        basePrice: 25000,
+      };
       jest.spyOn(roomRepository, 'findByRoomNumber').mockResolvedValue(null);
       jest.spyOn(roomRepository, 'findCategoryByName').mockResolvedValue(null);
       jest.spyOn(roomRepository, 'createCategory').mockReturnValue(newCategory);
-      jest.spyOn(roomRepository, 'create').mockImplementation((data: any) => ({ ...data, id: 'room-nueva' }) as any);
+      jest
+        .spyOn(roomRepository, 'create')
+        .mockImplementation((data: any) => ({ ...data, id: 'room-nueva' }));
 
-      await service.create(buildCreatePayload({ categoryName: 'Familiar', capacity: 5, basePrice: 25000 }));
+      await service.create(
+        buildCreatePayload({
+          categoryName: 'Familiar',
+          capacity: 5,
+          basePrice: 25000,
+        }),
+      );
 
-      expect(roomRepository.createCategory).toHaveBeenCalledWith({ name: 'Familiar', capacity: 5, basePrice: 25000 });
+      expect(roomRepository.createCategory).toHaveBeenCalledWith({
+        name: 'Familiar',
+        capacity: 5,
+        basePrice: 25000,
+      });
       expect(roomRepository.create).toHaveBeenCalledWith({
         roomNumber: '204',
         category: newCategory,
@@ -111,31 +152,51 @@ describe('RoomService', () => {
 
     it('crea la habitación como ACTIVE por defecto si no se especifica estado', async () => {
       jest.spyOn(roomRepository, 'findByRoomNumber').mockResolvedValue(null);
-      jest.spyOn(roomRepository, 'findCategoryByName').mockResolvedValue(mockCategory);
-      jest.spyOn(roomRepository, 'create').mockImplementation((data: any) => data as any);
+      jest
+        .spyOn(roomRepository, 'findCategoryByName')
+        .mockResolvedValue(mockCategory);
+      jest
+        .spyOn(roomRepository, 'create')
+        .mockImplementation((data: any) => data);
 
       await service.create(buildCreatePayload());
 
-      expect(roomRepository.create).toHaveBeenCalledWith(expect.objectContaining({ status: RoomStatus.ACTIVE }));
+      expect(roomRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ status: RoomStatus.ACTIVE }),
+      );
     });
   });
 
   describe('update', () => {
-    const freshRoom = () => ({ id: 'room-1', roomNumber: '201', status: RoomStatus.ACTIVE, category: { ...mockCategory } });
+    const freshRoom = () => ({
+      id: 'room-1',
+      roomNumber: '201',
+      status: RoomStatus.ACTIVE,
+      category: { ...mockCategory },
+    });
 
     it('rechaza con 404 si la habitación no existe', async () => {
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(null);
 
-      await expect(service.update('no-existe', {} as UpdateRoomDto)).rejects.toThrow(NotFoundException);
+      await expect(service.update('no-existe', {})).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('rechaza con 409 si el nuevo número ya lo usa otra habitación (CA2)', async () => {
       const room = freshRoom();
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(room as any);
-      jest.spyOn(roomRepository, 'findByRoomNumber').mockResolvedValue({ id: 'otra-habitacion' } as any);
+      jest
+        .spyOn(roomRepository, 'findByRoomNumber')
+        .mockResolvedValue({ id: 'otra-habitacion' } as any);
 
-      await expect(service.update('room-1', { roomNumber: '999' })).rejects.toThrow(ConflictException);
-      expect(roomRepository.findByRoomNumber).toHaveBeenCalledWith('999', 'room-1');
+      await expect(
+        service.update('room-1', { roomNumber: '999' }),
+      ).rejects.toThrow(ConflictException);
+      expect(roomRepository.findByRoomNumber).toHaveBeenCalledWith(
+        '999',
+        'room-1',
+      );
       expect(roomRepository.save).not.toHaveBeenCalled();
     });
 
@@ -143,7 +204,10 @@ describe('RoomService', () => {
       const room = freshRoom();
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(room as any);
 
-      const result = await service.update('room-1', { basePrice: 15000, capacity: 3 });
+      const result = await service.update('room-1', {
+        basePrice: 15000,
+        capacity: 3,
+      });
 
       expect(room.category.basePrice).toBe(15000);
       expect(room.category.capacity).toBe(3);
@@ -153,9 +217,16 @@ describe('RoomService', () => {
 
     it('cambia de tipo reutilizando una categoría existente con ese nombre', async () => {
       const room = freshRoom();
-      const suiteCategory: any = { id: 'cat-suite', name: 'Suite', capacity: 4, basePrice: 20000 };
+      const suiteCategory: any = {
+        id: 'cat-suite',
+        name: 'Suite',
+        capacity: 4,
+        basePrice: 20000,
+      };
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(room as any);
-      jest.spyOn(roomRepository, 'findCategoryByName').mockResolvedValue(suiteCategory);
+      jest
+        .spyOn(roomRepository, 'findCategoryByName')
+        .mockResolvedValue(suiteCategory);
 
       await service.update('room-1', { categoryName: 'Suite' });
 
@@ -167,7 +238,9 @@ describe('RoomService', () => {
       const room = freshRoom();
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(room as any);
 
-      const result = await service.update('room-1', { status: RoomStatus.INACTIVE });
+      const result = await service.update('room-1', {
+        status: RoomStatus.INACTIVE,
+      });
 
       expect(result.status).toBe(RoomStatus.INACTIVE);
     });
@@ -203,7 +276,9 @@ describe('RoomService', () => {
       jest.spyOn(roomRepository, 'deactivate').mockResolvedValue(false);
       jest.spyOn(roomRepository, 'findById').mockResolvedValue(null);
 
-      await expect(service.remove('no-existe')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('no-existe')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });
