@@ -1,4 +1,14 @@
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsInt, Matches, Max, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsInt,
+  Matches,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;

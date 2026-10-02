@@ -9,8 +9,14 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { createValidationPipe } from '../src/validation.config';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
-import { Room, RoomStatus } from '../src/infrastructure/database/entities/Room.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../src/infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../src/infrastructure/database/entities/RoomCategory.entity';
 
 describe('Admin Rooms CRUD (e2e)', () => {
@@ -22,7 +28,11 @@ describe('Admin Rooms CRUD (e2e)', () => {
   const uniqueSuffix = Date.now();
   const categoryName = `Doble E2E-${uniqueSuffix}`;
   const createdRoomIds: string[] = [];
-  const createdCategoryNames = [categoryName, `Suite E2E-${uniqueSuffix}`, `Familiar E2E-${uniqueSuffix}`];
+  const createdCategoryNames = [
+    categoryName,
+    `Suite E2E-${uniqueSuffix}`,
+    `Familiar E2E-${uniqueSuffix}`,
+  ];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,7 +48,13 @@ describe('Admin Rooms CRUD (e2e)', () => {
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -56,10 +72,14 @@ describe('Admin Rooms CRUD (e2e)', () => {
       if (createdRoomIds.length > 0) {
         await em.nativeDelete(Room, { id: { $in: createdRoomIds } });
       }
-      await em.nativeDelete(RoomCategory, { name: { $in: createdCategoryNames } });
-      await em.nativeDelete(User, { email: { $in: [admin.user.email, employee.user.email] } });
+      await em.nativeDelete(RoomCategory, {
+        name: { $in: createdCategoryNames },
+      });
+      await em.nativeDelete(User, {
+        email: { $in: [admin.user.email, employee.user.email] },
+      });
       if (app) await app.close();
-    } catch (e) {
+    } catch {
       // no-op: limpieza best-effort
     }
   });
@@ -80,7 +100,12 @@ describe('Admin Rooms CRUD (e2e)', () => {
       await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(employee.accessToken))
-        .send({ roomNumber: `X-${uniqueSuffix}`, categoryName, capacity: 2, basePrice: 12000 })
+        .send({
+          roomNumber: `X-${uniqueSuffix}`,
+          categoryName,
+          capacity: 2,
+          basePrice: 12000,
+        })
         .expect(403);
     });
 
@@ -105,7 +130,12 @@ describe('Admin Rooms CRUD (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ roomNumber: `201-${uniqueSuffix}`, categoryName, capacity: 2, basePrice: 12000 })
+        .send({
+          roomNumber: `201-${uniqueSuffix}`,
+          categoryName,
+          capacity: 2,
+          basePrice: 12000,
+        })
         .expect(201);
 
       expect(response.body).toMatchObject({
@@ -123,13 +153,26 @@ describe('Admin Rooms CRUD (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ roomNumber: `202-${uniqueSuffix}`, categoryName, capacity: 2, basePrice: 12000 })
+        .send({
+          roomNumber: `202-${uniqueSuffix}`,
+          categoryName,
+          capacity: 2,
+          basePrice: 12000,
+        })
         .expect(201);
 
       createdRoomIds.push(response.body.id);
 
-      const first = await em.findOne(Room, { id: createdRoomIds[0] }, { populate: ['category'] });
-      const second = await em.findOne(Room, { id: createdRoomIds[1] }, { populate: ['category'] });
+      const first = await em.findOne(
+        Room,
+        { id: createdRoomIds[0] },
+        { populate: ['category'] },
+      );
+      const second = await em.findOne(
+        Room,
+        { id: createdRoomIds[1] },
+        { populate: ['category'] },
+      );
       expect(first!.category.id).toBe(second!.category.id);
     });
 
@@ -137,7 +180,12 @@ describe('Admin Rooms CRUD (e2e)', () => {
       await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ roomNumber: `201-${uniqueSuffix}`, categoryName, capacity: 2, basePrice: 12000 })
+        .send({
+          roomNumber: `201-${uniqueSuffix}`,
+          categoryName,
+          capacity: 2,
+          basePrice: 12000,
+        })
         .expect(409);
     });
 
@@ -145,7 +193,12 @@ describe('Admin Rooms CRUD (e2e)', () => {
       await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ roomNumber: `203-${uniqueSuffix}`, categoryName, capacity: 2, basePrice: -100 })
+        .send({
+          roomNumber: `203-${uniqueSuffix}`,
+          categoryName,
+          capacity: 2,
+          basePrice: -100,
+        })
         .expect(400);
     });
 
@@ -153,7 +206,12 @@ describe('Admin Rooms CRUD (e2e)', () => {
       await request(app.getHttpServer())
         .post('/rooms')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ roomNumber: `203-${uniqueSuffix}`, categoryName, capacity: 0, basePrice: 12000 })
+        .send({
+          roomNumber: `203-${uniqueSuffix}`,
+          categoryName,
+          capacity: 0,
+          basePrice: 12000,
+        })
         .expect(400);
     });
 
@@ -173,7 +231,9 @@ describe('Admin Rooms CRUD (e2e)', () => {
         .set('Authorization', bearer(admin.accessToken))
         .expect(200);
 
-      const created = response.body.find((room: any) => room.id === createdRoomIds[0]);
+      const created = response.body.find(
+        (room: any) => room.id === createdRoomIds[0],
+      );
       expect(created).toMatchObject({
         roomNumber: `201-${uniqueSuffix}`,
         categoryName,
@@ -215,7 +275,9 @@ describe('Admin Rooms CRUD (e2e)', () => {
         .set('Authorization', bearer(admin.accessToken))
         .expect(200);
 
-      const sibling = response.body.find((room: any) => room.id === createdRoomIds[1]);
+      const sibling = response.body.find(
+        (room: any) => room.id === createdRoomIds[1],
+      );
       expect(sibling.basePrice).toBe(18000);
     });
 
@@ -244,7 +306,7 @@ describe('Admin Rooms CRUD (e2e)', () => {
         .delete(`/rooms/${createdRoomIds[0]}`)
         .set('Authorization', bearer(admin.accessToken))
         .expect(204);
-        
+
       em.clear();
       const room = await em.findOne(Room, { id: createdRoomIds[0] });
       expect(room).not.toBeNull();

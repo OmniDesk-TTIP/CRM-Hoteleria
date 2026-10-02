@@ -15,7 +15,10 @@ describe('RagSeederService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RagSeederService,
-        { provide: RagService, useValue: { ingestDocument: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: RagService,
+          useValue: { ingestDocument: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: RagRepository, useValue: { countDocuments: jest.fn() } },
       ],
     }).compile();
@@ -41,7 +44,9 @@ describe('RagSeederService', () => {
 
   it('ingiere cada fragmento de knowledge.json cuando la base está vacía', async () => {
     jest.spyOn(ragRepository, 'countDocuments').mockResolvedValue(0);
-    jest.spyOn(fs, 'readFileSync').mockReturnValue(JSON.stringify(['Fragmento 1', 'Fragmento 2']));
+    jest
+      .spyOn(fs, 'readFileSync')
+      .mockReturnValue(JSON.stringify(['Fragmento 1', 'Fragmento 2']));
 
     await service.onModuleInit();
 

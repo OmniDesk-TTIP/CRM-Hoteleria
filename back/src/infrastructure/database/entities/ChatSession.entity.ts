@@ -1,5 +1,13 @@
 import { Opt } from '@mikro-orm/core';
-import { Entity, PrimaryKey, Property, ManyToOne, Enum, Unique, Index } from '@mikro-orm/decorators/legacy';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  ManyToOne,
+  Enum,
+  Unique,
+  Index,
+} from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { User } from './User.entity';
 import { MessageRole } from './ChatMessage.entity';

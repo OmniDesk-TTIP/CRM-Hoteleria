@@ -1,10 +1,25 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ListChatsQueryDto } from './dto/listChats.dto';
 import { ListChatMessagesQueryDto } from './dto/listChatMessages.dto';
 import { SendChatMessageDto } from './dto/sendChatMessage.dto';
 import { ReleaseChatDto } from './dto/releaseChat.dto';
-import { ChatDetailDto, ChatMessageDto, ChatSummaryDto, CursorPageDto } from './dto/chat.dto';
+import {
+  ChatDetailDto,
+  ChatMessageDto,
+  ChatSummaryDto,
+  CursorPageDto,
+} from './dto/chat.dto';
 import { PaginatedResultDto } from '../reservation/dto/adminReservation.dto';
 import { CurrentUser } from '../auth/auth.decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -19,12 +34,17 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Get()
-  list(@Query() query: ListChatsQueryDto, @CurrentUser() user: AuthUser): Promise<PaginatedResultDto<ChatSummaryDto>> {
+  list(
+    @Query() query: ListChatsQueryDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PaginatedResultDto<ChatSummaryDto>> {
     return this.chatService.list(query, user);
   }
 
   @Get(':chatId')
-  detail(@Param('chatId', ParseUUIDPipe) chatId: string): Promise<ChatDetailDto> {
+  detail(
+    @Param('chatId', ParseUUIDPipe) chatId: string,
+  ): Promise<ChatDetailDto> {
     return this.chatService.getDetail(chatId);
   }
 
@@ -50,7 +70,10 @@ export class ChatController {
   // CA2: "Tomar el control" silencia al bot.
   @Post(':chatId/takeover')
   @HttpCode(HttpStatus.OK)
-  takeOver(@Param('chatId', ParseUUIDPipe) chatId: string, @CurrentUser() user: AuthUser): Promise<ChatDetailDto> {
+  takeOver(
+    @Param('chatId', ParseUUIDPipe) chatId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ChatDetailDto> {
     return this.chatService.takeOver(chatId, user);
   }
 

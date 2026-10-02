@@ -10,7 +10,11 @@ import { PaymentModule } from '../payment/payment.module';
 @Module({
   imports: [BookingProcessModule, RoomModule, PaymentModule],
   controllers: [ReservationAdminController],
-  providers: [ReservationService, ReservationRepository, ReservationAdminService],
+  providers: [
+    ReservationService,
+    ReservationRepository,
+    ReservationAdminService,
+  ],
   exports: [ReservationService],
 })
 export class ReservationModule {}

@@ -9,7 +9,10 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { createValidationPipe } from '../src/validation.config';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
 import { RefreshToken } from '../src/infrastructure/database/entities/RefreshToken.entity';
 
 const REFRESH_COOKIE = 'refresh_token';
@@ -45,7 +48,13 @@ describe('Auth (e2e)', () => {
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -64,9 +73,14 @@ describe('Auth (e2e)', () => {
     try {
       // Los refresh tokens tienen FK al usuario: se borran primero.
       await em.nativeDelete(RefreshToken, {});
-      await em.nativeDelete(User, { email: { $in: [admin.user.email, employee.user.email, ...createdEmails] } });
+      await em.nativeDelete(User, {
+        email: {
+          $in: [admin.user.email, employee.user.email, ...createdEmails],
+        },
+      });
       if (app) await app.close();
-    } catch (e) {
+    } catch {
+      // no-op: limpieza best-effort
     }
   });
 
@@ -81,9 +95,9 @@ describe('Auth (e2e)', () => {
       expect(response.body.user.email).toBe(admin.user.email);
       expect(JSON.stringify(response.body)).not.toContain('passwordHash');
 
-      const cookie = (response.headers['set-cookie'] as unknown as string[]).find((c) =>
-        c.startsWith(`${REFRESH_COOKIE}=`),
-      );
+      const cookie = (
+        response.headers['set-cookie'] as unknown as string[]
+      ).find((c) => c.startsWith(`${REFRESH_COOKIE}=`));
       expect(cookie).toContain('HttpOnly');
       expect(cookie).toContain('Path=/auth');
     });
@@ -91,7 +105,10 @@ describe('Auth (e2e)', () => {
     it('acepta el email con otra capitalización', async () => {
       await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ email: admin.user.email.toUpperCase(), password: admin.password })
+        .send({
+          email: admin.user.email.toUpperCase(),
+          password: admin.password,
+        })
         .expect(200);
     });
 
@@ -121,7 +138,11 @@ describe('Auth (e2e)', () => {
     it('rechaza campos no declarados en el DTO (400)', async () => {
       await request(app.getHttpServer())
         .post('/auth/login')
-        .send({ email: admin.user.email, password: admin.password, rememberMe: true })
+        .send({
+          email: admin.user.email,
+          password: admin.password,
+          rememberMe: true,
+        })
         .expect(400);
     });
   });
@@ -132,7 +153,10 @@ describe('Auth (e2e)', () => {
     });
 
     it('rechaza un token inválido (401)', async () => {
-      await request(app.getHttpServer()).get('/auth/me').set('Authorization', 'Bearer basura').expect(401);
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', 'Bearer basura')
+        .expect(401);
     });
 
     it('devuelve el usuario autenticado sin el hash de la contraseña', async () => {
@@ -151,7 +175,11 @@ describe('Auth (e2e)', () => {
     it('rechaza sin token (401)', async () => {
       await request(app.getHttpServer())
         .post('/auth/register')
-        .send({ email: 'nueva@omnidesk.test', password: 'unaClaveLarga123', fullName: 'Nueva Empleada' })
+        .send({
+          email: 'nueva@omnidesk.test',
+          password: 'unaClaveLarga123',
+          fullName: 'Nueva Empleada',
+        })
         .expect(401);
     });
 
@@ -159,7 +187,11 @@ describe('Auth (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .set('Authorization', bearer(employee.accessToken))
-        .send({ email: 'nueva@omnidesk.test', password: 'unaClaveLarga123', fullName: 'Nueva Empleada' })
+        .send({
+          email: 'nueva@omnidesk.test',
+          password: 'unaClaveLarga123',
+          fullName: 'Nueva Empleada',
+        })
         .expect(403);
     });
 
@@ -170,7 +202,11 @@ describe('Auth (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/auth/register')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ email, password: 'unaClaveLarga123', fullName: 'Nueva Empleada' })
+        .send({
+          email,
+          password: 'unaClaveLarga123',
+          fullName: 'Nueva Empleada',
+        })
         .expect(201);
 
       expect(response.body.role).toBe(UserRole.EMPLOYEE);
@@ -187,7 +223,11 @@ describe('Auth (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/register')
         .set('Authorization', bearer(admin.accessToken))
-        .send({ email: admin.user.email, password: 'unaClaveLarga123', fullName: 'Duplicada' })
+        .send({
+          email: admin.user.email,
+          password: 'unaClaveLarga123',
+          fullName: 'Duplicada',
+        })
         .expect(409);
     });
   });
@@ -216,8 +256,14 @@ describe('Auth (e2e)', () => {
 
       // Reusar la cookie vieja es la señal de token robado: se cierran TODAS las sesiones,
       // así que la cookie nueva también deja de servir.
-      await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', primeraCookie).expect(401);
-      await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', segundaCookie).expect(401);
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', primeraCookie)
+        .expect(401);
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', segundaCookie)
+        .expect(401);
     });
   });
 
@@ -230,8 +276,14 @@ describe('Auth (e2e)', () => {
 
       const cookie = extractRefreshCookie(login);
 
-      await request(app.getHttpServer()).post('/auth/logout').set('Cookie', cookie).expect(204);
-      await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', cookie).expect(401);
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Cookie', cookie)
+        .expect(204);
+      await request(app.getHttpServer())
+        .post('/auth/refresh')
+        .set('Cookie', cookie)
+        .expect(401);
     });
 
     it('sin cookie responde 204 igual', async () => {

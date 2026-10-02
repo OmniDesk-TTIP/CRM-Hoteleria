@@ -31,12 +31,15 @@ export class SupportHoursService {
     private readonly supportHoursRepository: SupportHoursRepository,
     configService: ConfigService,
   ) {
-    const configured = configService.get<string>('SUPPORT_TIMEZONE') ?? DEFAULT_TIMEZONE;
+    const configured =
+      configService.get<string>('SUPPORT_TIMEZONE') ?? DEFAULT_TIMEZONE;
 
     if (isValidTimeZone(configured)) {
       this.timeZone = configured;
     } else {
-      this.logger.warn(`SUPPORT_TIMEZONE="${configured}" no es una zona horaria válida. Se usa UTC.`);
+      this.logger.warn(
+        `SUPPORT_TIMEZONE="${configured}" no es una zona horaria válida. Se usa UTC.`,
+      );
       this.timeZone = 'UTC';
     }
   }
@@ -47,13 +50,20 @@ export class SupportHoursService {
 
   async getSchedule(): Promise<SupportHoursDto> {
     const days = await this.supportHoursRepository.findAll();
-    return { days: days.map((day) => SupportHoursDayDto.fromEntity(day)), timeZone: this.timeZone };
+    return {
+      days: days.map((day) => SupportHoursDayDto.fromEntity(day)),
+      timeZone: this.timeZone,
+    };
   }
 
-  async replaceSchedule(payload: UpdateSupportHoursDto): Promise<SupportHoursDto> {
+  async replaceSchedule(
+    payload: UpdateSupportHoursDto,
+  ): Promise<SupportHoursDto> {
     const weekdays = payload.days.map((day) => day.weekday);
     if (new Set(weekdays).size !== 7) {
-      throw new BadRequestException('days tiene que traer exactamente un registro por día de la semana');
+      throw new BadRequestException(
+        'days tiene que traer exactamente un registro por día de la semana',
+      );
     }
 
     for (const day of payload.days) {
@@ -65,10 +75,14 @@ export class SupportHoursService {
     }
 
     const existing = await this.supportHoursRepository.findAll();
-    const byWeekday = new Map(existing.map((entity) => [entity.weekday, entity]));
+    const byWeekday = new Map(
+      existing.map((entity) => [entity.weekday, entity]),
+    );
 
     for (const day of payload.days) {
-      const entity = byWeekday.get(day.weekday) ?? this.supportHoursRepository.create({ weekday: day.weekday });
+      const entity =
+        byWeekday.get(day.weekday) ??
+        this.supportHoursRepository.create({ weekday: day.weekday });
       entity.isClosed = day.isClosed;
       entity.opensAt = day.opensAt;
       entity.closesAt = day.closesAt;
@@ -83,9 +97,13 @@ export class SupportHoursService {
     if (schedule.length === 0) return { isOpen: true, nextOpeningLabel: null };
 
     const current = zonedNow(now, this.timeZone);
-    if (isOpenAt(current, schedule)) return { isOpen: true, nextOpeningLabel: null };
+    if (isOpenAt(current, schedule))
+      return { isOpen: true, nextOpeningLabel: null };
 
-    return { isOpen: false, nextOpeningLabel: describeNextOpening(findNextOpening(current, schedule)) };
+    return {
+      isOpen: false,
+      nextOpeningLabel: describeNextOpening(findNextOpening(current, schedule)),
+    };
   }
 
   /** Alta inicial de la semana por defecto; la usa el seeder. */
@@ -104,6 +122,11 @@ export class SupportHoursService {
 
   private async loadSchedule(): Promise<DaySchedule[]> {
     const days = await this.supportHoursRepository.findAll();
-    return days.map(({ weekday, isClosed, opensAt, closesAt }) => ({ weekday, isClosed, opensAt, closesAt }));
+    return days.map(({ weekday, isClosed, opensAt, closesAt }) => ({
+      weekday,
+      isClosed,
+      opensAt,
+      closesAt,
+    }));
   }
 }

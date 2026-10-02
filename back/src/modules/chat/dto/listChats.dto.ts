@@ -1,13 +1,24 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ChatSessionStatus } from '../../../infrastructure/database/entities/ChatSession.entity';
 
 /** Los query params llegan como string: 'true'/'1' son los únicos valores que cuentan como sí. */
-const toBoolean = ({ value }: { value: unknown }) => value === true || value === 'true' || value === '1';
+const toBoolean = ({ value }: { value: unknown }) =>
+  value === true || value === 'true' || value === '1';
 
 export class ListChatsQueryDto {
   @IsOptional()
-  @IsIn(Object.values(ChatSessionStatus), { message: 'Estado de chat inválido' })
+  @IsIn(Object.values(ChatSessionStatus), {
+    message: 'Estado de chat inválido',
+  })
   status?: ChatSessionStatus;
 
   /** Solo las conversaciones con un pedido de intervención pendiente. */

@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -20,12 +30,15 @@ export class AuthController {
   ) {}
 
   private cookieOptions(): CookieOptions {
-    const ttlDays = Number(this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7);
+    const ttlDays = Number(
+      this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? 7,
+    );
 
     return {
       httpOnly: true,
       secure: this.configService.get<string>('AUTH_COOKIE_SECURE') === 'true',
-      sameSite: (this.configService.get<string>('AUTH_COOKIE_SAMESITE') ?? 'lax') as CookieOptions['sameSite'],
+      sameSite: (this.configService.get<string>('AUTH_COOKIE_SAMESITE') ??
+        'lax') as CookieOptions['sameSite'],
       path: '/auth',
       maxAge: ttlDays * 24 * 60 * 60 * 1000,
     };
@@ -34,8 +47,12 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const { refreshToken, accessToken, expiresIn, user } = await this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { refreshToken, accessToken, expiresIn, user } =
+      await this.authService.login(dto);
 
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, this.cookieOptions());
 
@@ -45,10 +62,14 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { refreshToken, accessToken, expiresIn } = await this.authService.refresh(
-      req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined,
-    );
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { refreshToken, accessToken, expiresIn } =
+      await this.authService.refresh(
+        req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined,
+      );
 
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, this.cookieOptions());
 
@@ -58,10 +79,18 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
-    await this.authService.logout(req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.authService.logout(
+      req.cookies?.[REFRESH_COOKIE_NAME] as string | undefined,
+    );
 
-    res.clearCookie(REFRESH_COOKIE_NAME, { ...this.cookieOptions(), maxAge: undefined });
+    res.clearCookie(REFRESH_COOKIE_NAME, {
+      ...this.cookieOptions(),
+      maxAge: undefined,
+    });
   }
 
   @Roles(UserRole.ADMIN)

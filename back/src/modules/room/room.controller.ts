@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { RoomService } from './room.service';
 import { RoomOptionDto } from './dto/roomOption.dto';
 import { CreateRoomDto } from './dto/createRoom.dto';
@@ -26,7 +38,10 @@ export class RoomController {
   @Roles(UserRole.ADMIN)
   @UseGuards(RolesGuard)
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() body: UpdateRoomDto): Promise<RoomOptionDto> {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateRoomDto,
+  ): Promise<RoomOptionDto> {
     return this.roomService.update(id, body);
   }
 

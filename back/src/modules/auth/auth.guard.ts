@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY, ROLES_KEY } from './auth.decorators';
@@ -35,7 +41,11 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
-      request.user = { id: payload.sub, email: payload.email, role: payload.role };
+      request.user = {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role,
+      };
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         throw new UnauthorizedException('La sesión expiró');
@@ -69,7 +79,9 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest<AuthenticatedRequest>();
 
     if (!user || !required.includes(user.role)) {
-      throw new ForbiddenException('No tenés permisos para realizar esta acción');
+      throw new ForbiddenException(
+        'No tenés permisos para realizar esta acción',
+      );
     }
 
     return true;

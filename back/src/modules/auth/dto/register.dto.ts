@@ -1,9 +1,18 @@
-import { IsString, IsNotEmpty, IsEmail, IsEnum, IsOptional, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
+import { toNormalizedEmail, trimString } from '../../../common/transforms';
 import { UserRole } from '../../../infrastructure/database/entities/User.entity';
 
 export class RegisterDto {
-  @Transform(({ value }) => value?.toString().trim().toLowerCase())
+  @Transform(toNormalizedEmail)
   @IsEmail({}, { message: 'Ingresá un email válido' })
   email!: string;
 
@@ -11,10 +20,12 @@ export class RegisterDto {
   @IsString({ message: 'La contraseña debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'La contraseña no puede estar vacía' })
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
-  @MaxLength(72, { message: 'La contraseña no puede superar los 72 caracteres' })
+  @MaxLength(72, {
+    message: 'La contraseña no puede superar los 72 caracteres',
+  })
   password!: string;
 
-  @Transform(({ value }) => value?.trim())
+  @Transform(trimString)
   @IsString({ message: 'El nombre completo debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'El nombre completo no puede estar vacío' })
   @MinLength(3, { message: 'El nombre completo es muy corto' })
