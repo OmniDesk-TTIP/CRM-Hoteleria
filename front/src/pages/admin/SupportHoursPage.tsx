@@ -63,7 +63,7 @@ export default function SupportHoursPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 p-4 md:space-y-6 md:p-6">
       <div>
         <h1 className="text-2xl font-bold text-text">Horarios de atención</h1>
         <p className="mt-1 text-sm text-textMuted">
@@ -80,8 +80,8 @@ export default function SupportHoursPage() {
         <>
           <div className="divide-y divide-goldLight/10 overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
             {days.map((day) => (
-              <div key={day.weekday} className="flex flex-wrap items-center gap-4 p-4">
-                <span className="w-28 text-sm font-medium text-text">{WEEKDAY_LABEL[day.weekday]}</span>
+              <div key={day.weekday} className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+                <span className="w-full text-sm font-medium text-text sm:w-28">{WEEKDAY_LABEL[day.weekday]}</span>
 
                 <label className="flex items-center gap-2 text-sm text-textMuted">
                   <input
@@ -93,7 +93,7 @@ export default function SupportHoursPage() {
                   Abierto
                 </label>
 
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <input
                     type="time"
                     value={day.opensAt}
@@ -116,7 +116,7 @@ export default function SupportHoursPage() {
             ))}
           </div>
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             {savedAt && <p className="text-sm text-successText">Guardado a las {savedAt}.</p>}
             <button
               type="button"
