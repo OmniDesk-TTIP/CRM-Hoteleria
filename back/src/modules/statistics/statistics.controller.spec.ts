@@ -17,18 +17,15 @@ describe('StatisticsController', () => {
   });
 
   it('GET / delega en statisticsService.getStatistics con el range de la query', () => {
-    controller.get({ range: '7d' });
+    void controller.get({ range: '7d' });
 
     expect(service.getStatistics).toHaveBeenCalledWith('7d');
   });
 
   it('solo lo puede ver un Administrador (CA5)', () => {
-    const roles = Reflect.getMetadata(ROLES_KEY, StatisticsController) as
-      | UserRole[]
-      | undefined;
-    const guards = Reflect.getMetadata('__guards__', StatisticsController) as
-      | unknown[]
-      | undefined;
+    const target = StatisticsController;
+    const roles: unknown = Reflect.getMetadata(ROLES_KEY, target);
+    const guards: unknown = Reflect.getMetadata('__guards__', target);
 
     expect(roles).toEqual([UserRole.ADMIN]);
     expect(guards).toContain(RolesGuard);

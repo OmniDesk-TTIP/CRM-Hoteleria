@@ -1,10 +1,10 @@
 import { StatisticsService } from './statistics.service';
 import { StatisticsRepository } from './statistics.repository';
 import { SupportHoursService } from '../supportHours/supportHours.service';
+import { ReservationOrigin } from '../../infrastructure/database/entities/Reservation.entity';
 
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
 
-/** 2026-10-02T01:00:00Z todavía es el 1 de octubre a las 22:00 en Buenos Aires. */
 const NOW = new Date('2026-10-02T01:00:00Z');
 
 describe('StatisticsService', () => {
@@ -15,8 +15,18 @@ describe('StatisticsService', () => {
   beforeEach(() => {
     repository = {
       salesByOrigin: jest.fn().mockResolvedValue([
-        { origin: 'BOT', count: 2, deposits: 60000, total: 200000 },
-        { origin: 'MANUAL', count: 1, deposits: 10000, total: 30000 },
+        {
+          origin: ReservationOrigin.BOT,
+          count: 2,
+          deposits: 60000,
+          total: 200000,
+        },
+        {
+          origin: ReservationOrigin.MANUAL,
+          count: 1,
+          deposits: 10000,
+          total: 30000,
+        },
       ]),
       handoverCounts: jest
         .fn()
@@ -111,7 +121,12 @@ describe('StatisticsService', () => {
 
   it('si solo hay reservas manuales, el bot queda en 0% y los ingresos del bot en 0', async () => {
     repository.salesByOrigin.mockResolvedValue([
-      { origin: 'MANUAL', count: 4, deposits: 40000, total: 120000 },
+      {
+        origin: ReservationOrigin.MANUAL,
+        count: 4,
+        deposits: 40000,
+        total: 120000,
+      },
     ]);
 
     const { sales, revenue } = await service.getStatistics('month', NOW);
@@ -123,9 +138,19 @@ describe('StatisticsService', () => {
 
   it('ignora orígenes desconocidos para que Bot vs Manual siga sumando 100%', async () => {
     repository.salesByOrigin.mockResolvedValue([
-      { origin: 'BOT', count: 1, deposits: 1000, total: 3000 },
-      { origin: 'MANUAL', count: 1, deposits: 1000, total: 3000 },
-      { origin: 'WEB', count: 5, deposits: 9999, total: 99999 },
+      { origin: ReservationOrigin.BOT, count: 1, deposits: 1000, total: 3000 },
+      {
+        origin: ReservationOrigin.MANUAL,
+        count: 1,
+        deposits: 1000,
+        total: 3000,
+      },
+      {
+        origin: 'WEB' as ReservationOrigin,
+        count: 5,
+        deposits: 9999,
+        total: 99999,
+      },
     ]);
 
     const { sales } = await service.getStatistics('month', NOW);
