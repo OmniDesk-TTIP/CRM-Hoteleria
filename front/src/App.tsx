@@ -12,6 +12,7 @@ import SupportHoursPage from '@/pages/admin/SupportHoursPage';
 import RoomsPage from '@/pages/admin/RoomsPage';
 import HomePage from '@/pages/admin/HomePage';
 import AppLayout from '@/components/layout/AppLayout';
+import StatisticsPage from '@/pages/admin/StatisticsPage';
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
 
                   <Route element={<ProtectedRoute roles={['ADMIN']} />}>
                     <Route path="/admin/support-hours" element={<SupportHoursPage />} />
+                    <Route path="/admin/statistics" element={<StatisticsPage />} />
                   </Route>
                 </Route>
               </Route>

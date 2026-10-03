@@ -11,6 +11,7 @@ import {
   BedIcon,
   CalendarIcon,
   ChatIcon,
+  ChartIcon,
   ClockIcon,
   HomeIcon,
   LogoutIcon,
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/chats', label: 'Chats', icon: ChatIcon, showChatBadge: true },
   { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon },
   { to: '/admin/rooms', label: 'Habitaciones', icon: BedIcon },
+  { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
   { to: '/admin/support-hours', label: 'Horarios', icon: ClockIcon, roles: ['ADMIN'] },
 ];
 
