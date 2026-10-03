@@ -1,12 +1,16 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import logoOmnidesk from '@/assets/logo-omnidesk-480.webp';
+import logoOmnideskLight from '@/assets/logo-omnidesk-light.png';
 import BrandPanel from '@/components/auth/BrandPanel';
 import LoginForm from '@/components/auth/LoginForm';
+import ThemeToggle from '@/components/layout/ThemeToggle';
 import { useAuth } from '@/context/auth.context';
+import { useTheme } from '@/context/theme.context';
 import type { LoginCredentials } from '@/config/types';
 
 export default function LoginPage() {
   const { login, isAuthenticated, status } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,6 +38,8 @@ export default function LoginPage() {
       <BrandPanel />
 
       <main className="relative flex w-full flex-col justify-center px-6 py-12 sm:px-10 lg:w-1/2">
+        <ThemeToggle className="absolute right-4 top-4 z-10 rounded-full p-2 text-textMuted transition hover:bg-surface hover:text-goldLight motion-reduce:transition-none" />
+
         <div
           className="pointer-events-none absolute right-0 top-1/4 h-72 w-72 rounded-full bg-gold/10 blur-3xl"
           aria-hidden
@@ -41,7 +47,7 @@ export default function LoginPage() {
 
         <div className="relative mx-auto w-full max-w-sm">
           <img
-            src={logoOmnidesk}
+            src={theme === 'light' ? logoOmnideskLight : logoOmnidesk}
             alt="OmniDesk"
             width={480}
             height={584}

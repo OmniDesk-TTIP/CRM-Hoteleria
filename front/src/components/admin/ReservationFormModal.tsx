@@ -93,7 +93,7 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-6 shadow-xl">
+      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-4 shadow-xl sm:p-6">
         <h2 className="mb-4 text-xl font-bold text-text">
           {isEdit ? 'Editar Reserva' : 'Nueva Reserva Manual'}
         </h2>
@@ -105,7 +105,7 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
               Nombre Completo *
               <input required name="guestFullName" value={formData.guestFullName} onChange={handleChange} className={inputClasses} />
@@ -128,7 +128,7 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
             </select>
           </label>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
               Check-in *
               <input required type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className={inputClasses} />
@@ -148,7 +148,7 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
             </select>
           </label>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
               Monto Total *
               <input required type="number" min="0" step="0.01" name="totalAmount" value={formData.totalAmount} onChange={handleChange} className={inputClasses} />
@@ -163,7 +163,7 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
             <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-xl px-4 py-2 font-medium text-textMuted transition hover:text-text">
               Cancelar
             </button>
-            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-gold px-4 py-2 font-medium text-background transition hover:bg-goldLight disabled:opacity-50">
+            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:opacity-50">
               {isSubmitting ? 'Guardando...' : 'Guardar'}
             </button>
           </div>

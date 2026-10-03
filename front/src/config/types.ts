@@ -29,19 +29,14 @@ export interface PrepaymentFormData {
 export interface PrepaymentFormProps {
   /** Datos del formulario de prepago */
   reservation: PrepaymentFormData;
-  /** Marca la seña como ya abonada (reserva confirmada antes de entrar a la pantalla). */
   alreadyPaid?: boolean;
-  /** Se ejecuta al confirmar el pago. Si rechaza la promesa, el form vuelve a habilitarse. */
   onConfirmedPayment?: (reservation: PrepaymentFormData) => Promise<void> | void;
 }
 
-/** Espejo de `RoomStatus` del back (`Room.entity.ts`). */
 export type RoomStatus = 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE';
 
-/** De dónde vino la reserva: generada por el bot de Telegram o cargada a mano (CA4). */
 export type ReservationOrigin = 'BOT' | 'MANUAL';
 
-/** Habitación disponible para asignar, con su categoría ya resuelta (para el selector del form). */
 export interface RoomOption {
   id: string;
   roomNumber: string;
@@ -51,7 +46,6 @@ export interface RoomOption {
   capacity: number;
   basePrice: number;
 }
-
 
 export interface RoomFormData {
   roomNumber: string;
@@ -68,7 +62,6 @@ export interface AdminReservation {
   guestDni: string;
   /** Fecha en formato YYYY-MM-DD. */
   checkIn: string;
-  /** Fecha en formato YYYY-MM-DD. */
   checkOut: string;
   status: ReservationStatus;
   origin: ReservationOrigin;
@@ -383,4 +376,20 @@ export interface DashboardSummary {
 export interface DashboardStatus {
   waitingHuman: number;
   support: DashboardSupport;
+}
+
+/* ───────── Metrics of the bot ───────── */
+
+/** Mismos valores que acepta `GET /statistics?range=`. */
+export type StatisticsRange = 'month' | '7d' | 'all';
+
+/** Respuesta de `GET /statistics`. */
+export interface BotStatistics {
+  range: StatisticsRange;
+  /** Primer día del período (YYYY-MM-DD); null en el histórico. */
+  from: string | null;
+  sales: { total: number; bot: number; manual: number; botPct: number; manualPct: number };
+  /** `botDeposits` es la seña cobrada por Mercado Pago; `botTotalValue`, el valor total de esas reservas. */
+  revenue: { botDeposits: number; botTotalValue: number };
+  handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
