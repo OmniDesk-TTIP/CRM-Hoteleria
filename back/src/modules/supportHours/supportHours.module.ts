@@ -6,7 +6,11 @@ import { SupportHoursSeederService } from './supportHours.seeder.service';
 
 @Module({
   controllers: [SupportHoursController],
-  providers: [SupportHoursService, SupportHoursRepository, SupportHoursSeederService],
+  providers: [
+    SupportHoursService,
+    SupportHoursRepository,
+    SupportHoursSeederService,
+  ],
   exports: [SupportHoursService],
 })
 export class SupportHoursModule {}

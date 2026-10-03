@@ -16,14 +16,19 @@ describe('AuthSeederService', () => {
     BCRYPT_SALT_ROUNDS: '4',
   };
 
-  const buildService = async (overrides: Record<string, string | undefined> = {}) => {
+  const buildService = async (
+    overrides: Record<string, string | undefined> = {},
+  ) => {
     const values = { ...configValues, ...overrides };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthSeederService,
         { provide: AuthRepository, useValue: authRepositoryMock },
-        { provide: ConfigService, useValue: { get: jest.fn((key: string) => values[key]) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => values[key]) },
+        },
       ],
     }).compile();
 
@@ -32,7 +37,10 @@ describe('AuthSeederService', () => {
 
   beforeEach(async () => {
     process.env.NODE_ENV = 'dev';
-    authRepositoryMock = { countUsers: jest.fn().mockResolvedValue(0), createUser: jest.fn() };
+    authRepositoryMock = {
+      countUsers: jest.fn().mockResolvedValue(0),
+      createUser: jest.fn(),
+    };
     service = await buildService();
   });
 
@@ -46,7 +54,9 @@ describe('AuthSeederService', () => {
     const created = authRepositoryMock.createUser.mock.calls[0][0];
     expect(created.role).toBe(UserRole.ADMIN);
     expect(created.email).toBe('admin@omnidesk.local');
-    await expect(verifyPassword('unaClaveLarga123', created.passwordHash)).resolves.toBe(true);
+    await expect(
+      verifyPassword('unaClaveLarga123', created.passwordHash),
+    ).resolves.toBe(true);
   });
 
   it('no siembra nada si ya hay usuarios', async () => {

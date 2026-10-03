@@ -1,5 +1,8 @@
 import { UserDto } from './user.dto';
-import { User, UserRole } from '../../../infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../../../infrastructure/database/entities/User.entity';
 
 describe('UserDto', () => {
   const user = {
@@ -17,7 +20,14 @@ describe('UserDto', () => {
   it('expone solo los campos del contrato público', () => {
     const dto = UserDto.fromEntity(user);
 
-    expect(Object.keys(dto).sort()).toEqual(['createdAt', 'email', 'fullName', 'id', 'isActive', 'role']);
+    expect(Object.keys(dto).sort()).toEqual([
+      'createdAt',
+      'email',
+      'fullName',
+      'id',
+      'isActive',
+      'role',
+    ]);
   });
 
   it('nunca incluye el hash de la contraseña', () => {

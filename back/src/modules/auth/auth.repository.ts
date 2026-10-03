@@ -19,7 +19,9 @@ export class AuthRepository {
     return this.em.count(User);
   }
 
-  async createUser(data: Pick<User, 'email' | 'passwordHash' | 'fullName' | 'role'>): Promise<User> {
+  async createUser(
+    data: Pick<User, 'email' | 'passwordHash' | 'fullName' | 'role'>,
+  ): Promise<User> {
     const user = this.em.create(User, data);
     this.em.persist(user);
     await this.em.flush();
@@ -27,10 +29,18 @@ export class AuthRepository {
   }
 
   async touchLastLogin(userId: string): Promise<void> {
-    await this.em.nativeUpdate(User, { id: userId }, { lastLoginAt: new Date() });
+    await this.em.nativeUpdate(
+      User,
+      { id: userId },
+      { lastLoginAt: new Date() },
+    );
   }
 
-  async createRefreshToken(user: User, tokenHash: string, expiresAt: Date): Promise<RefreshToken> {
+  async createRefreshToken(
+    user: User,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<RefreshToken> {
     const token = this.em.create(RefreshToken, { user, tokenHash, expiresAt });
     this.em.persist(token);
     await this.em.flush();
@@ -38,10 +48,17 @@ export class AuthRepository {
   }
 
   async findRefreshToken(tokenHash: string): Promise<RefreshToken | null> {
-    return this.em.findOne(RefreshToken, { tokenHash }, { populate: ['user'], disableIdentityMap: true });
+    return this.em.findOne(
+      RefreshToken,
+      { tokenHash },
+      { populate: ['user'], disableIdentityMap: true },
+    );
   }
 
-  async revokeToken(tokenHash: string, replacedByHash?: string): Promise<boolean> {
+  async revokeToken(
+    tokenHash: string,
+    replacedByHash?: string,
+  ): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       RefreshToken,
       { tokenHash, revokedAt: null },
@@ -50,9 +67,13 @@ export class AuthRepository {
 
     return affected === 1;
   }
-  
+
   async revokeAllForUser(userId: string): Promise<number> {
-    return this.em.nativeUpdate(RefreshToken, { user: userId, revokedAt: null }, { revokedAt: new Date() });
+    return this.em.nativeUpdate(
+      RefreshToken,
+      { user: userId, revokedAt: null },
+      { revokedAt: new Date() },
+    );
   }
 
   async deleteExpiredTokens(now: Date): Promise<number> {

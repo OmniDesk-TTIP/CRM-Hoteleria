@@ -90,7 +90,7 @@ export default function RoomFormModal({ room, existingRooms, onClose, onSuccess 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-6 shadow-xl">
+      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-4 shadow-xl sm:p-6">
         <h2 className="mb-4 text-xl font-bold text-text">{isEdit ? 'Editar Habitación' : 'Nueva Habitación'}</h2>
 
         {error && (
@@ -137,7 +137,7 @@ export default function RoomFormModal({ room, existingRooms, onClose, onSuccess 
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
               Capacidad máxima *
               <input
@@ -191,7 +191,7 @@ export default function RoomFormModal({ room, existingRooms, onClose, onSuccess 
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-gold px-4 py-2 font-medium text-background transition hover:bg-goldLight disabled:opacity-50"
+              className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:opacity-50"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar'}
             </button>

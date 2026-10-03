@@ -18,7 +18,7 @@ export default function ChatsPage() {
   const conversation = useChatConversation(chatId);
 
   return (
-    <div className="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
+    <div className="mx-auto flex h-full max-w-7xl flex-col gap-4 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-text">Conversaciones</h1>
         <p className="flex items-center gap-2 text-xs text-textMuted">
@@ -30,8 +30,7 @@ export default function ChatsPage() {
         </p>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-
+      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
         <div className={`min-h-0 ${chatId ? 'hidden lg:block' : ''}`}>
           <ChatList
             chats={chats}

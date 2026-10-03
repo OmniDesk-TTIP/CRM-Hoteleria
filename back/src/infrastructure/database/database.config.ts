@@ -15,7 +15,7 @@ export default defineConfig({
   dbName: process.env.DATABASE_NAME,
   user: process.env.DATABASE_USER,
   password: process.env.DATABASE_PASSWORD,
-  
+
   entities: ['dist/**/*.entity.js'],
   entitiesTs: ['src/**/*.entity.ts'],
 
@@ -31,7 +31,7 @@ export default defineConfig({
     safe: false,
     snapshotName: '.snapshot',
   },
-  
+
   debug: process.env.NODE_ENV === 'dev',
   timezone: 'UTC',
   allowGlobalContext: true,

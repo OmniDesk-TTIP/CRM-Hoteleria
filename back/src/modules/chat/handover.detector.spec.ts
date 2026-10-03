@@ -53,7 +53,9 @@ describe('detectHumanRequest', () => {
   });
 
   it('tolera emojis y puntuación alrededor del pedido', () => {
-    expect(detectHumanRequest('🙏 quiero hablar con una persona!!!')).toBe(true);
+    expect(detectHumanRequest('🙏 quiero hablar con una persona!!!')).toBe(
+      true,
+    );
   });
 });
 

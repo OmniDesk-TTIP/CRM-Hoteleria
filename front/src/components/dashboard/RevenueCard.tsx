@@ -43,9 +43,9 @@ export default function RevenueCard({ revenue }: { revenue: DashboardRevenue }) 
     <DashboardCard title="Ingresos">
       <dl className="grid grid-cols-3 divide-x divide-gold/30">
         {kpis.map(({ label, value }) => (
-          <div key={label} className="px-3 first:pl-0 last:pr-0">
-            <dt className="text-xs text-textMuted md:text-sm">{label}</dt>
-            <dd className="mt-1 truncate text-lg font-semibold text-gold md:text-2xl">{value}</dd>
+          <div key={label} className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-3">
+            <dt className="text-[11px] leading-tight text-textMuted sm:text-xs md:text-sm">{label}</dt>
+            <dd className="mt-1 truncate text-base font-semibold text-gold sm:text-lg md:text-2xl">{value}</dd>
           </div>
         ))}
       </dl>

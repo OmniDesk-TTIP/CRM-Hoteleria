@@ -7,7 +7,10 @@ import { RagService } from '../src/modules/rag/rag.service';
 import { createValidationPipe } from '../src/validation.config';
 import { MikroORM, EntityManager } from '@mikro-orm/core';
 import { seedUser, bearer } from './auth.helper';
-import { User, UserRole } from '../src/infrastructure/database/entities/User.entity';
+import {
+  User,
+  UserRole,
+} from '../src/infrastructure/database/entities/User.entity';
 
 describe('ValidationPipe global (e2e)', () => {
   let app: INestApplication;
@@ -22,9 +25,18 @@ describe('ValidationPipe global (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(RagService)
-      .useValue({ ingestDocument: jest.fn().mockResolvedValue(undefined), askQuestion: jest.fn().mockResolvedValue({}) })
+      .useValue({
+        ingestDocument: jest.fn().mockResolvedValue(undefined),
+        askQuestion: jest.fn().mockResolvedValue({}),
+      })
       .overrideProvider(getBotToken())
-      .useValue({ launch: jest.fn(), stop: jest.fn(), on: jest.fn(), start: jest.fn(), use: jest.fn() })
+      .useValue({
+        launch: jest.fn(),
+        stop: jest.fn(),
+        on: jest.fn(),
+        start: jest.fn(),
+        use: jest.fn(),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -41,7 +53,8 @@ describe('ValidationPipe global (e2e)', () => {
     try {
       await em.nativeDelete(User, { id: adminId });
       if (app) await app.close();
-    } catch (e) {
+    } catch {
+      // no-op: limpieza best-effort
     }
   });
 
@@ -75,7 +88,10 @@ describe('ValidationPipe global (e2e)', () => {
   it('rechaza POST /rag/ask con campos no declarados en el DTO (400)', async () => {
     await request(app.getHttpServer())
       .post('/rag/ask')
-      .send({ question: '¿Cuál es el horario del hotel?', campoExtra: 'no debería existir' })
+      .send({
+        question: '¿Cuál es el horario del hotel?',
+        campoExtra: 'no debería existir',
+      })
       .expect(400);
   });
 

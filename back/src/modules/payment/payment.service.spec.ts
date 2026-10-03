@@ -18,7 +18,9 @@ jest.mock('mercadopago', () => {
   };
 });
 
-const { createMock, getPaymentMock, validateMock } = (jest.requireMock('mercadopago') as any).__mocks as {
+const { createMock, getPaymentMock, validateMock } = jest.requireMock(
+  'mercadopago',
+).__mocks as {
   createMock: jest.Mock;
   getPaymentMock: jest.Mock;
   validateMock: jest.Mock;
@@ -40,20 +42,27 @@ describe('PaymentService', () => {
     APP_BASE_URL: 'https://example.com',
   };
 
-  const buildModule = async (overrides: Record<string, string | undefined> = {}) => {
+  const buildModule = async (
+    overrides: Record<string, string | undefined> = {},
+  ) => {
     const values = { ...configValues, ...overrides };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentService,
-        { provide: ConfigService, useValue: { get: jest.fn((key: string) => values[key]) } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string) => values[key]) },
+        },
         { provide: PaymentRepository, useValue: paymentRepositoryMock },
         { provide: getBotToken(), useValue: botMock },
         // El aviso de pago acreditado también queda en el hilo del panel (US-11).
         {
           provide: ChatService,
           useValue: {
-            getOrCreateSession: jest.fn().mockResolvedValue({ id: 'chat-1', telegramUserId: '123' }),
+            getOrCreateSession: jest
+              .fn()
+              .mockResolvedValue({ id: 'chat-1', telegramUserId: '123' }),
             recordSystemMessage: jest.fn().mockResolvedValue({}),
           },
         },
@@ -65,7 +74,9 @@ describe('PaymentService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    botMock = { telegram: { sendMessage: jest.fn().mockResolvedValue(undefined) } };
+    botMock = {
+      telegram: { sendMessage: jest.fn().mockResolvedValue(undefined) },
+    };
     paymentRepositoryMock = {
       findReservationById: jest.fn(),
       confirmIfPending: jest.fn(),
@@ -75,11 +86,15 @@ describe('PaymentService', () => {
   });
 
   it('lanza un error en el constructor si falta MERCADOPAGO_ACCESS_TOKEN', async () => {
-    await expect(buildModule({ MERCADOPAGO_ACCESS_TOKEN: undefined })).rejects.toThrow('Falta MERCADOPAGO_ACCESS_TOKEN');
+    await expect(
+      buildModule({ MERCADOPAGO_ACCESS_TOKEN: undefined }),
+    ).rejects.toThrow('Falta MERCADOPAGO_ACCESS_TOKEN');
   });
 
   it('lanza un error en el constructor si falta MERCADOPAGO_WEBHOOK_SECRET', async () => {
-    await expect(buildModule({ MERCADOPAGO_WEBHOOK_SECRET: undefined })).rejects.toThrow('Falta MERCADOPAGO_WEBHOOK_SECRET');
+    await expect(
+      buildModule({ MERCADOPAGO_WEBHOOK_SECRET: undefined }),
+    ).rejects.toThrow('Falta MERCADOPAGO_WEBHOOK_SECRET');
   });
 
   describe('createPreference', () => {
@@ -91,18 +106,30 @@ describe('PaymentService', () => {
     const guestData = { fullName: 'Juan Pérez', dni: '30111222' };
 
     it('crea la preferencia con el monto de la seña y los datos del huésped', async () => {
-      createMock.mockResolvedValue({ id: 'pref-1', init_point: 'https://mp.example/pref-1' });
+      createMock.mockResolvedValue({
+        id: 'pref-1',
+        init_point: 'https://mp.example/pref-1',
+      });
 
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      const result = await service.createPreference(reservation, guestData as any);
+      const result = await service.createPreference(reservation, guestData);
 
-      expect(result).toEqual({ preferenceId: 'pref-1', initPoint: 'https://mp.example/pref-1' });
+      expect(result).toEqual({
+        preferenceId: 'pref-1',
+        initPoint: 'https://mp.example/pref-1',
+      });
       expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            items: [expect.objectContaining({ id: 'reservation-1', unit_price: 150, currency_id: 'ARS' })],
+            items: [
+              expect.objectContaining({
+                id: 'reservation-1',
+                unit_price: 150,
+                currency_id: 'ARS',
+              }),
+            ],
             payer: expect.objectContaining({
               name: 'Juan Pérez',
               identification: { type: 'DNI', number: '30111222' },
@@ -120,9 +147,9 @@ describe('PaymentService', () => {
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      await expect(service.createPreference(reservation, guestData as any)).rejects.toThrow(
-        'Mercado Pago no devolvió una preferencia válida',
-      );
+      await expect(
+        service.createPreference(reservation, guestData as any),
+      ).rejects.toThrow('Mercado Pago no devolvió una preferencia válida');
     });
   });
 
@@ -147,7 +174,11 @@ describe('PaymentService', () => {
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      const result = service.verifyWebhookSignature('ts=1,v1=abc', 'req-1', 'data-1');
+      const result = service.verifyWebhookSignature(
+        'ts=1,v1=abc',
+        'req-1',
+        'data-1',
+      );
 
       expect(result).toBe(true);
       expect(validateMock).toHaveBeenCalledWith({
@@ -166,7 +197,11 @@ describe('PaymentService', () => {
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      const result = service.verifyWebhookSignature('ts=1,v1=bad', 'req-1', 'data-1');
+      const result = service.verifyWebhookSignature(
+        'ts=1,v1=bad',
+        'req-1',
+        'data-1',
+      );
 
       expect(result).toBe(false);
     });
@@ -177,18 +212,32 @@ describe('PaymentService', () => {
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      await service.notifyPaymentApproved('123456789', new Date(2026, 9, 10), new Date(2026, 9, 15));
+      await service.notifyPaymentApproved(
+        '123456789',
+        new Date(2026, 9, 10),
+        new Date(2026, 9, 15),
+      );
 
-      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith('123456789', expect.stringContaining('Recibimos tu pago'));
+      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(
+        '123456789',
+        expect.stringContaining('Recibimos tu pago'),
+      );
     });
 
     it('envía un mensaje de confirmación por Telegram cuando las fechas vienen como string (hidratación de MikroORM para columnas "date")', async () => {
       const module = await buildModule();
       service = module.get<PaymentService>(PaymentService);
 
-      await service.notifyPaymentApproved('123456789', '2026-10-10', '2026-10-15');
+      await service.notifyPaymentApproved(
+        '123456789',
+        '2026-10-10',
+        '2026-10-15',
+      );
 
-      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith('123456789', expect.stringContaining('Recibimos tu pago'));
+      expect(botMock.telegram.sendMessage).toHaveBeenCalledWith(
+        '123456789',
+        expect.stringContaining('Recibimos tu pago'),
+      );
     });
   });
 });

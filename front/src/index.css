@@ -1,11 +1,5 @@
 @import 'tailwindcss';
 
-/*
- * Design tokens de la paleta.
- * En Tailwind v4 el prefijo del token define la utilidad que se genera:
- *   --color-* -> bg-*, text-*, border-*, ring-*, etc.
- *   --font-*  -> font-*
- */
 @theme {
   /* COLORS */
   --color-shell: #0f1d28;
@@ -25,9 +19,40 @@
   --font-poppins: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
+/*
+ * MODO CLARO. Se activa con <html data-theme="light"> (lo maneja ThemeProvider).
+ *
+ * Ojo con dos tokens que se usan para cosas distintas:
+ *  - gold: fondo de los botones (con `text-shell` encima) y también texto de títulos. En claro
+ *    es un dorado oscuro para que el texto crema de los botones y los títulos sobre fondo
+ *    claro tengan contraste suficiente.
+ *  - goldLight: texto de acento, bordes (`border-goldLight/10`) y hover. En claro pasa a un
+ *    bronce oscuro: el hover de los botones dorados oscurece en vez de aclarar.
+ *
+ * Va fuera de @layer a propósito: le gana a las variables del @theme sin pelear especificidad.
+ */
+:root[data-theme='light'] {
+  --color-shell: #f5f0e6;
+  --color-surface: #ebe3d1;
+  --color-card: #fffdf8;
+  --color-gold: #8a6114;
+  --color-goldDark: #54390a;
+  --color-goldLight: #6b4a0e;
+  --color-text: #1d2a33;
+  --color-textMuted: #526168;
+  --color-success: #2f9468;
+  --color-successText: #1b6a47;
+  --color-danger: #c4463a;
+  --color-dangerText: #9c2f25;
+}
+
 @layer base {
   html {
     color-scheme: dark;
+  }
+
+  html[data-theme='light'] {
+    color-scheme: light;
   }
 
   body {

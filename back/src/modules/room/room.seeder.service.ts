@@ -1,7 +1,10 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
-import { Room, RoomStatus } from '../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
 
 interface CategorySeed {
   name: string;
@@ -11,8 +14,18 @@ interface CategorySeed {
 }
 
 const DEFAULT_CATEGORIES: CategorySeed[] = [
-  { name: 'Individual', capacity: 1, basePrice: 8000, roomNumbers: ['101', '102'] },
-  { name: 'Doble', capacity: 2, basePrice: 12000, roomNumbers: ['201', '202', '203'] },
+  {
+    name: 'Individual',
+    capacity: 1,
+    basePrice: 8000,
+    roomNumbers: ['101', '102'],
+  },
+  {
+    name: 'Doble',
+    capacity: 2,
+    basePrice: 12000,
+    roomNumbers: ['201', '202', '203'],
+  },
   { name: 'Suite', capacity: 4, basePrice: 20000, roomNumbers: ['301', '302'] },
 ];
 
@@ -28,7 +41,9 @@ export class RoomSeederService implements OnModuleInit {
     const count = await this.em.count(Room);
 
     if (count === 0) {
-      this.logger.log('No hay habitaciones cargadas. Sembrando habitaciones por defecto...');
+      this.logger.log(
+        'No hay habitaciones cargadas. Sembrando habitaciones por defecto...',
+      );
       await this.seedDefaultRooms();
       this.logger.log('Habitaciones por defecto sembradas exitosamente.');
     } else {
@@ -37,11 +52,24 @@ export class RoomSeederService implements OnModuleInit {
   }
 
   private async seedDefaultRooms() {
-    for (const { name, capacity, basePrice, roomNumbers } of DEFAULT_CATEGORIES) {
-      const category = this.em.create(RoomCategory, { name, capacity, basePrice });
+    for (const {
+      name,
+      capacity,
+      basePrice,
+      roomNumbers,
+    } of DEFAULT_CATEGORIES) {
+      const category = this.em.create(RoomCategory, {
+        name,
+        capacity,
+        basePrice,
+      });
 
       for (const roomNumber of roomNumbers) {
-        this.em.create(Room, { roomNumber, category, status: RoomStatus.ACTIVE });
+        this.em.create(Room, {
+          roomNumber,
+          category,
+          status: RoomStatus.ACTIVE,
+        });
       }
     }
 

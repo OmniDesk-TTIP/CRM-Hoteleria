@@ -14,7 +14,12 @@ export class SupportHoursRepository {
     return this.em.count(SupportHours);
   }
 
-  create(day: { weekday: number; isClosed?: boolean; opensAt?: string; closesAt?: string }): SupportHours {
+  create(day: {
+    weekday: number;
+    isClosed?: boolean;
+    opensAt?: string;
+    closesAt?: string;
+  }): SupportHours {
     return this.em.create(SupportHours, day);
   }
 

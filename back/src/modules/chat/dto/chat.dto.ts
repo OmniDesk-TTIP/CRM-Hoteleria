@@ -1,6 +1,16 @@
-import { ChatSession, ChatSessionStatus, HandoverReason } from '../../../infrastructure/database/entities/ChatSession.entity';
-import { ChatMessage, MessageRole } from '../../../infrastructure/database/entities/ChatMessage.entity';
-import { BookingProcess, BookingProcessStep } from '../../../infrastructure/database/entities/BookingProcess.entity';
+import {
+  ChatSession,
+  ChatSessionStatus,
+  HandoverReason,
+} from '../../../infrastructure/database/entities/ChatSession.entity';
+import {
+  ChatMessage,
+  MessageRole,
+} from '../../../infrastructure/database/entities/ChatMessage.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../../infrastructure/database/entities/BookingProcess.entity';
 import { User } from '../../../infrastructure/database/entities/User.entity';
 
 export class ChatOperatorDto {
@@ -59,7 +69,9 @@ export class ChatActiveBookingDto {
   checkOut!: string | null;
   capacity!: number | null;
 
-  static fromEntity(booking?: BookingProcess | null): ChatActiveBookingDto | null {
+  static fromEntity(
+    booking?: BookingProcess | null,
+  ): ChatActiveBookingDto | null {
     if (!booking) return null;
     const dto = new ChatActiveBookingDto();
     dto.id = booking.id;
@@ -88,7 +100,10 @@ export class ChatDetailDto extends ChatSummaryDto {
     activeBooking?: BookingProcess | null,
     guestNotified?: boolean,
   ): ChatDetailDto {
-    const dto = Object.assign(new ChatDetailDto(), ChatSummaryDto.fromEntity(session));
+    const dto = Object.assign(
+      new ChatDetailDto(),
+      ChatSummaryDto.fromEntity(session),
+    );
     dto.takenOverAt = session.takenOverAt ?? null;
     dto.releasedAt = session.releasedAt ?? null;
     dto.consecutiveBotFailures = session.consecutiveBotFailures;

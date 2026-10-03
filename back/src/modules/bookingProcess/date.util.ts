@@ -2,7 +2,8 @@ export const DATE_FORMAT_REGEX = /^(\d{2})-(\d{2})-(\d{4})$/;
 
 export function parseDate(value: string): Date {
   const match = DATE_FORMAT_REGEX.exec(value);
-  if (!match) throw new Error(`Fecha "${value}" no tiene el formato DD-MM-YYYY`);
+  if (!match)
+    throw new Error(`Fecha "${value}" no tiene el formato DD-MM-YYYY`);
 
   const [, day, month, year] = match;
   return new Date(Number(year), Number(month) - 1, Number(day));
@@ -26,5 +27,9 @@ export function isValidDateFormat(value: unknown): value is string {
   const year = Number(match[3]);
   const date = new Date(year, month - 1, day);
 
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
 }
