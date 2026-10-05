@@ -15,6 +15,7 @@ import {
   ClockIcon,
   HomeIcon,
   LogoutIcon,
+  BookIcon,
 } from '@/components/layout/icons';
 
 interface NavItem {
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/admin/chats', label: 'Chats', icon: ChatIcon, showChatBadge: true },
   { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon },
   { to: '/admin/rooms', label: 'Habitaciones', icon: BedIcon },
+  { to: '/admin/hotel-rules', label: 'Reglas', icon: BookIcon, roles: ['ADMIN'] },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
   { to: '/admin/support-hours', label: 'Horarios', icon: ClockIcon, roles: ['ADMIN'] },
 ];

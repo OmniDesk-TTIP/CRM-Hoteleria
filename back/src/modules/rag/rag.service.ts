@@ -47,19 +47,32 @@ export class RagService {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
-  async ingestDocument(rawText: string): Promise<void> {
+    async ingestDocument(
+    rawText: string,
+    sourceDocumentId?: string,
+  ): Promise<number> {
     const chunks = this.chunkText(rawText, 1000, 200);
 
     const embeddingModel = this.genAI.getGenerativeModel({
       model: 'gemini-embedding-2',
     });
 
+    let source: { id: string; filename: string; mimeType: string } | undefined;
+
+    if (sourceDocumentId) {
+      const doc = await this.ragRepository.findSourceDocument(sourceDocumentId);
+      if (doc) {
+        source = { id: doc.id, filename: doc.filename, mimeType: doc.mimeType };
+      }
+    }
+
     for (const chunk of chunks) {
       const result = await embeddingModel.embedContent(chunk);
       const embeddingVector = result.embedding.values;
-
-      await this.ragRepository.saveDocumentChunk(chunk, embeddingVector);
+      await this.ragRepository.saveDocumentChunk(chunk, embeddingVector, source);
     }
+
+    return chunks.length;
   }
 
   async askQuestion(

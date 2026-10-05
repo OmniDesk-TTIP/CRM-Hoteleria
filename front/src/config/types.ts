@@ -393,3 +393,21 @@ export interface BotStatistics {
   revenue: { botDeposits: number; botTotalValue: number };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
+
+/* ───────── US: Administración de reglas base (base de conocimiento) ───────── */
+
+export type KnowledgeDocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'ERROR';
+export type KnowledgeDocumentType = 'PDF' | 'TXT';
+
+export interface KnowledgeDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  type: KnowledgeDocumentType;
+  sizeBytes: number;
+  status: KnowledgeDocumentStatus;
+  chunksCount: number;
+  errorMessage?: string;
+  /** ISO 8601. */
+  createdAt: string;
+}
