@@ -4,6 +4,7 @@ import {
   PrimaryKey,
   Property,
   Enum,
+  Index,
 } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { CustomBaseEntity } from './CustomBase.entity';
@@ -21,6 +22,7 @@ export enum KnowledgeDocumentType {
 }
 
 @Entity({ tableName: 'knowledge_documents' })
+@Index({ properties: ['createdAt'] })
 export class KnowledgeDocument extends CustomBaseEntity {
   @PrimaryKey({ type: 'uuid' })
   id: string = v4();

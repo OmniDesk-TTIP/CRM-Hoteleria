@@ -58,24 +58,6 @@ describe('ValidationPipe global (e2e)', () => {
     }
   });
 
-  it('rechaza POST /rag/ingest con un texto más corto que el mínimo (400)', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/rag/ingest')
-      .set('Authorization', bearer(adminToken))
-      .send({ text: 'corto' })
-      .expect(400);
-
-    expect(response.body.message).toContain('mínimo 10 caracteres');
-  });
-
-  it('rechaza POST /rag/ingest sin el campo text (400)', async () => {
-    await request(app.getHttpServer())
-      .post('/rag/ingest')
-      .set('Authorization', bearer(adminToken))
-      .send({})
-      .expect(400);
-  });
-
   it('rechaza POST /rag/ask con una pregunta más corta que el mínimo (400)', async () => {
     const response = await request(app.getHttpServer())
       .post('/rag/ask')

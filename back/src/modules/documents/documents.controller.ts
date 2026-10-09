@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Post,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
   BadRequestException,
@@ -22,6 +23,8 @@ import { CurrentUser, Roles } from '../auth/auth.decorators';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
 import { AuthUser } from '../auth/auth.types';
 import { MAX_UPLOAD_BYTES } from './documents.constants';
+import { decodeFilename } from './documents.util';
+import { FileTooLargeFilter } from './file-too-large.filter';
 
 @Controller('admin/documents')
 @Roles(UserRole.ADMIN)
@@ -35,6 +38,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @UseFilters(FileTooLargeFilter)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -48,7 +52,7 @@ export class DocumentsController {
     if (!file) throw new BadRequestException('Adjuntá un archivo PDF o TXT');
     return this.documentsService.upload(
       {
-        originalname: file.originalname,
+        originalname: decodeFilename(file.originalname),
         mimetype: file.mimetype,
         size: file.size,
         buffer: file.buffer,

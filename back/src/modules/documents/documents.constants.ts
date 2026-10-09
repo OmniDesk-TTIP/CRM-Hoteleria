@@ -1,11 +1,14 @@
 import { KnowledgeDocumentType } from '../../infrastructure/database/entities/KnowledgeDocument.entity';
 
-export const ALLOWED_MIME_TYPES: Record<string, KnowledgeDocumentType> = {
-  'application/pdf': KnowledgeDocumentType.PDF,
-  'text/plain': KnowledgeDocumentType.TXT,
+export const EXTENSION_TYPES: Record<string, KnowledgeDocumentType> = {
+  '.pdf': KnowledgeDocumentType.PDF,
+  '.txt': KnowledgeDocumentType.TXT,
 };
 
-export const ALLOWED_EXTENSIONS = ['.pdf', '.txt'];
+export const CANONICAL_MIME_TYPES: Record<KnowledgeDocumentType, string> = {
+  [KnowledgeDocumentType.PDF]: 'application/pdf',
+  [KnowledgeDocumentType.TXT]: 'text/plain',
+};
 
 export const MAX_UPLOAD_BYTES =
-  Number(process.env.MAX_UPLOAD_MB ?? 20) * 1024 * 1024;
+  Number(process.env.MAX_UPLOAD_MB ?? 10) * 1024 * 1024;

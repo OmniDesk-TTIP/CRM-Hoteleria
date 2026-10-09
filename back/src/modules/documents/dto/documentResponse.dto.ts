@@ -24,7 +24,7 @@ export class DocumentResponseDto {
     dto.sizeBytes = doc.sizeBytes;
     dto.status = doc.status;
     dto.chunksCount = doc.chunksCount;
-    dto.errorMessage = doc.errorMessage;
+    dto.errorMessage = doc.errorMessage ?? undefined;
     dto.createdAt = doc.createdAt.toISOString();
     return dto;
   }

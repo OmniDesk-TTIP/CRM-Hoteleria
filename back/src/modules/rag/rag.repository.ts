@@ -17,7 +17,9 @@ export class RagRepository {
     const document = this.em.create(Document, {
       content: text,
       embedding: formattedEmbedding as unknown as number[],
-      sourceDocument: source ? this.em.getReference(KnowledgeDocument, source.id) : undefined,
+      sourceDocument: source
+        ? this.em.getReference(KnowledgeDocument, source.id)
+        : undefined,
       filename: source?.filename,
       mimeType: source?.mimeType,
     });
@@ -54,7 +56,7 @@ export class RagRepository {
       sourceDocument: { id: sourceDocumentId },
     });
   }
-  
+
   async findSourceDocument(id: string): Promise<KnowledgeDocument | null> {
     return this.em.findOne(KnowledgeDocument, { id });
   }

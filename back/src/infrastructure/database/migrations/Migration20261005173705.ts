@@ -1,7 +1,7 @@
 import { Migration } from '@mikro-orm/migrations';
 
-export class Migration20261005Documents extends Migration {
-  override name = 'Migration20261005Documents';
+export class Migration20261005173705 extends Migration {
+  override name = 'Migration20261005173705';
 
   override up(): void | Promise<void> {
     this.addSql(`create extension if not exists "vector";`);
@@ -60,3 +60,4 @@ export class Migration20261005Documents extends Migration {
     this.addSql(`drop table if exists "knowledge_documents" cascade;`);
   }
 }
+

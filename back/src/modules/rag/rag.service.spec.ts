@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { RagService, ChatAction } from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
+import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
 
 jest.mock('@google/generative-ai', () => {
   const actual = jest.requireActual('@google/generative-ai');
@@ -35,6 +36,10 @@ describe('RagService', () => {
           useValue: {
             findSimilar: jest.fn().mockResolvedValue([]),
             saveDocumentChunk: jest.fn().mockResolvedValue(undefined),
+            findSourceDocument: jest.fn(),
+            deleteChunksBySourceDocument: jest
+              .fn()
+              .mockResolvedValue(undefined),
             countDocuments: jest.fn(),
           },
         },
@@ -164,7 +169,10 @@ describe('RagService', () => {
         checkOut: null,
         capacity: 2,
       };
-      await service.askQuestion('Quiero agregar el checkout', reservaActiva);
+      await service.askQuestion(
+        'Quiero agregar el checkout',
+        reservaActiva as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain('ESTADO ACTUAL: Faltan datos');
@@ -183,7 +191,10 @@ describe('RagService', () => {
         checkOut: '15-10-2026',
         capacity: 2,
       };
-      await service.askQuestion('dale', reservaActiva);
+      await service.askQuestion(
+        'dale',
+        reservaActiva as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain(
@@ -203,7 +214,12 @@ describe('RagService', () => {
         checkIn: '01-01-2026',
         checkOut: '05-01-2026',
       };
-      await service.askQuestion('Hola de nuevo', null, [], ultimaCompletada);
+      await service.askQuestion(
+        'Hola de nuevo',
+        null,
+        [],
+        ultimaCompletada as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain('a la espera del pago');
@@ -285,6 +301,7 @@ describe('RagService', () => {
       expect(ragRepository.saveDocumentChunk).toHaveBeenCalledWith(
         'Un texto corto para ingestar.',
         [0.1, 0.2],
+        undefined,
       );
     });
 
@@ -295,6 +312,108 @@ describe('RagService', () => {
 
       expect(embeddingModelMock.embedContent).toHaveBeenCalledTimes(2);
       expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(2);
+    });
+
+    it('devuelve la cantidad de chunks generados', async () => {
+      await expect(service.ingestDocument('Texto corto.')).resolves.toBe(1);
+      await expect(service.ingestDocument('a'.repeat(1500))).resolves.toBe(2);
+    });
+
+    it('sin documento de origen no consulta el repositorio de documentos', async () => {
+      await service.ingestDocument('Texto corto.');
+
+      expect(ragRepository.findSourceDocument).not.toHaveBeenCalled();
+    });
+
+    it('con documento de origen guarda cada chunk vinculado a él (CA4)', async () => {
+      (ragRepository.findSourceDocument as jest.Mock).mockResolvedValue({
+        id: 'doc-1',
+        filename: 'reglas.pdf',
+        mimeType: 'application/pdf',
+      });
+
+      const chunks = await service.ingestDocument('a'.repeat(1500), 'doc-1');
+
+      expect(ragRepository.findSourceDocument).toHaveBeenCalledWith('doc-1');
+      expect(chunks).toBe(2);
+      expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(2);
+      expect(ragRepository.saveDocumentChunk).toHaveBeenNthCalledWith(
+        1,
+        expect.any(String),
+        [0.1, 0.2],
+        { id: 'doc-1', filename: 'reglas.pdf', mimeType: 'application/pdf' },
+      );
+      expect(ragRepository.saveDocumentChunk).toHaveBeenNthCalledWith(
+        2,
+        expect.any(String),
+        [0.1, 0.2],
+        { id: 'doc-1', filename: 'reglas.pdf', mimeType: 'application/pdf' },
+      );
+    });
+
+    it('propaga el error de Gemini y no sigue guardando chunks', async () => {
+      embeddingModelMock.embedContent
+        .mockResolvedValueOnce({ embedding: { values: [0.1, 0.2] } })
+        .mockRejectedValueOnce(new Error('429 Too Many Requests'));
+
+      await expect(service.ingestDocument('a'.repeat(3000))).rejects.toThrow(
+        '429 Too Many Requests',
+      );
+      expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(1);
+    });
+
+    it('rechaza y no guarda chunks huérfanos si el documento de origen ya no existe', async () => {
+      (ragRepository.findSourceDocument as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.ingestDocument('Texto corto.', 'doc-borrado'),
+      ).rejects.toThrow();
+      expect(ragRepository.saveDocumentChunk).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeDocumentChunks', () => {
+    it('borra los chunks del documento de origen', async () => {
+      await service.removeDocumentChunks('doc-1');
+
+      expect(ragRepository.deleteChunksBySourceDocument).toHaveBeenCalledWith(
+        'doc-1',
+      );
+    });
+  });
+
+  describe('reflejo en el bot (CA5)', () => {
+    const chatInstructions = () =>
+      getGenerativeModelMock.mock.calls
+        .map(
+          ([config]) => config as { model: string; systemInstruction?: string },
+        )
+        .filter((config) => config.model !== 'gemini-embedding-2')
+        .map((config) => config.systemInstruction ?? '');
+
+    beforeEach(() => {
+      chatModelMock.generateContent.mockResolvedValue({
+        response: { functionCalls: () => [], text: () => 'ok' },
+      });
+    });
+
+    it('arma el contexto con lo que devuelve la búsqueda en cada consulta, sin cachear entre consultas', async () => {
+      (ragRepository.findSimilar as jest.Mock)
+        .mockResolvedValueOnce([{ content: 'El spa abre de 9 a 21 hs.' }])
+        .mockResolvedValueOnce([]);
+
+      await service.askQuestion('¿A qué hora abre el spa?');
+      await service.askQuestion('¿A qué hora abre el spa?');
+
+      const [primera, segunda] = chatInstructions();
+      expect(primera).toContain('El spa abre de 9 a 21 hs.');
+      expect(segunda).not.toContain('El spa abre de 9 a 21 hs.');
+    });
+
+    it('busca solo con los 3 chunks más cercanos a la pregunta', async () => {
+      await service.askQuestion('¿Aceptan mascotas?');
+
+      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 3);
     });
   });
 });

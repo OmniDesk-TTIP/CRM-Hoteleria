@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  EntityManager as CoreEntityManager,
+  RequestContext,
+} from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import {
   KnowledgeDocument,
@@ -31,6 +35,21 @@ export class DocumentsRepository {
     return this.em.findOne(KnowledgeDocument, { id });
   }
 
+  async findInProgress(): Promise<KnowledgeDocument[]> {
+    return this.em.find(KnowledgeDocument, {
+      status: {
+        $in: [
+          KnowledgeDocumentStatus.PENDING,
+          KnowledgeDocumentStatus.PROCESSING,
+        ],
+      },
+    });
+  }
+
+  runInContext<T>(work: () => Promise<T>): Promise<T> {
+    return RequestContext.create(this.em as unknown as CoreEntityManager, work);
+  }
+
   create(data: CreateDocumentData): KnowledgeDocument {
     return this.em.create(KnowledgeDocument, {
       ...data,
@@ -60,7 +79,11 @@ export class DocumentsRepository {
     await this.em.nativeUpdate(
       KnowledgeDocument,
       { id },
-      { status: KnowledgeDocumentStatus.READY, chunksCount, errorMessage: null },
+      {
+        status: KnowledgeDocumentStatus.READY,
+        chunksCount,
+        errorMessage: null,
+      },
     );
   }
 

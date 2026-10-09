@@ -13,5 +13,4 @@ export class Migration20261005191559 extends Migration {
     this.addSql(`alter table "knowledge_documents" alter column "status" drop default;`);
     this.addSql(`alter table "knowledge_documents" alter column "chunks_count" drop default;`);
   }
-
 }
