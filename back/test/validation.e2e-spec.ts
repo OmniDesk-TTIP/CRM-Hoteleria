@@ -6,7 +6,7 @@ import { AppModule } from './../src/app.module';
 import { RagService } from '../src/modules/rag/rag.service';
 import { createValidationPipe } from '../src/validation.config';
 import { MikroORM, EntityManager } from '@mikro-orm/core';
-import { seedUser, bearer } from './auth.helper';
+import { seedUser } from './auth.helper';
 import {
   User,
   UserRole,
@@ -15,9 +15,6 @@ import {
 describe('ValidationPipe global (e2e)', () => {
   let app: INestApplication;
   let em: EntityManager;
-  // /rag/ingest quedó detrás de @Roles(ADMIN): sin token daría 401 y nunca llegaría
-  // al ValidationPipe, que es lo que esta suite quiere ejercitar.
-  let adminToken: string;
   let adminId: string;
 
   beforeAll(async () => {
@@ -45,7 +42,6 @@ describe('ValidationPipe global (e2e)', () => {
 
     em = app.get(MikroORM).em.fork();
     const admin = await seedUser(app, em, UserRole.ADMIN);
-    adminToken = admin.accessToken;
     adminId = admin.user.id;
   });
 

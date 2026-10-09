@@ -53,5 +53,4 @@ export class KnowledgeDocument extends CustomBaseEntity {
 
   @Property({ type: 'uuid', nullable: true })
   uploadedById?: string;
-
 }

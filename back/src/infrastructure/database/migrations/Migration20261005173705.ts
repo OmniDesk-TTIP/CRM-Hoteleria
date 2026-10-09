@@ -60,4 +60,3 @@ export class Migration20261005173705 extends Migration {
     this.addSql(`drop table if exists "knowledge_documents" cascade;`);
   }
 }
-
