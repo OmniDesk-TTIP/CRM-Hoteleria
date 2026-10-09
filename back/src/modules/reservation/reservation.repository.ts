@@ -56,6 +56,15 @@ export class ReservationRepository {
     );
   }
 
+  async findConfirmedByTelegramUserId(
+    telegramUserId: string,
+  ): Promise<Reservation[]> {
+    return this.em.find(Reservation, {
+      telegramUserId,
+      status: ReservationStatus.CONFIRMED,
+    });
+  }
+
   create(data: CreateReservationData): Reservation {
     return this.em.create(Reservation, {
       ...data,

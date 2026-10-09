@@ -12,6 +12,9 @@ import {
 } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
+import { SpaService } from '../spa/spa.service';
+import { SpaReservationService } from '../spaReservation/spaReservation.service';
+import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -48,6 +51,8 @@ export class TelegramUpdate {
     private readonly reservationService: ReservationService,
     private readonly bookingProcessService: BookingProcessService,
     private readonly chatService: ChatService,
+    private readonly spaService: SpaService,
+    private readonly spaReservationService: SpaReservationService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -123,11 +128,14 @@ export class TelegramUpdate {
       );
 
       const history = previousMessages.reverse();
+      const servicesBlock =
+        await this.spaService.getGuestContextBlock(telegramUserId);
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
         history,
         lastCompletedBooking,
+        servicesBlock,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -240,12 +248,36 @@ export class TelegramUpdate {
           activeBooking,
           escapeHtml(aiResponse.texto || ''),
         );
+      case ChatAction.REQUEST_SPA_BOOKING:
+        return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
       default:
         return (
           escapeHtml(aiResponse.texto || '') ||
           'Disculpá, no entendí bien eso. ¿Podés reformularlo?'
         );
     }
+  }
+
+  private async resolveSpaBooking(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const bookingDto = plainToInstance(RequestSpaBookingDto, datos);
+    const validationErrors = await validate(bookingDto);
+    if (validationErrors.length > 0) {
+      // El modelo a veces dispara la tool sin tener todos los datos; se los pedimos en vez de
+      // cortar con un error técnico.
+      this.logger.warn(
+        `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
+      );
+      return '¿Me confirmás qué servicio querés, qué día (DD-MM-YYYY) y a qué hora?';
+    }
+
+    const result = await this.spaReservationService.requestSpa(
+      telegramUserId,
+      bookingDto,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   private async resolveSearchAvailability(

@@ -15,6 +15,6 @@ import { PaymentModule } from '../payment/payment.module';
     ReservationRepository,
     ReservationAdminService,
   ],
-  exports: [ReservationService],
+  exports: [ReservationService, ReservationRepository],
 })
 export class ReservationModule {}

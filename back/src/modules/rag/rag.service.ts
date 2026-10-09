@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import {
+  FunctionDeclaration,
+  GoogleGenerativeAI,
+  SchemaType,
+} from '@google/generative-ai';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
 import {
@@ -24,8 +28,35 @@ export enum ChatAction {
   SEARCH_AVAILABILITY = 'SEARCH_AVAILABILITY',
   CONFIRM_RESERVATION = 'CONFIRM_RESERVATION',
   REQUEST_HUMAN = 'REQUEST_HUMAN',
+  REQUEST_SPA_BOOKING = 'REQUEST_SPA_BOOKING',
   REPLY = 'REPLY',
 }
+
+const REQUEST_SPA_BOOKING_DECLARATION: FunctionDeclaration = {
+  name: 'request_spa_booking',
+  description:
+    'Llama a esta función cuando el huésped quiera un turno de spa y ya te haya indicado qué servicio, ' +
+    'qué día y a qué hora. Si falta alguno de esos datos, preguntáselo antes. Usá el id del servicio tal ' +
+    'cual figura en [SERVICIOS DEL HOTEL].',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      serviceId: {
+        type: SchemaType.STRING,
+        description: 'El id (uuid) del servicio de spa elegido.',
+      },
+      date: {
+        type: SchemaType.STRING,
+        description: 'Fecha del turno DD-MM-YYYY.',
+      },
+      time: {
+        type: SchemaType.STRING,
+        description: 'Hora de inicio del turno HH:mm (24 horas).',
+      },
+    },
+    required: ['serviceId', 'date', 'time'],
+  },
+};
 
 /** Lo que decidió el modelo: responder texto o disparar una acción con sus argumentos sin validar. */
 export interface AiResponse {
@@ -67,6 +98,7 @@ export class RagService {
     reservaActiva: BookingProcess | null = null,
     history: ChatMessage[] = [],
     ultimaCompletada: BookingProcess | null = null,
+    servicesBlock: string | null = null,
   ): Promise<AiResponse> {
     const embeddingModel = this.genAI.getGenerativeModel({
       model: 'gemini-embedding-2',
@@ -77,9 +109,13 @@ export class RagService {
       result.embedding.values,
       3,
     );
-    const contextText = similarDocs
+    const knowledgeText = similarDocs
       .map((doc) => doc.content)
       .join('\n\n---\n\n');
+    // Los servicios del hotel (solo para huespedes elegibles) vienen de la DB, no del RAG.
+    const contextText = servicesBlock
+      ? `${knowledgeText}\n\n---\n\n${servicesBlock}`
+      : knowledgeText;
 
     let contextoReserva = '';
     if (reservaActiva?.step === BookingProcessStep.PENDING_CONFIRMATION) {
@@ -94,7 +130,10 @@ export class RagService {
 
     const chatModel = this.genAI.getGenerativeModel({
       model: CHAT_MODEL,
-      systemInstruction: this.buildSystemInstruction(contextText),
+      systemInstruction: this.buildSystemInstruction(
+        contextText,
+        servicesBlock !== null,
+      ),
       tools: [
         {
           functionDeclarations: [
@@ -157,6 +196,10 @@ export class RagService {
                 required: ['reason'],
               },
             },
+            // Solo para huéspedes elegibles (CA2); el service lo vuelve a validar.
+            ...(servicesBlock !== null
+              ? [REQUEST_SPA_BOOKING_DECLARATION]
+              : []),
           ],
         },
       ],
@@ -182,6 +225,13 @@ export class RagService {
       }
       if (name === 'request_human')
         return { action: ChatAction.REQUEST_HUMAN, datos: args };
+      if (name === 'request_spa_booking' && servicesBlock !== null) {
+        return {
+          action: ChatAction.REQUEST_SPA_BOOKING,
+          datos: args,
+          texto: chatResponse.response.text(),
+        };
+      }
     }
 
     return { action: ChatAction.REPLY, texto: chatResponse.response.text() };
@@ -222,8 +272,15 @@ export class RagService {
       .join('\n');
   }
 
-  private buildSystemInstruction(contextText: string): string {
-    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\nCONTEXTO:\n${contextText}`;
+  private buildSystemInstruction(
+    contextText: string,
+    guestHasServices = false,
+  ): string {
+    const servicesRule = guestHasServices
+      ? `REGLA PARA SERVICIOS DEL HOTEL: Este huésped tiene una reserva confirmada o está alojado, así que podés informarle y ofrecerle el spa usando ÚNICAMENTE lo que figura en la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). No inventes servicios, precios ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecerle el spa por tu cuenta una sola vez (si en el historial ya se lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Si quiere un turno, asegurate de tener el servicio, el día (DD-MM-YYYY) y la hora (HH:mm); recién entonces usa 'request_spa_booking' con el id del servicio. Es una solicitud que recepción confirma después: nunca le digas que el turno quedó confirmado.`
+      : `REGLA PARA SERVICIOS DEL HOTEL: El spa es un servicio exclusivo para huéspedes con reserva confirmada o alojados, y con este usuario no tenés esa verificación. No ofrezcas el spa ni des precios u horarios. Si pregunta por él, explicale que es para huéspedes con reserva confirmada y que puede reservar su habitación con vos.`;
+
+    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${servicesRule}\n\nCONTEXTO:\n${contextText}`;
   }
 
   private chunkText(
