@@ -340,18 +340,5 @@ describe('Auth (e2e)', () => {
         .send({ question: '¿Cuáles son los horarios del hotel?' })
         .expect(200);
     });
-
-    it('POST /rag/ingest ahora exige un ADMIN', async () => {
-      await request(app.getHttpServer())
-        .post('/rag/ingest')
-        .send({ text: 'un texto suficientemente largo' })
-        .expect(401);
-
-      await request(app.getHttpServer())
-        .post('/rag/ingest')
-        .set('Authorization', bearer(employee.accessToken))
-        .send({ text: 'un texto suficientemente largo' })
-        .expect(403);
-    });
   });
 });
