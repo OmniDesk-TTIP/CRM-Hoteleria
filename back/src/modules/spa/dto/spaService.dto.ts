@@ -8,6 +8,7 @@ export class SpaServiceDto {
   description: string;
   durationMinutes: number;
   price: number;
+  capacity: number;
   status: SpaServiceStatus;
   availableWeekdays: number[];
   opensAt: string;
@@ -20,6 +21,7 @@ export class SpaServiceDto {
     dto.description = model.description;
     dto.durationMinutes = model.durationMinutes;
     dto.price = model.price;
+    dto.capacity = model.capacity;
     dto.status = model.status;
     dto.availableWeekdays = model.availableWeekdays;
     dto.opensAt = model.opensAt;

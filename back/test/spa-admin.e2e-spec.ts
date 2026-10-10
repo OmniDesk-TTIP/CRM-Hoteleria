@@ -144,6 +144,15 @@ describe('Spa services CRUD (e2e)', () => {
       });
     });
 
+    it('guarda y devuelve la capacidad indicada', async () => {
+      const body = await createService({
+        name: `Con cupo ${uniqueSuffix}`,
+        capacity: 3,
+      });
+
+      expect(body.capacity).toBe(3);
+    });
+
     it('responde 400 con datos inválidos', async () => {
       await request(app.getHttpServer())
         .post('/spa-services')
@@ -159,6 +168,11 @@ describe('Spa services CRUD (e2e)', () => {
         .post('/spa-services')
         .set('Authorization', bearer(admin.accessToken))
         .send(buildPayload({ name: 'Otro', availableWeekdays: [7] }))
+        .expect(400);
+      await request(app.getHttpServer())
+        .post('/spa-services')
+        .set('Authorization', bearer(admin.accessToken))
+        .send(buildPayload({ name: 'Otro', capacity: 0 }))
         .expect(400);
     });
   });

@@ -154,7 +154,7 @@ describe('RagService', () => {
       jest.useRealTimers();
     });
 
-    describe('servicios del hotel (CA2/CA3)', () => {
+    describe('spa (CA3)', () => {
       const readChatConfig = () =>
         getGenerativeModelMock.mock.calls.find(
           ([config]) => config.model !== 'gemini-embedding-2',
@@ -175,10 +175,12 @@ describe('RagService', () => {
 
         const { systemInstruction } = readChatConfig();
         expect(systemInstruction).toContain('id=spa-1 | Masaje');
-        expect(systemInstruction).toContain(
-          'Este huésped tiene una reserva confirmada o está alojado',
-        );
-        expect(systemInstruction).not.toContain('no tenés esa verificación');
+        expect(systemInstruction).toContain('REGLA PARA EL SPA');
+        // la regla cubre a los dos tipos de cliente y manda pedir nombre y DNI al externo
+        expect(systemInstruction).toContain('HUÉSPED');
+        expect(systemInstruction).toContain('EXTERNO');
+        expect(systemInstruction).toContain('nombre completo y su DNI');
+        expect(systemInstruction).not.toContain('No tenés información del spa');
       });
 
       const toolNames = () =>
@@ -186,7 +188,7 @@ describe('RagService', () => {
           (declaration: { name: string }) => declaration.name,
         );
 
-      it('declara la tool request_spa_booking solo si hay bloque de servicios', async () => {
+      it('declara la tool request_spa_booking solo si hay bloque del spa', async () => {
         chatModelMock.generateContent.mockResolvedValue(
           mockChatResponse([], 'ok'),
         );
@@ -230,7 +232,7 @@ describe('RagService', () => {
         });
       });
 
-      it('ignora la tool si el huésped no es elegible (defensa en profundidad)', async () => {
+      it('ignora la tool si no hay información del spa (defensa en profundidad)', async () => {
         chatModelMock.generateContent.mockResolvedValue(
           mockChatResponse(
             [{ name: 'request_spa_booking', args: {} }],
@@ -243,7 +245,7 @@ describe('RagService', () => {
         expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
       });
 
-      it('sin bloque (huésped no elegible) prohíbe ofrecer el spa', async () => {
+      it('sin bloque del spa no deja que invente servicios ni precios', async () => {
         chatModelMock.generateContent.mockResolvedValue(
           mockChatResponse([], 'ok'),
         );
@@ -251,7 +253,7 @@ describe('RagService', () => {
         await service.askQuestion('¿Tienen spa?');
 
         const { systemInstruction } = readChatConfig();
-        expect(systemInstruction).toContain('no tenés esa verificación');
+        expect(systemInstruction).toContain('No tenés información del spa');
         expect(systemInstruction).not.toContain('id=spa-1');
       });
     });

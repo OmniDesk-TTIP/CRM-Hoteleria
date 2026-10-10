@@ -58,6 +58,7 @@ export class SpaRepository {
     entity.description = model.description;
     entity.durationMinutes = model.durationMinutes;
     entity.price = model.price;
+    entity.capacity = model.capacity;
     entity.status = model.status;
     entity.availableWeekdays = model.availableWeekdays;
     entity.opensAt = model.opensAt;
@@ -73,6 +74,7 @@ export class SpaRepository {
       durationMinutes: entity.durationMinutes,
       // decimal llega como string desde pg.
       price: Number(entity.price),
+      capacity: entity.capacity,
       status: entity.status,
       availableWeekdays: entity.availableWeekdays,
       opensAt: entity.opensAt,

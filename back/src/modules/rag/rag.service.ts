@@ -35,9 +35,10 @@ export enum ChatAction {
 const REQUEST_SPA_BOOKING_DECLARATION: FunctionDeclaration = {
   name: 'request_spa_booking',
   description:
-    'Llama a esta función cuando el huésped quiera un turno de spa y ya te haya indicado qué servicio, ' +
+    'Llama a esta función cuando el cliente quiera un turno de spa y ya te haya indicado qué servicio, ' +
     'qué día y a qué hora. Si falta alguno de esos datos, preguntáselo antes. Usá el id del servicio tal ' +
-    'cual figura en [SERVICIOS DEL HOTEL].',
+    'cual figura en [SERVICIOS DEL HOTEL]. Si la sección indica que el cliente es EXTERNO, pedile antes su ' +
+    'nombre completo y su DNI y enviálos también; si es HUÉSPED no hace falta.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -52,6 +53,16 @@ const REQUEST_SPA_BOOKING_DECLARATION: FunctionDeclaration = {
       time: {
         type: SchemaType.STRING,
         description: 'Hora de inicio del turno HH:mm (24 horas).',
+      },
+      fullName: {
+        type: SchemaType.STRING,
+        description:
+          'Nombre completo de quien reserva. Solo para clientes EXTERNOS.',
+      },
+      dni: {
+        type: SchemaType.STRING,
+        description:
+          'DNI de quien reserva, solo dígitos. Solo para clientes EXTERNOS.',
       },
     },
     required: ['serviceId', 'date', 'time'],
@@ -274,11 +285,11 @@ export class RagService {
 
   private buildSystemInstruction(
     contextText: string,
-    guestHasServices = false,
+    hasSpaContext = false,
   ): string {
-    const servicesRule = guestHasServices
-      ? `REGLA PARA SERVICIOS DEL HOTEL: Este huésped tiene una reserva confirmada o está alojado, así que podés informarle y ofrecerle el spa usando ÚNICAMENTE lo que figura en la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). No inventes servicios, precios ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecerle el spa por tu cuenta una sola vez (si en el historial ya se lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Si quiere un turno, asegurate de tener el servicio, el día (DD-MM-YYYY) y la hora (HH:mm); recién entonces usa 'request_spa_booking' con el id del servicio. Es una solicitud que recepción confirma después: nunca le digas que el turno quedó confirmado.`
-      : `REGLA PARA SERVICIOS DEL HOTEL: El spa es un servicio exclusivo para huéspedes con reserva confirmada o alojados, y con este usuario no tenés esa verificación. No ofrezcas el spa ni des precios u horarios. Si pregunta por él, explicale que es para huéspedes con reserva confirmada y que puede reservar su habitación con vos.`;
+    const servicesRule = hasSpaContext
+      ? `REGLA PARA EL SPA: Podés informar y ofrecer el spa a cualquier cliente usando ÚNICAMENTE la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). Esa sección te dice si el cliente es HUÉSPED (el spa es SIN CARGO) o EXTERNO (paga el servicio): respetalo y no inventes precios, descuentos ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecer el spa por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Para reservar necesitás el servicio, el día (DD-MM-YYYY) y la hora (HH:mm). Si el cliente es EXTERNO, además pedile su nombre completo y su DNI antes de reservar y avisale que el turno se confirma cuando pague el link de pago que vas a enviarle. Recién cuando tengas todos los datos usa 'request_spa_booking' con el id del servicio. Nunca le digas que el turno quedó confirmado: eso lo informa el sistema (a los huéspedes los confirma recepción y a los externos se confirma al acreditarse el pago).`
+      : `REGLA PARA EL SPA: No tenés información del spa en este momento. No inventes servicios, precios ni horarios; ofrecele derivarlo a recepción.`;
 
     return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${servicesRule}\n\nCONTEXTO:\n${contextText}`;
   }

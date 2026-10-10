@@ -20,7 +20,7 @@ describe('TelegramUpdate', () => {
   let bookingProcessService: BookingProcessService;
   let em: EntityManager;
   let chatService: any;
-  let spaService: { getGuestContextBlock: jest.Mock };
+  let spaService: { getSpaContextBlock: jest.Mock };
   let spaReservationService: { requestSpa: jest.Mock };
   let session: any;
 
@@ -68,7 +68,7 @@ describe('TelegramUpdate', () => {
         },
         {
           provide: SpaService,
-          useValue: { getGuestContextBlock: jest.fn() },
+          useValue: { getSpaContextBlock: jest.fn() },
         },
         {
           provide: SpaReservationService,
@@ -102,7 +102,7 @@ describe('TelegramUpdate', () => {
     chatService = module.get<ChatService>(ChatService);
     spaService = module.get(SpaService);
     spaReservationService = module.get(SpaReservationService);
-    spaService.getGuestContextBlock.mockResolvedValue(null);
+    spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
 
     jest.spyOn(bookingProcessService, 'getActive').mockResolvedValue(null);
     jest
@@ -157,8 +157,8 @@ describe('TelegramUpdate', () => {
     );
   });
 
-  it('le pasa a Chamber el bloque de servicios del huésped elegible (CA2/CA3)', async () => {
-    spaService.getGuestContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
+  it('le pasa a Chamber el bloque de servicios del spa del cliente (CA3)', async () => {
+    spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
     jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
       texto: 'Tenemos spa',
       action: ChatAction.REPLY,
@@ -166,7 +166,7 @@ describe('TelegramUpdate', () => {
 
     await update.onMessage('¿Tienen spa?', mockCtx);
 
-    expect(spaService.getGuestContextBlock).toHaveBeenCalledWith(
+    expect(spaService.getSpaContextBlock).toHaveBeenCalledWith(
       mockTelegramUserId,
     );
     expect(ragService.askQuestion).toHaveBeenCalledWith(
@@ -227,6 +227,21 @@ describe('TelegramUpdate', () => {
       });
     });
 
+    it('vuelve a pedir nombre y DNI si el DNI viene mal formado', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_SPA_BOOKING,
+        datos: { ...datos, fullName: 'Beto Externo', dni: '28.111.222' },
+      });
+
+      await update.onMessage('Quiero un masaje', mockCtx);
+
+      expect(spaReservationService.requestSpa).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('nombre completo y tu DNI'),
+        { parse_mode: 'HTML' },
+      );
+    });
+
     it('pide los datos que faltan en vez de fallar si los argumentos son inválidos', async () => {
       jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
         action: ChatAction.REQUEST_SPA_BOOKING,
@@ -241,17 +256,6 @@ describe('TelegramUpdate', () => {
         { parse_mode: 'HTML' },
       );
     });
-  });
-
-  it('no le pasa servicios a un huésped que no es elegible', async () => {
-    jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
-      texto: 'El spa es para huéspedes con reserva',
-      action: ChatAction.REPLY,
-    });
-
-    await update.onMessage('¿Tienen spa?', mockCtx);
-
-    expect((ragService.askQuestion as jest.Mock).mock.calls[0][4]).toBeNull();
   });
 
   it('debería buscar disponibilidad y encontrar habitación (SEARCH_AVAILABILITY)', async () => {

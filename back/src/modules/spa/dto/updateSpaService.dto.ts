@@ -46,6 +46,14 @@ export class UpdateSpaServiceDto {
   price?: number;
 
   @IsOptional()
+  @IsInt({ message: 'La capacidad debe ser un número entero' })
+  @Min(1, { message: 'La capacidad debe ser de al menos 1 turno simultáneo' })
+  @Max(50, {
+    message: 'La capacidad no puede superar los 50 turnos simultáneos',
+  })
+  capacity?: number;
+
+  @IsOptional()
   @IsIn(Object.values(SpaServiceStatus), { message: 'Estado inválido' })
   status?: SpaServiceStatus;
 

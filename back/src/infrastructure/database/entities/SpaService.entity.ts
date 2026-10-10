@@ -27,8 +27,13 @@ export class SpaService extends CustomBaseEntity {
   @Property({ type: 'int' })
   durationMinutes!: number;
 
+  /** Precio para clientes externos; los huéspedes no pagan. */
   @Property({ type: 'decimal', precision: 12, scale: 2 })
   price!: number;
+
+  /** Cuántos turnos pueden estar en curso a la vez (cabinas o profesionales disponibles). */
+  @Property({ type: 'int' })
+  capacity: number & Opt = 1;
 
   @Enum(() => SpaServiceStatus)
   status: SpaServiceStatus & Opt = SpaServiceStatus.ACTIVE;

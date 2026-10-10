@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
 import { getBotToken } from 'nestjs-telegraf';
@@ -27,6 +28,7 @@ import { ChatMessage } from '../src/infrastructure/database/entities/ChatMessage
 import { ChatSession } from '../src/infrastructure/database/entities/ChatSession.entity';
 import {
   SpaReservation,
+  SpaReservationClientType,
   SpaReservationStatus,
 } from '../src/infrastructure/database/entities/SpaReservation.entity';
 
@@ -37,6 +39,9 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
   let employee: Awaited<ReturnType<typeof seedUser>>;
 
   const suffix = Date.now();
+  const getPayment = jest.fn();
+  const verifyWebhookSignature = jest.fn();
+
   const requestIds: string[] = [];
   let reservationId: string;
   let spaServiceId: string;
@@ -71,8 +76,8 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
       .overrideProvider(PaymentService)
       .useValue({
         createPreference: jest.fn(),
-        getPayment: jest.fn(),
-        verifyWebhookSignature: jest.fn(),
+        getPayment,
+        verifyWebhookSignature,
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
@@ -92,6 +97,8 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
     await app.init();
 
     em = app.get(MikroORM).em.fork();
+    getPayment.mockReset();
+    verifyWebhookSignature.mockReset();
     admin = await seedUser(app, em, UserRole.ADMIN);
     employee = await seedUser(app, em, UserRole.EMPLOYEE);
 
@@ -178,6 +185,8 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
         guestFullName: 'Ana E2E',
         requestedDate: '2099-01-15',
         requestedTime: '15:00',
+        clientType: 'GUEST',
+        amount: 0,
       });
     });
 
@@ -236,6 +245,79 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
         .set('Authorization', bearer(admin.accessToken))
         .send({ status: 'CONFIRMED' })
         .expect(404);
+    });
+  });
+
+  describe('pagos de turnos externos (CA4)', () => {
+    const seedPendingPayment = () =>
+      seedRequest({
+        status: SpaReservationStatus.PENDING_PAYMENT,
+        clientType: SpaReservationClientType.EXTERNAL,
+        amount: 15000,
+      });
+
+    const statusOf = async (id: string) =>
+      (await em.fork().findOneOrFail(SpaReservation, { id })).status;
+
+    beforeEach(() => {
+      getPayment.mockReset();
+      verifyWebhookSignature.mockReset();
+    });
+
+    it('el webhook de un pago aprobado confirma el turno (sin autenticación)', async () => {
+      const turn = await seedPendingPayment();
+      getPayment.mockResolvedValue({
+        id: 9001,
+        status: 'approved',
+        external_reference: turn.id,
+      });
+
+      await request(app.getHttpServer())
+        .post('/spa-payments/webhook')
+        .send({ type: 'payment', data: { id: '9001' } })
+        .expect(200);
+
+      expect(await statusOf(turn.id)).toBe(SpaReservationStatus.CONFIRMED);
+    });
+
+    it('ignora las notificaciones que no son de un pago', async () => {
+      await request(app.getHttpServer())
+        .post('/spa-payments/webhook')
+        .send({ type: 'merchant_order', data: { id: '9002' } })
+        .expect(200);
+
+      expect(getPayment).not.toHaveBeenCalled();
+    });
+
+    it('rechaza con 401 un webhook con la firma inválida y no consulta el pago', async () => {
+      verifyWebhookSignature.mockReturnValue(false);
+
+      await request(app.getHttpServer())
+        .post('/spa-payments/webhook')
+        .set('x-signature', 'ts=1,v1=falsa')
+        .send({ type: 'payment', data: { id: '9003' } })
+        .expect(401);
+
+      expect(getPayment).not.toHaveBeenCalled();
+    });
+
+    it('al volver del checkout confirma el pago y redirige al front', async () => {
+      const turn = await seedPendingPayment();
+      getPayment.mockResolvedValue({
+        id: 9004,
+        status: 'approved',
+        external_reference: turn.id,
+      });
+      const frontendBaseUrl = app
+        .get(ConfigService)
+        .getOrThrow<string>('FRONTEND_BASE_URL');
+
+      await request(app.getHttpServer())
+        .get('/spa-payments/success?payment_id=9004')
+        .expect(302)
+        .expect('Location', `${frontendBaseUrl}/payment/success`);
+
+      expect(await statusOf(turn.id)).toBe(SpaReservationStatus.CONFIRMED);
     });
   });
 });

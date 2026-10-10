@@ -18,20 +18,7 @@ import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 import { Query, Res } from '@nestjs/common';
 import { Public } from '../auth/auth.decorators';
-
-/** Mercado Pago manda el mismo aviso con formatos distintos según el tipo de notificación (body o query). */
-interface WebhookBody {
-  id?: string | number;
-  type?: string;
-  topic?: string;
-  data?: { id?: string | number };
-}
-
-interface WebhookQuery {
-  id?: string;
-  topic?: string;
-  'data.id'?: string;
-}
+import { readWebhook, WebhookBody, WebhookQuery } from './webhook.util';
 
 // Todo este controller queda fuera de la autenticación: el webhook lo llama Mercado Pago,
 // /success es el redirect de vuelta del checkout, y el resumen y el comprobante los abre el huesped desde el link de Telegram, sin cuenta.
@@ -113,9 +100,7 @@ export class PaymentController {
     @Headers('x-signature') xSignature?: string,
     @Headers('x-request-id') xRequestId?: string,
   ) {
-    const dataId =
-      query?.['data.id'] || body?.data?.id || query?.id || body?.id;
-    const eventType = body?.type || query?.topic || body?.topic;
+    const { dataId, eventType } = readWebhook(body, query);
 
     if (!dataId) {
       this.logger.warn(

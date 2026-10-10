@@ -1628,6 +1628,43 @@
       "name": "spa_reservations",
       "schema": "public",
       "columns": {
+        "amount": {
+          "name": "amount",
+          "type": "numeric(12,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 12,
+          "scale": 2,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "decimal"
+        },
+        "client_type": {
+          "name": "client_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'GUEST'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "GUEST",
+            "EXTERNAL"
+          ],
+          "mappedType": "enum"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp(6)",
@@ -1644,6 +1681,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "guest_dni": {
+          "name": "guest_dni",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
         },
         "guest_full_name": {
           "name": "guest_full_name",
@@ -1678,6 +1732,57 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "mp_init_point": {
+          "name": "mp_init_point",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "mp_payment_id": {
+          "name": "mp_payment_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "mp_preference_id": {
+          "name": "mp_preference_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
         },
         "requested_date": {
           "name": "requested_date",
@@ -1719,7 +1824,7 @@
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
           "length": null,
           "precision": null,
@@ -1780,8 +1885,10 @@
           "collation": null,
           "enumItems": [
             "PENDING",
+            "PENDING_PAYMENT",
             "CONFIRMED",
-            "REJECTED"
+            "REJECTED",
+            "CANCELLED"
           ],
           "mappedType": "enum"
         },
@@ -1834,9 +1941,15 @@
       ],
       "checks": [
         {
+          "name": "spa_reservations_client_type_check",
+          "expression": "\"client_type\" in ('GUEST', 'EXTERNAL')",
+          "definition": "check (\"client_type\" in ('GUEST', 'EXTERNAL'))",
+          "columnName": "client_type"
+        },
+        {
           "name": "spa_reservations_status_check",
-          "expression": "\"status\" in ('PENDING', 'CONFIRMED', 'REJECTED')",
-          "definition": "check (\"status\" in ('PENDING', 'CONFIRMED', 'REJECTED'))",
+          "expression": "\"status\" in ('PENDING', 'PENDING_PAYMENT', 'CONFIRMED', 'REJECTED', 'CANCELLED')",
+          "definition": "check (\"status\" in ('PENDING', 'PENDING_PAYMENT', 'CONFIRMED', 'REJECTED', 'CANCELLED'))",
           "columnName": "status"
         }
       ],
@@ -1851,7 +1964,8 @@
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.reservations"
+          "referencedTableName": "public.reservations",
+          "deleteRule": "set null"
         },
         "spa_reservations_spa_service_id_foreign": {
           "columnNames": [
@@ -1887,6 +2001,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "json"
+        },
+        "capacity": {
+          "name": "capacity",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "1",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
         },
         "closes_at": {
           "name": "closes_at",
@@ -2065,22 +2196,22 @@
       "indexes": [
         {
           "columnNames": [
-            "id"
-          ],
-          "composite": false,
-          "constraint": true,
-          "keyName": "spa_services_pkey",
-          "primary": true,
-          "unique": true
-        },
-        {
-          "columnNames": [
             "name"
           ],
           "composite": false,
           "constraint": true,
           "keyName": "spa_services_name_unique",
           "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "spa_services_pkey",
+          "primary": true,
           "unique": true
         }
       ],

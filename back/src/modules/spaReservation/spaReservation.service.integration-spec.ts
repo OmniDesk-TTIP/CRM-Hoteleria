@@ -30,13 +30,15 @@ import {
 import { ChatSession } from '../../infrastructure/database/entities/ChatSession.entity';
 import {
   SpaReservation,
+  SpaReservationClientType,
   SpaReservationStatus,
 } from '../../infrastructure/database/entities/SpaReservation.entity';
 
 /**
  * Integración de SpaReservationService contra la base de test: reservas, servicios y turnos son
- * filas reales. Las reglas puras (disponibilidad horaria del servicio, elegibilidad) tienen su
- * test de modelo; acá se prueba el flujo completo y lo que queda persistido.
+ * filas reales; Mercado Pago y Telegram están simulados. Las reglas puras (disponibilidad horaria
+ * del servicio, matemática de la capacidad) tienen su test de modelo; acá se prueba el flujo
+ * completo y lo que queda persistido.
  *
  * Estadía del huésped: 10 al 20 de marzo de 2099. "Hoy" lo fija cada test con `now`.
  */
@@ -47,6 +49,8 @@ describe('SpaReservationService (integración)', () => {
   let service: SpaReservationService;
 
   const sendMessage = jest.fn();
+  const createSpaPreference = jest.fn();
+  const getPayment = jest.fn();
 
   const suffix = Date.now();
   let seq = 0;
@@ -55,13 +59,16 @@ describe('SpaReservationService (integración)', () => {
   // 15/03/2099 12:00 en Buenos Aires: dentro de la estadía.
   const NOW = new Date(Date.UTC(2099, 2, 15, 15, 0));
   const GUEST_NAME = 'Ana E2E';
+  const EXTERNAL = { fullName: 'Beto Externo', dni: '28111222' };
+  const INIT_POINT = 'https://mp.example/pagar-turno';
 
   let categoryId: string;
   let roomId: string;
-  const guestIds: string[] = [];
+  const clientIds: string[] = [];
   const reservationIds: string[] = [];
   const spaServiceIds: string[] = [];
 
+  /** Un huésped: tiene una reserva confirmada del 10 al 20 de marzo de 2099. */
   const seedGuest = async (status = ReservationStatus.CONFIRMED) => {
     const telegramUserId = `tg-spa-res-${next()}`;
     const reservation = em.create(Reservation, {
@@ -78,9 +85,16 @@ describe('SpaReservationService (integración)', () => {
     });
     em.persist(reservation);
     await em.flush();
-    guestIds.push(telegramUserId);
+    clientIds.push(telegramUserId);
     reservationIds.push(reservation.id);
     return { telegramUserId, reservationId: reservation.id };
+  };
+
+  /** Un cliente externo: no tiene ninguna reserva de habitación. */
+  const newExternal = () => {
+    const telegramUserId = `tg-spa-ext-${next()}`;
+    clientIds.push(telegramUserId);
+    return telegramUserId;
   };
 
   const seedSpa = async (overrides: Partial<SpaService> = {}) => {
@@ -103,13 +117,50 @@ describe('SpaReservationService (integración)', () => {
   const rowsOf = (telegramUserId: string) =>
     em.fork().find(SpaReservation, { telegramUserId });
 
+  const rowById = (id: string) =>
+    em.fork().findOneOrFail(SpaReservation, { id });
+
+  /** Envejece un turno para simular que pasó el tiempo de retención del pago. */
+  const age = (id: string, minutes: number) =>
+    em.nativeUpdate(
+      SpaReservation,
+      { id },
+      { createdAt: new Date(Date.now() - minutes * 60 * 1000) },
+    );
+
   const request = (
     telegramUserId: string,
     serviceId: string,
     date: string,
     time = '15:00',
     now = NOW,
-  ) => service.requestSpa(telegramUserId, { serviceId, date, time }, now);
+    extra: { fullName?: string; dni?: string } = {},
+  ) =>
+    service.requestSpa(
+      telegramUserId,
+      { serviceId, date, time, ...extra },
+      now,
+    );
+
+  const requestAsExternal = (
+    telegramUserId: string,
+    serviceId: string,
+    date: string,
+    time = '15:00',
+  ) => request(telegramUserId, serviceId, date, time, NOW, EXTERNAL);
+
+  /** Crea un turno de un externo y devuelve su id (falla el test si no se pudo crear). */
+  const createExternalTurn = async (
+    spa: SpaService,
+    date = '16-03-2099',
+    time = '15:00',
+  ) => {
+    const telegramUserId = newExternal();
+    const result = await requestAsExternal(telegramUserId, spa.id, date, time);
+    if (!result.ok)
+      throw new Error(`No se pudo crear el turno: ${result.reason}`);
+    return { id: result.request.id, telegramUserId };
+  };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -120,7 +171,8 @@ describe('SpaReservationService (integración)', () => {
       .overrideProvider(PaymentService)
       .useValue({
         createPreference: jest.fn(),
-        getPayment: jest.fn(),
+        createSpaPreference,
+        getPayment,
         verifyWebhookSignature: jest.fn(),
         notifyPaymentApproved: jest.fn(),
       })
@@ -163,14 +215,24 @@ describe('SpaReservationService (integración)', () => {
     orm.em.clear();
     sendMessage.mockReset();
     sendMessage.mockResolvedValue(undefined);
+    createSpaPreference.mockReset();
+    createSpaPreference.mockResolvedValue({
+      preferenceId: 'pref-1',
+      initPoint: INIT_POINT,
+    });
+    getPayment.mockReset();
   });
 
   afterAll(async () => {
     try {
-      await em.nativeDelete(ChatMessage, { telegramUserId: { $in: guestIds } });
-      await em.nativeDelete(ChatSession, { telegramUserId: { $in: guestIds } });
+      await em.nativeDelete(ChatMessage, {
+        telegramUserId: { $in: clientIds },
+      });
+      await em.nativeDelete(ChatSession, {
+        telegramUserId: { $in: clientIds },
+      });
       await em.nativeDelete(SpaReservation, {
-        telegramUserId: { $in: guestIds },
+        telegramUserId: { $in: clientIds },
       });
       await em.nativeDelete(Reservation, { id: { $in: reservationIds } });
       await em.nativeDelete(SpaService, { id: { $in: spaServiceIds } });
@@ -182,8 +244,8 @@ describe('SpaReservationService (integración)', () => {
     if (app) await app.close();
   });
 
-  describe('requestSpa (CA4)', () => {
-    it('registra el turno PENDING con los datos del huésped y del servicio', async () => {
+  describe('turno de un huésped (CA4)', () => {
+    it('registra el turno PENDING, sin cobro, con los datos del huésped y del servicio', async () => {
       const guest = await seedGuest();
       const spa = await seedSpa();
 
@@ -200,11 +262,15 @@ describe('SpaReservationService (integración)', () => {
       expect(row).toMatchObject({
         id: result.request.id,
         status: SpaReservationStatus.PENDING,
+        clientType: SpaReservationClientType.GUEST,
         serviceName: spa.name,
         guestFullName: GUEST_NAME,
         requestedDate: '2099-03-16',
         requestedTime: '15:00',
       });
+      expect(Number(row.amount)).toBe(0);
+      expect(row.roomReservation?.id).toBe(guest.reservationId);
+      expect(createSpaPreference).not.toHaveBeenCalled();
     });
 
     it('acepta el día de hoy y el último día de la estadía', async () => {
@@ -217,20 +283,6 @@ describe('SpaReservationService (integración)', () => {
       expect(today.ok).toBe(true);
       expect(lastDay.ok).toBe(true);
       expect(await rowsOf(guest.telegramUserId)).toHaveLength(2);
-    });
-
-    it('rechaza a un huésped sin reserva confirmada (CA2) y no guarda nada', async () => {
-      const guest = await seedGuest(ReservationStatus.PENDING_PAYMENT);
-      const spa = await seedSpa();
-
-      const result = await request(guest.telegramUserId, spa.id, '16-03-2099');
-
-      expect(result).toEqual({
-        ok: false,
-        reason:
-          'Los turnos de spa son para huéspedes con una reserva confirmada.',
-      });
-      expect(await rowsOf(guest.telegramUserId)).toHaveLength(0);
     });
 
     it('rechaza un servicio deshabilitado (CA7) y no guarda nada', async () => {
@@ -277,6 +329,28 @@ describe('SpaReservationService (integración)', () => {
       expect(await rowsOf(guest.telegramUserId)).toHaveLength(0);
     });
 
+    it('rechaza un horario de hoy que ya pasó', async () => {
+      const guest = await seedGuest();
+      const spa = await seedSpa();
+
+      // son las 12:00 del 15/03: las 11:00 de hoy ya pasaron, las 15:00 no
+      const past = await request(
+        guest.telegramUserId,
+        spa.id,
+        '15-03-2099',
+        '11:00',
+      );
+      const future = await request(
+        guest.telegramUserId,
+        spa.id,
+        '15-03-2099',
+        '15:00',
+      );
+
+      expect(past).toEqual({ ok: false, reason: 'Ese horario ya pasó.' });
+      expect(future.ok).toBe(true);
+    });
+
     it('rechaza un día en que el servicio no se brinda, indicando cuándo sí', async () => {
       const guest = await seedGuest();
       // lunes a viernes; el 15/03/2099 es domingo
@@ -308,6 +382,281 @@ describe('SpaReservationService (integración)', () => {
     });
   });
 
+  describe('turno de un cliente externo (cobro)', () => {
+    it('le pide nombre y DNI si faltan y no guarda nada', async () => {
+      const spa = await seedSpa();
+      const external = newExternal();
+
+      const withoutData = await request(external, spa.id, '16-03-2099');
+      const withoutDni = await request(
+        external,
+        spa.id,
+        '16-03-2099',
+        '15:00',
+        NOW,
+        { fullName: 'Beto Externo' },
+      );
+
+      expect(withoutData.ok).toBe(false);
+      expect(!withoutData.ok && withoutData.reason).toMatch(
+        /nombre completo y tu DNI/,
+      );
+      expect(withoutDni.ok).toBe(false);
+      expect(await rowsOf(external)).toHaveLength(0);
+      expect(createSpaPreference).not.toHaveBeenCalled();
+    });
+
+    it('guarda el turno PENDING_PAYMENT con el monto y responde con el link de pago', async () => {
+      const spa = await seedSpa({ price: 23000 });
+      const external = newExternal();
+
+      const result = await requestAsExternal(external, spa.id, '16-03-2099');
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.reply).toContain('Total: $23000');
+      expect(result.reply).toContain('Todavía no está confirmado');
+      expect(result.reply).toContain('30 minutos');
+      expect(result.reply).toContain(INIT_POINT);
+      expect(result.reply).toContain('Beto Externo');
+
+      expect(createSpaPreference).toHaveBeenCalledWith({
+        id: result.request.id,
+        serviceName: spa.name,
+        amount: 23000,
+        fullName: 'Beto Externo',
+        dni: '28111222',
+      });
+      const row = await rowById(result.request.id);
+      expect(row).toMatchObject({
+        status: SpaReservationStatus.PENDING_PAYMENT,
+        clientType: SpaReservationClientType.EXTERNAL,
+        guestFullName: 'Beto Externo',
+        guestDni: '28111222',
+        mpPreferenceId: 'pref-1',
+        mpInitPoint: INIT_POINT,
+      });
+      expect(Number(row.amount)).toBe(23000);
+      expect(row.roomReservation).toBeNull();
+    });
+
+    it('lo deja reservar sin estadía, hasta 60 días hacia adelante', async () => {
+      const spa = await seedSpa();
+
+      // 15/03/2099 + 60 días = 14/05/2099
+      const lastDay = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '14-05-2099',
+      );
+      const tooFar = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '15-05-2099',
+      );
+
+      expect(lastDay.ok).toBe(true);
+      expect(tooFar.ok).toBe(false);
+      expect(!tooFar.ok && tooFar.reason).toMatch(/hasta 60 días/);
+    });
+
+    it('si no se puede generar el link de pago, cancela el turno y libera el lugar', async () => {
+      const spa = await seedSpa();
+      const external = newExternal();
+      createSpaPreference.mockRejectedValueOnce(
+        new Error('Mercado Pago caído'),
+      );
+
+      const result = await requestAsExternal(external, spa.id, '16-03-2099');
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.reason).toMatch(/link de pago/);
+      const [row] = await rowsOf(external);
+      expect(row.status).toBe(SpaReservationStatus.CANCELLED);
+    });
+  });
+
+  describe('capacidad', () => {
+    it('no vende más turnos que la capacidad, sea de huésped o de externo', async () => {
+      const spa = await seedSpa({ capacity: 1 });
+      const guest = await seedGuest();
+
+      const first = await request(guest.telegramUserId, spa.id, '16-03-2099');
+      const sameTime = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '16-03-2099',
+      );
+      const overlapping = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '16-03-2099',
+        '15:30',
+      );
+      const rightAfter = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '16-03-2099',
+        '16:00',
+      );
+
+      expect(first.ok).toBe(true);
+      expect(sameTime.ok).toBe(false);
+      expect(!sameTime.ok && sameTime.reason).toMatch(/Ya no quedan lugares/);
+      expect(overlapping.ok).toBe(false);
+      expect(rightAfter.ok).toBe(true);
+    });
+
+    it('con capacidad 2 caben dos turnos a la vez y el tercero no', async () => {
+      const spa = await seedSpa({ capacity: 2 });
+
+      const results: Awaited<ReturnType<typeof requestAsExternal>>[] = [];
+      for (let i = 0; i < 3; i++) {
+        results.push(
+          await requestAsExternal(newExternal(), spa.id, '16-03-2099'),
+        );
+      }
+
+      expect(results.map((result) => result.ok)).toEqual([true, true, false]);
+    });
+
+    it('dos pedidos simultáneos por el último lugar: solo uno lo consigue', async () => {
+      const spa = await seedSpa({ capacity: 1 });
+      const [a, b] = [await seedGuest(), await seedGuest()];
+
+      const results = await Promise.all([
+        request(a.telegramUserId, spa.id, '16-03-2099'),
+        request(b.telegramUserId, spa.id, '16-03-2099'),
+      ]);
+
+      expect(results.filter((result) => result.ok)).toHaveLength(1);
+      const rows = [
+        ...(await rowsOf(a.telegramUserId)),
+        ...(await rowsOf(b.telegramUserId)),
+      ];
+      expect(rows).toHaveLength(1);
+    });
+  });
+
+  describe('pago del cliente externo', () => {
+    const approve = (paymentId: string, reference: string) =>
+      getPayment.mockResolvedValue({
+        id: Number(paymentId),
+        status: 'approved',
+        external_reference: reference,
+      });
+
+    it('un pago aprobado confirma el turno, guarda el pago y avisa una sola vez', async () => {
+      const spa = await seedSpa();
+      const turn = await createExternalTurn(spa);
+      approve('777', turn.id);
+
+      await service.confirmPayment('777', 'webhook');
+      // el redirect de Mercado Pago suele llegar casi junto con el webhook
+      await service.confirmPayment('777', 'back_url');
+
+      const row = await rowById(turn.id);
+      expect(row.status).toBe(SpaReservationStatus.CONFIRMED);
+      expect(row.mpPaymentId).toBe('777');
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      const [to, notice] = sendMessage.mock.calls[0] as [string, string];
+      expect(to).toBe(turn.telegramUserId);
+      expect(notice).toContain('Recibimos tu pago');
+      expect(notice).toContain(`${spa.name} del 16/03/2099 a las 15:00`);
+    });
+
+    it('un pago que no está aprobado no confirma nada', async () => {
+      const turn = await createExternalTurn(await seedSpa());
+      getPayment.mockResolvedValue({
+        id: 778,
+        status: 'pending',
+        external_reference: turn.id,
+      });
+
+      await service.confirmPayment('778', 'webhook');
+
+      expect((await rowById(turn.id)).status).toBe(
+        SpaReservationStatus.PENDING_PAYMENT,
+      );
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('un pago que llega con el turno ya vencido no lo revive ni avisa', async () => {
+      const turn = await createExternalTurn(await seedSpa());
+      await age(turn.id, 60);
+      await service.releaseUnpaid();
+      approve('779', turn.id);
+
+      await service.confirmPayment('779', 'webhook');
+
+      expect((await rowById(turn.id)).status).toBe(
+        SpaReservationStatus.CANCELLED,
+      );
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('ignora un pago de un turno que no existe', async () => {
+      approve('780', '00000000-0000-0000-0000-000000000000');
+
+      await expect(
+        service.confirmPayment('780', 'webhook'),
+      ).resolves.toBeUndefined();
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('vencimiento del pago', () => {
+    it('cancela solo los turnos de externos sin pagar hace más de 30 minutos', async () => {
+      const spa = await seedSpa({ capacity: 5 });
+      const old = await createExternalTurn(spa, '16-03-2099', '10:00');
+      const recent = await createExternalTurn(spa, '16-03-2099', '12:00');
+      const guest = await seedGuest();
+      const guestTurn = await request(
+        guest.telegramUserId,
+        spa.id,
+        '16-03-2099',
+        '14:00',
+      );
+      if (!guestTurn.ok) throw new Error('El turno del huésped no se creó');
+      await age(old.id, 60);
+      await age(guestTurn.request.id, 60);
+
+      await service.releaseUnpaid();
+
+      expect((await rowById(old.id)).status).toBe(
+        SpaReservationStatus.CANCELLED,
+      );
+      expect((await rowById(recent.id)).status).toBe(
+        SpaReservationStatus.PENDING_PAYMENT,
+      );
+      // el turno de un huésped espera a recepción, no al pago: no vence
+      expect((await rowById(guestTurn.request.id)).status).toBe(
+        SpaReservationStatus.PENDING,
+      );
+    });
+
+    it('el lugar de un turno vencido vuelve a estar disponible', async () => {
+      const spa = await seedSpa({ capacity: 1 });
+      const held = await createExternalTurn(spa);
+      const blocked = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '16-03-2099',
+      );
+      await age(held.id, 60);
+
+      await service.releaseUnpaid();
+      const afterRelease = await requestAsExternal(
+        newExternal(),
+        spa.id,
+        '16-03-2099',
+      );
+
+      expect(blocked.ok).toBe(false);
+      expect(afterRelease.ok).toBe(true);
+    });
+  });
+
   describe('changeStatus', () => {
     const createPending = async () => {
       const guest = await seedGuest();
@@ -321,8 +670,7 @@ describe('SpaReservationService (integración)', () => {
       };
     };
 
-    const statusInDb = async (id: string) =>
-      (await em.fork().findOneOrFail(SpaReservation, { id })).status;
+    const statusInDb = async (id: string) => (await rowById(id)).status;
 
     it.each([
       [SpaReservationStatus.CONFIRMED, 'quedó confirmado'],
@@ -381,6 +729,19 @@ describe('SpaReservationService (integración)', () => {
       ).rejects.toThrow(BadRequestException);
       expect(await statusInDb(id)).toBe(SpaReservationStatus.CONFIRMED);
       expect(sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('no deja resolver a mano un turno que espera el pago del cliente', async () => {
+      const turn = await createExternalTurn(await seedSpa());
+
+      await expect(
+        service.changeStatus(turn.id, SpaReservationStatus.CONFIRMED),
+      ).rejects.toThrow(/esperando el pago/);
+
+      expect(await statusInDb(turn.id)).toBe(
+        SpaReservationStatus.PENDING_PAYMENT,
+      );
+      expect(sendMessage).not.toHaveBeenCalled();
     });
 
     it('lanza NotFound si el turno no existe', async () => {

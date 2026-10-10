@@ -9,6 +9,8 @@ export interface SpaServiceProps {
   description: string;
   durationMinutes: number;
   price: number;
+  /** Turnos que pueden estar en curso a la vez. */
+  capacity: number;
   status: SpaServiceStatus;
   availableWeekdays: number[];
   opensAt: string;
@@ -27,6 +29,7 @@ export class SpaServiceModel {
   description: string;
   durationMinutes: number;
   price: number;
+  capacity: number;
   status: SpaServiceStatus;
   availableWeekdays: number[];
   opensAt: string;
@@ -38,6 +41,7 @@ export class SpaServiceModel {
     this.description = props.description;
     this.durationMinutes = props.durationMinutes;
     this.price = props.price;
+    this.capacity = props.capacity;
     this.status = props.status;
     this.availableWeekdays = [...props.availableWeekdays];
     this.opensAt = props.opensAt;
@@ -45,13 +49,14 @@ export class SpaServiceModel {
   }
 
   static create(
-    props: Omit<SpaServiceProps, 'id' | 'status'> &
-      Partial<Pick<SpaServiceProps, 'status'>>,
+    props: Omit<SpaServiceProps, 'id' | 'status' | 'capacity'> &
+      Partial<Pick<SpaServiceProps, 'status' | 'capacity'>>,
   ): SpaServiceModel {
     return new SpaServiceModel({
       ...props,
       id: v4(),
       status: props.status ?? SpaServiceStatus.ACTIVE,
+      capacity: props.capacity ?? 1,
     });
   }
 
@@ -87,6 +92,7 @@ export class SpaServiceModel {
     if (changes.durationMinutes !== undefined)
       this.durationMinutes = changes.durationMinutes;
     if (changes.price !== undefined) this.price = changes.price;
+    if (changes.capacity !== undefined) this.capacity = changes.capacity;
     if (changes.status !== undefined) this.status = changes.status;
     if (changes.availableWeekdays !== undefined)
       this.availableWeekdays = [...changes.availableWeekdays];
@@ -100,6 +106,10 @@ export class SpaServiceModel {
 
   /** Devuelve el motivo si la configuración horaria es inconsistente, o null si está bien. */
   getScheduleError(): string | null {
+    if (this.capacity < 1) {
+      return 'La capacidad tiene que ser de al menos 1 turno simultáneo';
+    }
+
     const weekdays = this.availableWeekdays;
     if (weekdays.length === 0) {
       return 'El servicio tiene que estar disponible al menos un día de la semana';
@@ -118,6 +128,34 @@ export class SpaServiceModel {
     }
     return null;
   }
+}
+
+// ───────── Capacidad ─────────
+
+/**
+ * ¿Entra un turno nuevo sin pasarse de la capacidad del servicio?
+ *
+ * `bookedStarts` son las horas de inicio (HH:mm) de los turnos que ya ocupan lugar ese día. Todos
+ * son del mismo servicio, así que duran lo mismo. La ocupación más alta dentro del turno nuevo
+ * se da al empezar él o al empezar otro que caiga adentro, así que alcanza con mirar esos puntos:
+ * dos turnos que se tocan sin superponerse (15:00-16:00 y 16:00-17:00) no cuentan como simultáneos.
+ */
+export function hasFreeCapacity(
+  bookedStarts: string[],
+  startTime: string,
+  durationMinutes: number,
+  capacity: number,
+): boolean {
+  const start = toMinutes(startTime);
+  const end = start + durationMinutes;
+  const booked = bookedStarts.map(toMinutes);
+
+  const checkpoints = [start, ...booked.filter((b) => b > start && b < end)];
+  return checkpoints.every(
+    (point) =>
+      booked.filter((b) => b <= point && point < b + durationMinutes).length <
+      capacity,
+  );
 }
 
 // ───────── Fechas (YYYY-MM-DD) ─────────
@@ -222,22 +260,33 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Sección `[SERVICIOS DEL HOTEL]` que se agrega al contexto de Chamber para huéspedes elegibles.
- * Se arma en cada mensaje desde la DB (no desde el RAG), así un servicio deshabilitado deja de
- * ofrecerse en la próxima consulta (CA7). Recibe solo servicios activos.
+ * Sección `[SERVICIOS DEL HOTEL]` que se agrega al contexto de Chamber. Se arma en cada mensaje
+ * desde la DB (no desde el RAG), así un servicio deshabilitado deja de ofrecerse en la próxima
+ * consulta (CA7). Recibe solo servicios activos.
+ *
+ * Los huéspedes no pagan el spa; los clientes externos sí, y el bloque lo dice para que el bot
+ * informe el precio correcto y pida los datos del pago antes de reservar.
  */
-export function buildGuestServicesBlock(
+export function buildSpaServicesBlock(
   spaServices: SpaServiceModel[],
+  isGuest: boolean,
 ): string {
-  const lines = ['[SERVICIOS DEL HOTEL]', 'SPA:'];
+  const lines = [
+    '[SERVICIOS DEL HOTEL]',
+    isGuest
+      ? 'CLIENTE: HUÉSPED del hotel. Los servicios del spa son SIN CARGO para él.'
+      : 'CLIENTE: EXTERNO (no se hospeda en el hotel). Los servicios del spa se pagan: el turno queda confirmado cuando paga el link de pago que se le envía.',
+    'SPA:',
+  ];
 
   if (spaServices.length === 0) {
     lines.push('- No hay servicios de spa disponibles por el momento.');
   }
 
   for (const service of spaServices.slice(0, MAX_SPA_SERVICES_IN_BLOCK)) {
+    const price = isGuest ? 'SIN CARGO' : `$${service.price}`;
     lines.push(
-      `- id=${service.id} | ${service.name} | ${service.durationMinutes} min | $${service.price} | ${describeWeekdays(service.availableWeekdays)} de ${service.opensAt} a ${service.closesAt}`,
+      `- id=${service.id} | ${service.name} | ${service.durationMinutes} min | ${price} | ${describeWeekdays(service.availableWeekdays)} de ${service.opensAt} a ${service.closesAt}`,
       `  ${truncate(service.description, MAX_DESCRIPTION_LENGTH)}`,
     );
   }

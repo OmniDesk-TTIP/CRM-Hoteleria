@@ -169,12 +169,19 @@ describe('SpaService (integración)', () => {
         name: spa.name,
         description: 'Masaje de 60 minutos',
         durationMinutes: 60,
+        capacity: 1,
         status: SpaServiceStatus.ACTIVE,
         availableWeekdays: [1, 2, 3, 4, 5],
         opensAt: '10:00',
         closesAt: '20:00',
       });
       expect(Number(row.price)).toBe(15000);
+    });
+
+    it('guarda la capacidad indicada', async () => {
+      const spa = await createSpa({ capacity: 3 });
+
+      expect((await rowOf(spa.id)).capacity).toBe(3);
     });
 
     it('rechaza un nombre repetido sin distinguir mayúsculas', async () => {
@@ -197,6 +204,7 @@ describe('SpaService (integración)', () => {
         { opensAt: '18:00', closesAt: '10:00' },
         /posterior/,
       ],
+      ['tiene capacidad 0', { capacity: 0 }, /capacidad/],
       [
         'dura más que la franja',
         { durationMinutes: 120, opensAt: '10:00', closesAt: '11:00' },
@@ -222,13 +230,19 @@ describe('SpaService (integración)', () => {
 
       const updated = await service.update(spa.id, {
         price: 18000,
+        capacity: 4,
         opensAt: '11:00',
       });
 
-      expect(updated).toMatchObject({ price: 18000, opensAt: '11:00' });
+      expect(updated).toMatchObject({
+        price: 18000,
+        capacity: 4,
+        opensAt: '11:00',
+      });
       const row = await rowOf(spa.id);
       expect(Number(row.price)).toBe(18000);
       expect(row).toMatchObject({
+        capacity: 4,
         opensAt: '11:00',
         closesAt: '20:00',
         name: spa.name,
@@ -361,29 +375,44 @@ describe('SpaService (integración)', () => {
     });
   });
 
-  describe('getGuestContextBlock (CA2/CA3/CA7)', () => {
-    it('devuelve null si el huésped no es elegible', async () => {
-      await expect(
-        service.getGuestContextBlock(newGuest()),
-      ).resolves.toBeNull();
-    });
-
-    it('incluye los servicios activos y deja de incluir los que se deshabilitan', async () => {
+  describe('getSpaContextBlock (CA2/CA3/CA7)', () => {
+    it('al huésped le presenta los servicios activos sin cargo', async () => {
       const guest = newGuest();
       await seedReservation(guest, [2099, 3, 10], [2099, 3, 20]);
       const active = await createSpa();
       const disabled = await createSpa({ status: SpaServiceStatus.INACTIVE });
 
-      const before = await service.getGuestContextBlock(guest);
+      const block = await service.getSpaContextBlock(guest);
 
-      expect(before).toContain('[SERVICIOS DEL HOTEL]');
-      expect(before).toContain(`id=${active.id}`);
-      expect(before).not.toContain(`id=${disabled.id}`);
+      expect(block).toContain('[SERVICIOS DEL HOTEL]');
+      expect(block).toContain('HUÉSPED');
+      expect(block).toContain(`id=${active.id}`);
+      expect(block).toContain('SIN CARGO');
+      expect(block).not.toContain(`id=${disabled.id}`);
+    });
 
-      await service.remove(active.id);
+    it('a quien no se hospeda le presenta los mismos servicios con su precio', async () => {
+      const active = await createSpa({ price: 23456 });
 
-      const after = await service.getGuestContextBlock(guest);
-      expect(after).not.toContain(`id=${active.id}`);
+      const block = await service.getSpaContextBlock(newGuest());
+
+      expect(block).toContain('EXTERNO');
+      expect(block).toContain(`id=${active.id}`);
+      expect(block).toContain('$23456');
+      expect(block).not.toContain('SIN CARGO');
+    });
+
+    it('un servicio que se deshabilita deja de aparecer en la próxima consulta', async () => {
+      const guest = newGuest();
+      const spa = await createSpa();
+
+      expect(await service.getSpaContextBlock(guest)).toContain(`id=${spa.id}`);
+
+      await service.remove(spa.id);
+
+      expect(await service.getSpaContextBlock(guest)).not.toContain(
+        `id=${spa.id}`,
+      );
     });
   });
 });

@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { ReservationRepository } from '../reservation/reservation.repository';
 import { SupportHoursService } from '../supportHours/supportHours.service';
+import { zonedNow } from '../supportHours/supportHours.util';
 import { SpaRepository } from './spa.repository';
 import {
-  buildGuestServicesBlock,
+  buildSpaServicesBlock,
   EligibleStay,
   findEligibleReservation,
   SpaServiceModel,
@@ -71,13 +72,23 @@ export class SpaService {
   }
 
   /**
-   * Seccion de servicios para el contexto de Chamber, o null si el huesped no es elegible (CA2).
-   * Siempre lee de la DB: lo que el admin deshabilita desaparece en la proxima consulta (CA7).
+   * Sección de servicios para el contexto de Chamber. El spa se ofrece a cualquiera: al huésped
+   * (CA2) se le muestra sin cargo y al cliente externo con precio. Siempre lee de la DB: lo que el
+   * admin deshabilita desaparece en la próxima consulta (CA7).
    */
-  async getGuestContextBlock(telegramUserId: string): Promise<string | null> {
-    if (!(await this.findEligibleStay(telegramUserId))) return null;
+  async getSpaContextBlock(telegramUserId: string): Promise<string> {
+    const isGuest = (await this.findEligibleStay(telegramUserId)) !== null;
 
-    return buildGuestServicesBlock(await this.listActive());
+    return buildSpaServicesBlock(await this.listActive(), isGuest);
+  }
+
+  /** Hoy (YYYY-MM-DD) y minutos desde la medianoche, en la zona horaria del hotel. */
+  getHotelClock(now: Date = new Date()): { today: string; minutes: number } {
+    const timeZone = this.supportHoursService.getTimeZone();
+    return {
+      today: todayIn(timeZone, now),
+      minutes: zonedNow(now, timeZone).minutes,
+    };
   }
 
   async create(payload: CreateSpaServiceDto): Promise<SpaServiceModel> {

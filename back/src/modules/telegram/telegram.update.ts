@@ -129,7 +129,7 @@ export class TelegramUpdate {
 
       const history = previousMessages.reverse();
       const servicesBlock =
-        await this.spaService.getGuestContextBlock(telegramUserId);
+        await this.spaService.getSpaContextBlock(telegramUserId);
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
@@ -267,9 +267,14 @@ export class TelegramUpdate {
     if (validationErrors.length > 0) {
       // El modelo a veces dispara la tool sin tener todos los datos; se los pedimos en vez de
       // cortar con un error técnico.
+      const invalidFields = validationErrors.map((error) => error.property);
       this.logger.warn(
-        `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
+        `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${invalidFields.join(', ')}`,
       );
+      // Si lo que falló son los datos de quien paga, es eso lo que hay que volver a pedir.
+      if (invalidFields.includes('fullName') || invalidFields.includes('dni')) {
+        return '¿Me pasás tu nombre completo y tu DNI (solo los números, sin puntos)?';
+      }
       return '¿Me confirmás qué servicio querés, qué día (DD-MM-YYYY) y a qué hora?';
     }
 
