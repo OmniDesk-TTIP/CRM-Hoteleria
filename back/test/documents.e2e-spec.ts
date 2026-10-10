@@ -16,6 +16,7 @@ import {
 } from '../src/infrastructure/database/entities/User.entity';
 import { Document } from '../src/infrastructure/database/entities/Document.entity';
 import { KnowledgeDocument } from '../src/infrastructure/database/entities/KnowledgeDocument.entity';
+import { MAX_UPLOAD_BYTES } from '../src/modules/documents/documents.model';
 
 const MARKER = 'E2E-DOC-MARKER';
 const FAIL_MARKER = 'E2E-FAIL';
@@ -68,6 +69,12 @@ interface DocumentBody {
   createdAt: string;
 }
 
+/**
+ * Solo lo propio de HTTP: autenticación y roles, la subida multipart (nombre con tildes, 400, 413),
+ * la baja, y el RagService de verdad (chunks vinculados al documento, que Chamber use y deje de usar
+ * lo que se sube o se borra). Las reglas del service (validaciones, estados y errores) se prueban en
+ * src/modules/documents/documents.service.integration-spec.ts.
+ */
 describe('Admin Documents - base de conocimiento (e2e)', () => {
   let app: INestApplication;
   let em: EntityManager;
@@ -258,35 +265,6 @@ describe('Admin Documents - base de conocimiento (e2e)', () => {
       expect(body).not.toHaveProperty('storagePath');
     });
 
-    it('guarda el archivo en disco con el id del documento como nombre', async () => {
-      const res = await upload(
-        `Regla ${UNIQUE}-DISCO`,
-        `disco-${RUN}.txt`,
-        'text/plain',
-      );
-      const { id } = res.body as DocumentBody;
-
-      expect(existsSync(join(UPLOAD_DIR, `${id}.txt`))).toBe(true);
-    });
-
-    it('sube un PDF y responde 201 con tipo PDF', async () => {
-      mockPdfParse.mockResolvedValue({
-        text: `Se aceptan mascotas. ${UNIQUE}-PDF`,
-      });
-
-      const res = await upload(
-        Buffer.from('%PDF-1.4 contenido simulado'),
-        `politicas-${RUN}.pdf`,
-        'application/pdf',
-      );
-
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({
-        type: 'PDF',
-        mimeType: 'application/pdf',
-      });
-    });
-
     it('rechaza un formato no soportado con 400 y un mensaje claro, sin crear el documento', async () => {
       const filename = `foto-${RUN}.png`;
 
@@ -304,16 +282,6 @@ describe('Admin Documents - base de conocimiento (e2e)', () => {
       expect(await em.count(KnowledgeDocument, { filename })).toBe(0);
     });
 
-    it('rechaza un .docx con 400', async () => {
-      const res = await upload(
-        Buffer.from('PK...'),
-        `reglas-${RUN}.docx`,
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      );
-
-      expect(res.status).toBe(400);
-    });
-
     it('responde 400 si no se adjunta ningún archivo', async () => {
       const res = await http()
         .post('/admin/documents')
@@ -323,6 +291,19 @@ describe('Admin Documents - base de conocimiento (e2e)', () => {
 
       expect((res.body as { message: string }).message).toBe(
         'Adjuntá un archivo PDF o TXT',
+      );
+    });
+
+    it('responde 413 con un mensaje en español si el archivo supera el tamaño máximo', async () => {
+      const res = await upload(
+        Buffer.alloc(MAX_UPLOAD_BYTES + 1, 'a'),
+        `enorme-${RUN}.txt`,
+        'text/plain',
+      );
+
+      expect(res.status).toBe(413);
+      expect((res.body as { message: string }).message).toBe(
+        `El archivo supera el tamaño máximo permitido (${MAX_UPLOAD_BYTES / 1024 / 1024} MB)`,
       );
     });
 
@@ -357,56 +338,6 @@ describe('Admin Documents - base de conocimiento (e2e)', () => {
       expect(await countChunksOfSource(id)).toBe(1);
     });
 
-    it('un PDF se indexa con el texto que extrae pdf-parse', async () => {
-      mockPdfParse.mockResolvedValue({
-        text: `La pileta cierra a las 20 hs. ${UNIQUE}-PILETA`,
-      });
-
-      const res = await upload(
-        Buffer.from('%PDF-1.4 simulado'),
-        `pileta-${RUN}.pdf`,
-        'application/pdf',
-      );
-      const { id } = res.body as DocumentBody;
-
-      const ready = await waitForStatus(id, 'READY');
-
-      expect(ready.type).toBe('PDF');
-      expect(ready.chunksCount).toBe(1);
-    });
-
-    it('un documento sin texto legible queda en ERROR con un mensaje claro', async () => {
-      mockPdfParse.mockResolvedValue({ text: '   ' });
-
-      const res = await upload(
-        Buffer.from('%PDF-1.4 escaneado'),
-        `escaneado-${RUN}.pdf`,
-        'application/pdf',
-      );
-      const { id } = res.body as DocumentBody;
-
-      const failed = await waitForStatus(id, 'ERROR');
-
-      expect(failed.errorMessage).toBe(
-        'El documento no contiene texto legible',
-      );
-      em.clear();
-      expect(await countChunksOfSource(id)).toBe(0);
-    });
-
-    it('si falla la vectorización queda en ERROR con el motivo', async () => {
-      const res = await upload(
-        `${UNIQUE}-FALLA ${FAIL_MARKER}`,
-        `falla-${RUN}.txt`,
-        'text/plain',
-      );
-      const { id } = res.body as DocumentBody;
-
-      const failed = await waitForStatus(id, 'ERROR');
-
-      expect(failed.errorMessage).toContain('Gemini no disponible');
-    });
-
     it('si la vectorización falla a mitad de camino no deja chunks parciales', async () => {
       const prefix = `${UNIQUE}-PARCIAL `;
       const text =
@@ -425,39 +356,6 @@ describe('Admin Documents - base de conocimiento (e2e)', () => {
       expect(
         await em.count(Document, { content: { $like: `%${UNIQUE}-PARCIAL%` } }),
       ).toBe(0);
-    });
-  });
-
-  describe('CA3 - listado de documentos', () => {
-    it('lista nombre, tipo y fecha de carga, del más reciente al más viejo', async () => {
-      const first = await upload(
-        `Uno ${UNIQUE}-L1`,
-        `listado-1-${RUN}.txt`,
-        'text/plain',
-      );
-      await sleep(30);
-      const second = await upload(
-        `Dos ${UNIQUE}-L2`,
-        `listado-2-${RUN}.txt`,
-        'text/plain',
-      );
-      const firstId = (first.body as DocumentBody).id;
-      const secondId = (second.body as DocumentBody).id;
-
-      const docs = await listDocuments();
-      const ids = docs.map((d) => d.id);
-
-      expect(ids).toContain(firstId);
-      expect(ids).toContain(secondId);
-      expect(ids.indexOf(secondId)).toBeLessThan(ids.indexOf(firstId));
-
-      const listed = docs.find((d) => d.id === firstId)!;
-      expect(listed).toMatchObject({
-        filename: `listado-1-${RUN}.txt`,
-        type: 'TXT',
-      });
-      expect(new Date(listed.createdAt).toString()).not.toBe('Invalid Date');
-      expect(listed).not.toHaveProperty('storagePath');
     });
   });
 

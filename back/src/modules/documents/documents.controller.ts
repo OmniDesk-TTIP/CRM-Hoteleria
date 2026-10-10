@@ -1,12 +1,15 @@
 import {
-  Body,
+  ArgumentsHost,
+  Catch,
   Controller,
   Delete,
+  ExceptionFilter,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  PayloadTooLargeException,
   Post,
   UploadedFile,
   UseFilters,
@@ -15,16 +18,34 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { DocumentsService } from './documents.service';
-import { DocumentResponseDto } from './dto/documentResponse.dto';
+import {
+  DocumentResponseDto,
+  MAX_UPLOAD_BYTES,
+  decodeFilename,
+} from './documents.model';
 import { RolesGuard } from '../auth/auth.guard';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
 import { AuthUser } from '../auth/auth.types';
-import { MAX_UPLOAD_BYTES } from './documents.constants';
-import { decodeFilename } from './documents.util';
-import { FileTooLargeFilter } from './file-too-large.filter';
+
+/** Multer corta con un 413 en inglés ("File too large"); acá se responde en español. */
+@Catch(PayloadTooLargeException)
+export class FileTooLargeFilter implements ExceptionFilter {
+  catch(_exception: PayloadTooLargeException, host: ArgumentsHost): void {
+    host
+      .switchToHttp()
+      .getResponse<Response>()
+      .status(413)
+      .json({
+        statusCode: 413,
+        error: 'Payload Too Large',
+        message: `El archivo supera el tamaño máximo permitido (${MAX_UPLOAD_BYTES / 1024 / 1024} MB)`,
+      });
+  }
+}
 
 @Controller('admin/documents')
 @Roles(UserRole.ADMIN)

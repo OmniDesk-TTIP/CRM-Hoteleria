@@ -12,6 +12,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { SupportHoursModule } from './modules/supportHours/supportHours.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { SpaModule } from './modules/spa/spa.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -31,6 +32,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
     SupportHoursModule,
     DashboardModule,
     StatisticsModule,
+    SpaModule,
     DocumentsModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],

@@ -8,16 +8,17 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
-import { join, extname } from 'path';
+import { join } from 'path';
 import { DocumentsRepository } from './documents.repository';
-import { DocumentResponseDto } from './dto/documentResponse.dto';
 import { RagService } from '../rag/rag.service';
 import { KnowledgeDocumentType } from '../../infrastructure/database/entities/KnowledgeDocument.entity';
 import {
   CANONICAL_MIME_TYPES,
-  EXTENSION_TYPES,
+  DocumentResponseDto,
   MAX_UPLOAD_BYTES,
-} from './documents.constants';
+  MIN_READABLE_TEXT_LENGTH,
+  detectDocumentType,
+} from './documents.model';
 
 const INTERRUPTED_MESSAGE =
   'El procesamiento se interrumpió. Eliminá el documento y volvé a subirlo.';
@@ -134,7 +135,7 @@ export class DocumentsService implements OnModuleInit {
       );
     }
 
-    const type = EXTENSION_TYPES[extname(file.originalname).toLowerCase()];
+    const type = detectDocumentType(file.originalname);
 
     if (!type) {
       throw new BadRequestException(
@@ -155,7 +156,7 @@ export class DocumentsService implements OnModuleInit {
 
       const text = await this.extractText(buffer, type);
 
-      if (!text || text.trim().length < 10) {
+      if (!text || text.trim().length < MIN_READABLE_TEXT_LENGTH) {
         await this.repo.markError(id, 'El documento no contiene texto legible');
         return;
       }

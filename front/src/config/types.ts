@@ -394,6 +394,78 @@ export interface BotStatistics {
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
 
+/* ───────── Spa y turnos de spa (US-17) ───────── */
+
+export type SpaServiceStatus = 'ACTIVE' | 'INACTIVE';
+
+/** Servicio del spa tal como lo devuelve `GET /spa-services`. */
+export interface SpaService {
+  id: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  /** Precio para clientes externos; los huéspedes no pagan. */
+  price: number;
+  /** Turnos que pueden estar en curso a la vez. */
+  capacity: number;
+  status: SpaServiceStatus;
+  /** 0 = domingo … 6 = sábado, igual que Date.getDay(). */
+  availableWeekdays: number[];
+  /** HH:mm */
+  opensAt: string;
+  /** HH:mm */
+  closesAt: string;
+}
+
+export interface SpaServiceFormData {
+  name: string;
+  description: string;
+  durationMinutes: number;
+  price: number;
+  capacity: number;
+  status: SpaServiceStatus;
+  availableWeekdays: number[];
+  opensAt: string;
+  closesAt: string;
+}
+
+/**
+ * PENDING espera a recepción (huésped); PENDING_PAYMENT espera el pago (cliente externo).
+ * CANCELLED no es una cancelación manual: es el turno de un externo que venció sin pagarse.
+ */
+export type SpaReservationStatus = 'PENDING' | 'PENDING_PAYMENT' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED';
+
+export type SpaReservationClientType = 'GUEST' | 'EXTERNAL';
+
+/** Turno de spa pedido por el chat: el huésped lo confirma recepción, el externo se confirma al pagar. */
+export interface SpaReservation {
+  id: string;
+  status: SpaReservationStatus;
+  clientType: SpaReservationClientType;
+  serviceName: string;
+  guestFullName: string;
+  /** YYYY-MM-DD */
+  requestedDate: string;
+  /** HH:mm */
+  requestedTime: string;
+  /** Lo que se cobra: 0 para huéspedes. */
+  amount: number;
+  createdAt: string | null;
+}
+
+export interface SpaReservationListFilters {
+  status: SpaReservationStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedSpaReservations {
+  items: SpaReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 /* ───────── US: Administración de reglas base (base de conocimiento) ───────── */
 
 export type KnowledgeDocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'ERROR';

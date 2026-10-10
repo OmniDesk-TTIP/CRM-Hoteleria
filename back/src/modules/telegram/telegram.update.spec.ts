@@ -6,6 +6,8 @@ import { ReservationService } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
 import { ChatService, HANDOVER_REPLY } from '../chat/chat.service';
+import { SpaService } from '../spa/spa.service';
+import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import {
   ChatSessionStatus,
   HandoverReason,
@@ -18,6 +20,8 @@ describe('TelegramUpdate', () => {
   let bookingProcessService: BookingProcessService;
   let em: EntityManager;
   let chatService: any;
+  let spaService: { getSpaContextBlock: jest.Mock };
+  let spaReservationService: { requestSpa: jest.Mock };
   let session: any;
 
   const mockTelegramUserId = '123456789';
@@ -63,6 +67,14 @@ describe('TelegramUpdate', () => {
           },
         },
         {
+          provide: SpaService,
+          useValue: { getSpaContextBlock: jest.fn() },
+        },
+        {
+          provide: SpaReservationService,
+          useValue: { requestSpa: jest.fn() },
+        },
+        {
           provide: MikroORM,
           // RequestContext.create forkea este em; el TelegramUpdate sigue usando el EntityManager inyectado.
           useValue: { em: { fork: () => ({ name: 'default' }) } },
@@ -88,6 +100,9 @@ describe('TelegramUpdate', () => {
     );
     em = module.get<EntityManager>(EntityManager);
     chatService = module.get<ChatService>(ChatService);
+    spaService = module.get(SpaService);
+    spaReservationService = module.get(SpaReservationService);
+    spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
 
     jest.spyOn(bookingProcessService, 'getActive').mockResolvedValue(null);
     jest
@@ -140,6 +155,107 @@ describe('TelegramUpdate', () => {
       session,
       'Hola, soy Chamber',
     );
+  });
+
+  it('le pasa a Chamber el bloque de servicios del spa del cliente (CA3)', async () => {
+    spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
+    jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+      texto: 'Tenemos spa',
+      action: ChatAction.REPLY,
+    });
+
+    await update.onMessage('¿Tienen spa?', mockCtx);
+
+    expect(spaService.getSpaContextBlock).toHaveBeenCalledWith(
+      mockTelegramUserId,
+    );
+    expect(ragService.askQuestion).toHaveBeenCalledWith(
+      '¿Tienen spa?',
+      null,
+      [],
+      null,
+      '[SERVICIOS DEL HOTEL]',
+    );
+  });
+
+  describe('solicitud de turno de spa (REQUEST_SPA_BOOKING)', () => {
+    const datos = {
+      serviceId: '5b0f7f8e-6c53-4d3f-9a7c-1f6f1d0f0001',
+      date: '08-10-2026',
+      time: '15:00',
+    };
+
+    it('registra la solicitud y responde con el texto fijo del backend', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_SPA_BOOKING,
+        datos,
+        texto: 'El turno quedó confirmado',
+      });
+      spaReservationService.requestSpa.mockResolvedValue({
+        ok: true,
+        reply: 'Listo, registré tu solicitud',
+      });
+
+      await update.onMessage('Quiero un masaje el jueves a las 15', mockCtx);
+
+      expect(spaReservationService.requestSpa).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        expect.objectContaining(datos),
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'Listo, registré tu solicitud',
+        {
+          parse_mode: 'HTML',
+        },
+      );
+    });
+
+    it('le explica el motivo si el backend rechaza la solicitud', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_SPA_BOOKING,
+        datos,
+      });
+      spaReservationService.requestSpa.mockResolvedValue({
+        ok: false,
+        reason: 'Esa fecha ya pasó.',
+      });
+
+      await update.onMessage('Quiero un masaje', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith('Esa fecha ya pasó.', {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('vuelve a pedir nombre y DNI si el DNI viene mal formado', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_SPA_BOOKING,
+        datos: { ...datos, fullName: 'Beto Externo', dni: '28.111.222' },
+      });
+
+      await update.onMessage('Quiero un masaje', mockCtx);
+
+      expect(spaReservationService.requestSpa).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('nombre completo y tu DNI'),
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('pide los datos que faltan en vez de fallar si los argumentos son inválidos', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_SPA_BOOKING,
+        datos: { serviceId: 'no-es-uuid', date: '2026-10-08', time: '3pm' },
+      });
+
+      await update.onMessage('Quiero un masaje', mockCtx);
+
+      expect(spaReservationService.requestSpa).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('qué servicio querés'),
+        { parse_mode: 'HTML' },
+      );
+    });
   });
 
   it('debería buscar disponibilidad y encontrar habitación (SEARCH_AVAILABILITY)', async () => {

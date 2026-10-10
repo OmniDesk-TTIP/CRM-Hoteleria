@@ -159,6 +159,110 @@ describe('RagService', () => {
       jest.useRealTimers();
     });
 
+    describe('spa (CA3)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+
+      it('agrega el bloque de servicios al contexto y habilita la regla de oferta', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          '¿Tienen spa?',
+          null,
+          [],
+          null,
+          ['[SERVICIOS DEL HOTEL]', 'SPA:', '- id=spa-1 | Masaje'].join('\n'),
+        );
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('id=spa-1 | Masaje');
+        expect(systemInstruction).toContain('REGLA PARA EL SPA');
+        // la regla cubre a los dos tipos de cliente y manda pedir nombre y DNI al externo
+        expect(systemInstruction).toContain('HUÉSPED');
+        expect(systemInstruction).toContain('EXTERNO');
+        expect(systemInstruction).toContain('nombre completo y su DNI');
+        expect(systemInstruction).not.toContain('No tenés información del spa');
+      });
+
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+
+      it('declara la tool request_spa_booking solo si hay bloque del spa', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          'Hola',
+          null,
+          [],
+          null,
+          '[SERVICIOS DEL HOTEL]',
+        );
+        expect(toolNames()).toContain('request_spa_booking');
+
+        getGenerativeModelMock.mockClear();
+        await service.askQuestion('Hola');
+        expect(toolNames()).not.toContain('request_spa_booking');
+      });
+
+      it('devuelve REQUEST_SPA_BOOKING con los datos de la function call', async () => {
+        const datos = {
+          serviceId: 'spa-1',
+          date: '08-10-2026',
+          time: '15:00',
+        };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([{ name: 'request_spa_booking', args: datos }]),
+        );
+
+        const result = await service.askQuestion(
+          'Quiero un masaje',
+          null,
+          [],
+          null,
+          '[SERVICIOS DEL HOTEL]',
+        );
+
+        expect(result).toEqual({
+          action: ChatAction.REQUEST_SPA_BOOKING,
+          datos,
+          texto: '',
+        });
+      });
+
+      it('ignora la tool si no hay información del spa (defensa en profundidad)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'request_spa_booking', args: {} }],
+            'texto',
+          ),
+        );
+
+        const result = await service.askQuestion('Quiero un masaje');
+
+        expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+      });
+
+      it('sin bloque del spa no deja que invente servicios ni precios', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion('¿Tienen spa?');
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('No tenés información del spa');
+        expect(systemInstruction).not.toContain('id=spa-1');
+      });
+    });
+
     it('incluye el estado de la reserva activa en el prompt cuando hay una en curso', async () => {
       chatModelMock.generateContent.mockResolvedValue(
         mockChatResponse([], 'ok'),

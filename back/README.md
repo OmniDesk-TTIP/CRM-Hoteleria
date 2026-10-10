@@ -83,7 +83,10 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ## 🧪 Pruebas (Testing)
 
 - **`npm run test`**
-  Ejecuta la suite de pruebas unitarias del proyecto.
+  Ejecuta las pruebas unitarias y de modelo (`*.spec.ts`), que no necesitan base de datos.
+
+- **`npm run test:integration`**
+  Ejecuta las pruebas de integración (`*.integration-spec.ts`, junto al código): los servicios contra la base de datos de test, sin pasar por HTTP. Necesita la base levantada (`docker-compose up -d`).
 
 - **`npm run test:e2e`**
   Ejecuta las pruebas *End-to-End* (E2E) para simular el comportamiento real de la aplicación de principio a fin.

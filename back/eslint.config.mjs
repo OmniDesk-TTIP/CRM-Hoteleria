@@ -33,7 +33,12 @@ export default tseslint.config(
   },
   {
     // Los mocks de Jest y las respuestas de supertest son `any` por diseño.
-    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', 'test/**/*.ts'],
+    files: [
+      '**/*.spec.ts',
+      '**/*.integration-spec.ts',
+      '**/*.e2e-spec.ts',
+      'test/**/*.ts',
+    ],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',

@@ -10,10 +10,28 @@ import ReservationsPage from '@/pages/admin/ReservationsPage';
 import ChatsPage from '@/pages/admin/ChatsPage';
 import SupportHoursPage from '@/pages/admin/SupportHoursPage';
 import RoomsPage from '@/pages/admin/RoomsPage';
+import SpaPage from '@/pages/admin/SpaPage';
+import SpaReservationsPage from '@/pages/admin/SpaReservationsPage';
 import HomePage from '@/pages/admin/HomePage';
 import AppLayout from '@/components/layout/AppLayout';
+import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
 import StatisticsPage from '@/pages/admin/StatisticsPage';
 import HotelRulesPage from '@/pages/admin/HotelRulesPage';
+
+const RESERVATION_TABS: TabItem[] = [
+  { to: '/admin/reservations', label: 'Habitaciones', end: true },
+  { to: '/admin/reservations/spa', label: 'Spa', badge: 'pendingSpaReservations' },
+];
+
+const SERVICE_TABS: TabItem[] = [
+  { to: '/admin/services', label: 'Habitaciones', end: true },
+  { to: '/admin/services/spa', label: 'Spa' },
+];
+
+const SETTINGS_TABS: TabItem[] = [
+  { to: '/admin/settings', label: 'Reglas', end: true },
+  { to: '/admin/settings/support-hours', label: 'Horarios' },
+];
 
 function App() {
   return (
@@ -39,17 +57,50 @@ function App() {
                 {/* todas las pantallas del panel comparten la sidebar y la barra de estado */}
                 <Route element={<AppLayout />}>
                   <Route path="/admin" element={<HomePage />} />
-                  <Route path="/admin/reservations" element={<ReservationsPage />} />
-                  <Route path="/admin/rooms" element={<RoomsPage />} />
+                  {/* Reservas y servicios: una ruta por pestaña (Habitaciones | Spa) */}
+                  <Route
+                    path="/admin/reservations"
+                    element={<TabbedLayout tabs={RESERVATION_TABS} maxWidth="max-w-7xl" />}
+                  >
+                    <Route index element={<ReservationsPage />} />
+                    <Route path="spa" element={<SpaReservationsPage />} />
+                  </Route>
+                  <Route
+                    path="/admin/services"
+                    element={<TabbedLayout tabs={SERVICE_TABS} maxWidth="max-w-6xl" />}
+                  >
+                    <Route index element={<RoomsPage />} />
+                    <Route path="spa" element={<SpaPage />} />
+                  </Route>
+
+                  {/* rutas anteriores: se redirigen para no romper favoritos */}
+                  <Route path="/admin/rooms" element={<Navigate to="/admin/services" replace />} />
+                  <Route path="/admin/spa" element={<Navigate to="/admin/services/spa" replace />} />
+                  <Route
+                    path="/admin/spa-reservations"
+                    element={<Navigate to="/admin/reservations/spa" replace />}
+                  />
 
                   {/* US-11: la conversación abierta va en la URL, igual que el id de la reserva */}
                   <Route path="/admin/chats" element={<ChatsPage />} />
                   <Route path="/admin/chats/:chatId" element={<ChatsPage />} />
 
                   <Route element={<ProtectedRoute roles={['ADMIN']} />}>
-                    <Route path="/admin/support-hours" element={<SupportHoursPage />} />
                     <Route path="/admin/statistics" element={<StatisticsPage />} />
-                    <Route path="/admin/hotel-rules" element={<HotelRulesPage />} />
+
+                    {/* Configuración: las reglas del bot y los horarios de la recepción, la primera es Reglas */}
+                    <Route
+                      path="/admin/settings"
+                      element={<TabbedLayout tabs={SETTINGS_TABS} maxWidth="max-w-6xl" />}
+                    >
+                      <Route index element={<HotelRulesPage />} />
+                      <Route path="support-hours" element={<SupportHoursPage />} />
+                    </Route>
+                    <Route path="/admin/hotel-rules" element={<Navigate to="/admin/settings" replace />} />
+                    <Route
+                      path="/admin/support-hours"
+                      element={<Navigate to="/admin/settings/support-hours" replace />}
+                    />
                   </Route>
                 </Route>
               </Route>
