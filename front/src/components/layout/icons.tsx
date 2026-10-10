@@ -117,6 +117,14 @@ export const ChartIcon = (props: IconProps) => (
   </svg>
 );
 
+export const SettingsIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+    <circle cx="16" cy="7" r="2" />
+    <circle cx="8" cy="17" r="2" />
+  </svg>
+);
+
 export const BotIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <rect x="4" y="8" width="16" height="12" rx="3" />
@@ -126,3 +134,12 @@ export const BotIcon = (props: IconProps) => (
     <path d="M2 13v2M22 13v2" />
   </svg>
 );
+
+export function BookIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    </svg>
+  );
+}

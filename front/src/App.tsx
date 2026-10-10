@@ -16,6 +16,7 @@ import HomePage from '@/pages/admin/HomePage';
 import AppLayout from '@/components/layout/AppLayout';
 import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
 import StatisticsPage from '@/pages/admin/StatisticsPage';
+import HotelRulesPage from '@/pages/admin/HotelRulesPage';
 
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
@@ -25,6 +26,11 @@ const RESERVATION_TABS: TabItem[] = [
 const SERVICE_TABS: TabItem[] = [
   { to: '/admin/services', label: 'Habitaciones', end: true },
   { to: '/admin/services/spa', label: 'Spa' },
+];
+
+const SETTINGS_TABS: TabItem[] = [
+  { to: '/admin/settings', label: 'Reglas', end: true },
+  { to: '/admin/settings/support-hours', label: 'Horarios' },
 ];
 
 function App() {
@@ -80,8 +86,21 @@ function App() {
                   <Route path="/admin/chats/:chatId" element={<ChatsPage />} />
 
                   <Route element={<ProtectedRoute roles={['ADMIN']} />}>
-                    <Route path="/admin/support-hours" element={<SupportHoursPage />} />
                     <Route path="/admin/statistics" element={<StatisticsPage />} />
+
+                    {/* Configuración: las reglas del bot y los horarios de la recepción, la primera es Reglas */}
+                    <Route
+                      path="/admin/settings"
+                      element={<TabbedLayout tabs={SETTINGS_TABS} maxWidth="max-w-6xl" />}
+                    >
+                      <Route index element={<HotelRulesPage />} />
+                      <Route path="support-hours" element={<SupportHoursPage />} />
+                    </Route>
+                    <Route path="/admin/hotel-rules" element={<Navigate to="/admin/settings" replace />} />
+                    <Route
+                      path="/admin/support-hours"
+                      element={<Navigate to="/admin/settings/support-hours" replace />}
+                    />
                   </Route>
                 </Route>
               </Route>

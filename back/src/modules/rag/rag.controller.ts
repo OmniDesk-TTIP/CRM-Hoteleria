@@ -16,10 +16,8 @@ import { UserRole } from '../../infrastructure/database/entities/User.entity';
 export class RagController {
   constructor(private readonly ragService: RagService) {}
 
-  // Cargar contenido acá es escribir en la base de conocimiento del bot: solo un ADMIN.
   @Roles(UserRole.ADMIN)
   @UseGuards(RolesGuard)
-  @Post('ingest')
   @HttpCode(HttpStatus.OK)
   async ingestData(@Body() ingestDataDto: IngestDataDto) {
     await this.ragService.ingestDocument(ingestDataDto.text);
@@ -30,7 +28,6 @@ export class RagController {
     };
   }
 
-  // El bot de Telegram consulta en nombre de huéspedes sin cuenta.
   @Public()
   @Post('ask')
   @HttpCode(HttpStatus.OK)

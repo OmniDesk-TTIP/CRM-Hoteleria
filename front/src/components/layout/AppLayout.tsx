@@ -17,6 +17,7 @@ import {
   ClockIcon,
   HomeIcon,
   LogoutIcon,
+  SettingsIcon,
 } from '@/components/layout/icons';
 
 interface NavItem {
@@ -44,7 +45,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: BedIcon,
   },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
-  { to: '/admin/support-hours', label: 'Horarios', icon: ClockIcon, roles: ['ADMIN'] },
+  {
+    to: '/admin/settings',
+    label: 'Configuración',
+    shortLabel: 'Config.',
+    icon: SettingsIcon,
+    roles: ['ADMIN'],
+  },
 ];
 
 function NavBadge({ count, label }: { count: number; label: string }) {
