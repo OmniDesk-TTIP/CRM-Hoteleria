@@ -8,9 +8,11 @@ import { useLayoutContext } from '@/components/layout/layout.context';
 const PAGE_SIZE = 10;
 
 const STATUS_FILTERS: { value: SpaReservationStatus | 'ALL'; label: string }[] = [
-  { value: 'PENDING', label: 'Pendientes' },
+  { value: 'PENDING', label: 'Pendientes de confirmar' },
+  { value: 'PENDING_PAYMENT', label: 'Esperando pago' },
   { value: 'CONFIRMED', label: 'Confirmadas' },
   { value: 'REJECTED', label: 'Rechazadas' },
+  { value: 'CANCELLED', label: 'Vencidas (sin pago)' },
   { value: 'ALL', label: 'Todas' },
 ];
 
@@ -22,7 +24,7 @@ const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ?
 export default function SpaReservationsPage() {
   const { refreshPendingSpaReservations } = useLayoutContext();
   const [filters, setFilters] = useState<SpaReservationListFilters>({
-    status: 'PENDING',
+    status: 'ALL',
     page: 1,
     pageSize: PAGE_SIZE,
   });

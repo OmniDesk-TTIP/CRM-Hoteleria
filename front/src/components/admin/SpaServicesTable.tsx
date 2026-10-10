@@ -73,7 +73,8 @@ export default function SpaServicesTable({
             <tr className="border-b border-goldLight/10 text-xs uppercase tracking-wide text-textMuted">
               <th className="px-4 py-3 font-medium sm:px-5">Servicio</th>
               <th className="px-4 py-3 font-medium sm:px-5">Duración</th>
-              <th className="px-4 py-3 font-medium sm:px-5">Precio</th>
+              <th className="px-4 py-3 font-medium sm:px-5">Precio (externos)</th>
+              <th className="px-4 py-3 font-medium sm:px-5">Turnos a la vez</th>
               <th className="px-4 py-3 font-medium sm:px-5">Disponibilidad</th>
               <th className="px-4 py-3 font-medium sm:px-5">Estado</th>
               {isAdmin && <th className="px-4 py-3 text-right font-medium sm:px-5">Acciones</th>}
@@ -82,7 +83,7 @@ export default function SpaServicesTable({
           <tbody className="divide-y divide-goldLight/10">
             {message && (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} className={`px-5 py-10 text-center ${message.tone}`}>
+                <td colSpan={isAdmin ? 7 : 6} className={`px-5 py-10 text-center ${message.tone}`}>
                   {message.text}
                 </td>
               </tr>
@@ -96,6 +97,7 @@ export default function SpaServicesTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">{service.durationMinutes} min</td>
                 <td className="whitespace-nowrap px-4 py-3 text-text sm:px-5">{formatCurrency(service.price)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">{service.capacity}</td>
                 <td className="px-4 py-3 text-textMuted sm:px-5">{scheduleLabel(service)}</td>
                 <td className="px-4 py-3 sm:px-5">
                   <SpaStatusBadge status={service.status} />
@@ -128,7 +130,8 @@ export default function SpaServicesTable({
                 </div>
 
                 <p className="text-sm text-textMuted">
-                  {service.durationMinutes} min · <span className="text-text">{formatCurrency(service.price)}</span>
+                  {service.durationMinutes} min · <span className="text-text">{formatCurrency(service.price)}</span> ·{' '}
+                  {service.capacity} {service.capacity === 1 ? 'turno a la vez' : 'turnos a la vez'}
                 </p>
                 <p className="text-sm text-textMuted">{scheduleLabel(service)}</p>
 

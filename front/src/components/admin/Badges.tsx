@@ -121,14 +121,18 @@ export function SpaStatusBadge({ status }: { status: SpaServiceStatus }) {
 
 const REQUEST_STATUS_LABEL: Record<SpaReservationStatus, string> = {
   PENDING: 'Pendiente',
+  PENDING_PAYMENT: 'Esperando pago',
   CONFIRMED: 'Confirmada',
   REJECTED: 'Rechazada',
+  CANCELLED: 'Vencida (sin pago)',
 };
 
 const REQUEST_STATUS_CLASSES: Record<SpaReservationStatus, string> = {
   PENDING: 'bg-gold/15 text-goldLight',
+  PENDING_PAYMENT: 'bg-gold/15 text-goldLight',
   CONFIRMED: 'bg-success/20 text-successText',
   REJECTED: 'bg-danger/15 text-dangerText',
+  CANCELLED: 'bg-surface text-textMuted',
 };
 
 export function SpaReservationStatusBadge({ status }: { status: SpaReservationStatus }) {

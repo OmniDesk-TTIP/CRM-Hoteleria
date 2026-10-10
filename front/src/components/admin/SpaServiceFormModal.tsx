@@ -33,6 +33,7 @@ export default function SpaServiceFormModal({ service, onClose, onSuccess }: Spa
     description: service?.description ?? '',
     durationMinutes: service?.durationMinutes ?? 60,
     price: service?.price ?? 0,
+    capacity: service?.capacity ?? 1,
     status: service?.status ?? 'ACTIVE',
     availableWeekdays: service?.availableWeekdays ?? [1, 2, 3, 4, 5],
     opensAt: service?.opensAt ?? '10:00',
@@ -58,6 +59,7 @@ export default function SpaServiceFormModal({ service, onClose, onSuccess }: Spa
   const validate = (): string | null => {
     if (formData.durationMinutes <= 0) return 'La duración debe ser mayor a 0 minutos.';
     if (formData.price <= 0) return 'El precio debe ser mayor a $0.';
+    if (formData.capacity < 1) return 'La capacidad debe ser de al menos 1 turno a la vez.';
     if (formData.availableWeekdays.length === 0) return 'Elegí al menos un día de la semana.';
     if (toMinutes(formData.closesAt) <= toMinutes(formData.opensAt)) {
       return 'La hora de cierre tiene que ser posterior a la de apertura.';
@@ -130,7 +132,7 @@ export default function SpaServiceFormModal({ service, onClose, onSuccess }: Spa
             />
           </label>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
               Duración (minutos) *
               <input
@@ -146,7 +148,7 @@ export default function SpaServiceFormModal({ service, onClose, onSuccess }: Spa
               />
             </label>
             <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Precio *
+              Precio (externos) *
               <input
                 required
                 type="number"
@@ -158,7 +160,25 @@ export default function SpaServiceFormModal({ service, onClose, onSuccess }: Spa
                 className={inputClasses}
               />
             </label>
+            <label className="flex flex-col gap-1 text-sm text-textMuted">
+              Turnos a la vez *
+              <input
+                required
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                name="capacity"
+                value={formData.capacity}
+                onChange={handleChange}
+                className={inputClasses}
+              />
+            </label>
           </div>
+          <p className="-mt-2 text-xs text-textMuted">
+            Los huéspedes no pagan el spa: el precio es para clientes externos, que abonan al reservar. Los
+            turnos a la vez son las cabinas o profesionales disponibles.
+          </p>
 
           <fieldset className="space-y-2">
             <legend className="text-sm text-textMuted">Días disponibles *</legend>

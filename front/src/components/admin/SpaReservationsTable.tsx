@@ -1,6 +1,6 @@
 import type { SpaReservation } from '@/config/types';
 import { SpaReservationStatusBadge } from './Badges';
-import { formatIsoDay } from './spaFormat';
+import { formatCurrency, formatIsoDay } from './spaFormat';
 
 interface SpaReservationsTableProps {
   requests: SpaReservation[];
@@ -21,6 +21,13 @@ const formatRequestedAt = (iso: string | null) =>
   iso
     ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
     : '—';
+
+const clientLabel = (request: SpaReservation) =>
+  request.clientType === 'GUEST' ? 'Huésped' : 'Cliente externo';
+
+/** Los huéspedes no pagan el spa. */
+const chargeLabel = (request: SpaReservation) =>
+  request.clientType === 'GUEST' ? 'Sin cargo' : formatCurrency(request.amount);
 
 const slotLabel = (request: SpaReservation) => `${formatIsoDay(request.requestedDate)} · ${request.requestedTime}`;
 
@@ -72,12 +79,13 @@ export default function SpaReservationsTable({
     <>
       {/* Tabla: pantallas anchas */}
       <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[820px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-goldLight/10 text-xs uppercase tracking-wide text-textMuted">
-              <th className="px-4 py-3 font-medium sm:px-5">Huésped</th>
+              <th className="px-4 py-3 font-medium sm:px-5">Cliente</th>
               <th className="px-4 py-3 font-medium sm:px-5">Servicio</th>
               <th className="px-4 py-3 font-medium sm:px-5">Turno pedido</th>
+              <th className="px-4 py-3 font-medium sm:px-5">Cobro</th>
               <th className="px-4 py-3 font-medium sm:px-5">Solicitada</th>
               <th className="px-4 py-3 font-medium sm:px-5">Estado</th>
               <th className="px-4 py-3 text-right font-medium sm:px-5">Acciones</th>
@@ -86,7 +94,7 @@ export default function SpaReservationsTable({
           <tbody className="divide-y divide-goldLight/10">
             {message && (
               <tr>
-                <td colSpan={6} className={`px-5 py-10 text-center ${message.tone}`}>
+                <td colSpan={7} className={`px-5 py-10 text-center ${message.tone}`}>
                   {message.text}
                 </td>
               </tr>
@@ -94,9 +102,13 @@ export default function SpaReservationsTable({
 
             {rows.map((request) => (
               <tr key={request.id} className="transition hover:bg-surface/50 motion-reduce:transition-none">
-                <td className="px-4 py-3 font-medium text-text sm:px-5">{request.guestFullName}</td>
+                <td className="px-4 py-3 sm:px-5">
+                  <p className="font-medium text-text">{request.guestFullName}</p>
+                  <p className="text-xs text-textMuted">{clientLabel(request)}</p>
+                </td>
                 <td className="px-4 py-3 text-text sm:px-5">{request.serviceName}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-text sm:px-5">{slotLabel(request)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">{chargeLabel(request)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">
                   {formatRequestedAt(request.createdAt)}
                 </td>
@@ -123,6 +135,9 @@ export default function SpaReservationsTable({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium text-text">{request.guestFullName}</p>
+                    <p className="text-xs text-textMuted">
+                      {clientLabel(request)} · {chargeLabel(request)}
+                    </p>
                     <p className="truncate text-sm text-text">{request.serviceName}</p>
                   </div>
                   <SpaReservationStatusBadge status={request.status} />
