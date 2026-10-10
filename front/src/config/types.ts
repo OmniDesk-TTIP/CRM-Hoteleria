@@ -393,3 +393,62 @@ export interface BotStatistics {
   revenue: { botDeposits: number; botTotalValue: number };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
+
+/* ───────── Spa y turnos de spa (US-17) ───────── */
+
+export type SpaServiceStatus = 'ACTIVE' | 'INACTIVE';
+
+/** Servicio del spa tal como lo devuelve `GET /spa-services`. */
+export interface SpaService {
+  id: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  price: number;
+  status: SpaServiceStatus;
+  /** 0 = domingo … 6 = sábado, igual que Date.getDay(). */
+  availableWeekdays: number[];
+  /** HH:mm */
+  opensAt: string;
+  /** HH:mm */
+  closesAt: string;
+}
+
+export interface SpaServiceFormData {
+  name: string;
+  description: string;
+  durationMinutes: number;
+  price: number;
+  status: SpaServiceStatus;
+  availableWeekdays: number[];
+  opensAt: string;
+  closesAt: string;
+}
+
+export type SpaReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+
+/** Solicitud de turno que llegó por el chat; recepción la confirma o la rechaza. */
+export interface SpaReservation {
+  id: string;
+  status: SpaReservationStatus;
+  serviceName: string;
+  guestFullName: string;
+  /** YYYY-MM-DD */
+  requestedDate: string;
+  /** HH:mm */
+  requestedTime: string;
+  createdAt: string | null;
+}
+
+export interface SpaReservationListFilters {
+  status: SpaReservationStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedSpaReservations {
+  items: SpaReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

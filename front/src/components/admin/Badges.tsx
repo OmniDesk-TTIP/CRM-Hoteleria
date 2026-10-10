@@ -3,6 +3,8 @@ import type {
   ReservationOrigin,
   ReservationStatus,
   RoomStatus,
+  SpaReservationStatus,
+  SpaServiceStatus,
 } from '@/config/types';
 
 const STATUS_LABEL: Record<ReservationStatus, string> = {
@@ -93,6 +95,48 @@ export function RoomStatusBadge({ status }: { status: RoomStatus }) {
       className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${ROOM_STATUS_CLASSES[status]}`}
     >
       {ROOM_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+const SPA_STATUS_LABEL: Record<SpaServiceStatus, string> = {
+  ACTIVE: 'Activo',
+  INACTIVE: 'Deshabilitado',
+};
+
+const SPA_STATUS_CLASSES: Record<SpaServiceStatus, string> = {
+  ACTIVE: 'bg-success/20 text-successText',
+  INACTIVE: 'bg-danger/15 text-dangerText',
+};
+
+export function SpaStatusBadge({ status }: { status: SpaServiceStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${SPA_STATUS_CLASSES[status]}`}
+    >
+      {SPA_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+const REQUEST_STATUS_LABEL: Record<SpaReservationStatus, string> = {
+  PENDING: 'Pendiente',
+  CONFIRMED: 'Confirmada',
+  REJECTED: 'Rechazada',
+};
+
+const REQUEST_STATUS_CLASSES: Record<SpaReservationStatus, string> = {
+  PENDING: 'bg-gold/15 text-goldLight',
+  CONFIRMED: 'bg-success/20 text-successText',
+  REJECTED: 'bg-danger/15 text-dangerText',
+};
+
+export function SpaReservationStatusBadge({ status }: { status: SpaReservationStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${REQUEST_STATUS_CLASSES[status]}`}
+    >
+      {REQUEST_STATUS_LABEL[status]}
     </span>
   );
 }

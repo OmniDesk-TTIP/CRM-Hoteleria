@@ -10,9 +10,22 @@ import ReservationsPage from '@/pages/admin/ReservationsPage';
 import ChatsPage from '@/pages/admin/ChatsPage';
 import SupportHoursPage from '@/pages/admin/SupportHoursPage';
 import RoomsPage from '@/pages/admin/RoomsPage';
+import SpaPage from '@/pages/admin/SpaPage';
+import SpaReservationsPage from '@/pages/admin/SpaReservationsPage';
 import HomePage from '@/pages/admin/HomePage';
 import AppLayout from '@/components/layout/AppLayout';
+import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
 import StatisticsPage from '@/pages/admin/StatisticsPage';
+
+const RESERVATION_TABS: TabItem[] = [
+  { to: '/admin/reservations', label: 'Habitaciones', end: true },
+  { to: '/admin/reservations/spa', label: 'Spa', badge: 'pendingSpaReservations' },
+];
+
+const SERVICE_TABS: TabItem[] = [
+  { to: '/admin/services', label: 'Habitaciones', end: true },
+  { to: '/admin/services/spa', label: 'Spa' },
+];
 
 function App() {
   return (
@@ -38,8 +51,29 @@ function App() {
                 {/* todas las pantallas del panel comparten la sidebar y la barra de estado */}
                 <Route element={<AppLayout />}>
                   <Route path="/admin" element={<HomePage />} />
-                  <Route path="/admin/reservations" element={<ReservationsPage />} />
-                  <Route path="/admin/rooms" element={<RoomsPage />} />
+                  {/* Reservas y servicios: una ruta por pestaña (Habitaciones | Spa) */}
+                  <Route
+                    path="/admin/reservations"
+                    element={<TabbedLayout tabs={RESERVATION_TABS} maxWidth="max-w-7xl" />}
+                  >
+                    <Route index element={<ReservationsPage />} />
+                    <Route path="spa" element={<SpaReservationsPage />} />
+                  </Route>
+                  <Route
+                    path="/admin/services"
+                    element={<TabbedLayout tabs={SERVICE_TABS} maxWidth="max-w-6xl" />}
+                  >
+                    <Route index element={<RoomsPage />} />
+                    <Route path="spa" element={<SpaPage />} />
+                  </Route>
+
+                  {/* rutas anteriores: se redirigen para no romper favoritos */}
+                  <Route path="/admin/rooms" element={<Navigate to="/admin/services" replace />} />
+                  <Route path="/admin/spa" element={<Navigate to="/admin/services/spa" replace />} />
+                  <Route
+                    path="/admin/spa-reservations"
+                    element={<Navigate to="/admin/reservations/spa" replace />}
+                  />
 
                   {/* US-11: la conversación abierta va en la URL, igual que el id de la reserva */}
                   <Route path="/admin/chats" element={<ChatsPage />} />

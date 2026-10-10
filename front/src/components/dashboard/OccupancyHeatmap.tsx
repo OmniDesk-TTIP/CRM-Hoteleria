@@ -33,7 +33,7 @@ export default function OccupancyHeatmap({ occupancy }: { occupancy: DashboardOc
     <DashboardCard
       title="Ocupación · próximos 14 días"
       action={
-        <Link to="/admin/rooms" className="text-sm text-goldLight underline-offset-2 hover:underline">
+        <Link to="/admin/services" className="text-sm text-goldLight underline-offset-2 hover:underline">
           Habitaciones
         </Link>
       }
