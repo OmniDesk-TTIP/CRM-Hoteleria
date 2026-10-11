@@ -97,7 +97,6 @@ describe('ReservationService', () => {
       toDay: number,
     ) => ({ room, checkIn: october(fromDay), checkOut: october(toDay) });
 
-    /** Simula la base: reservas activas y habitaciones que respetan los filtros de cada consulta. */
     const givenHotel = (rooms: any[], reservations: any[]) => {
       jest
         .spyOn(reservationRepository, 'findOverlapping')
@@ -168,15 +167,15 @@ describe('ReservationService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('busca las alternativas con una sola consulta de reservas sobre la ventana de ±7 días', async () => {
+    it('busca las alternativas con una sola consulta de reservas sobre la ventana de ±7 días más 2 de margen para detectar huecos', async () => {
       givenHotel([suite], [reserved(suite, 10, 15)]);
 
       await search('10-10-2026', '15-10-2026');
 
       expect(reservationRepository.findOverlapping).toHaveBeenCalledTimes(2);
       expect(reservationRepository.findOverlapping).toHaveBeenLastCalledWith(
-        october(3),
-        october(22),
+        october(1),
+        october(24),
       );
     });
 
@@ -205,8 +204,8 @@ describe('ReservationService', () => {
             totalAmount: 500,
           },
           {
-            checkIn: '16-10-2026',
-            checkOut: '21-10-2026',
+            checkIn: '17-10-2026',
+            checkOut: '22-10-2026',
             nights: 5,
             isShorterStay: false,
             roomCategory: 'Suite',
@@ -241,8 +240,8 @@ describe('ReservationService', () => {
             totalAmount: 500,
           },
           {
-            checkIn: '13-10-2026',
-            checkOut: '18-10-2026',
+            checkIn: '14-10-2026',
+            checkOut: '19-10-2026',
             nights: 5,
             isShorterStay: false,
             roomCategory: 'Suite',
@@ -289,7 +288,6 @@ describe('ReservationService', () => {
     });
 
     it('no ofrece estadías por debajo de la mitad de las noches pedidas', async () => {
-      // Pide 7 noches y solo quedan libres 2 (09 y 10): menos de la mitad, no se ofrecen.
       givenHotel([suite], [reserved(suite, 1, 9), reserved(suite, 11, 30)]);
 
       const result = await search('10-10-2026', '17-10-2026');
@@ -306,7 +304,7 @@ describe('ReservationService', () => {
       const checkIns = (
         result as { alternatives: { checkIn: string }[] }
       ).alternatives.map((a) => a.checkIn);
-      expect(checkIns).toEqual(['15-10-2026', '16-10-2026', '17-10-2026']);
+      expect(checkIns).toEqual(['15-10-2026', '17-10-2026', '16-10-2026']);
     });
 
     it('toma bien los días de reservas guardadas a medianoche UTC', async () => {
