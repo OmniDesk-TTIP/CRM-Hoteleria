@@ -6,10 +6,7 @@ export interface DayRange {
 }
 
 export type StayVariantKind =
-  | 'SHIFT_LATER'
-  | 'SHIFT_EARLIER'
-  | 'EXTEND_AFTER'
-  | 'EXTEND_BEFORE';
+  'SHIFT_LATER' | 'SHIFT_EARLIER' | 'EXTEND_AFTER' | 'EXTEND_BEFORE';
 
 export interface StayVariant {
   kind: StayVariantKind;
