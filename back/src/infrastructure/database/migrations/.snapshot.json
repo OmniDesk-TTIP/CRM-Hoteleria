@@ -880,16 +880,6 @@
           "keyName": "document_pkey",
           "primary": true,
           "unique": true
-        },
-        {
-          "columnNames": [
-            "source_document_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "document_source_document_id_index",
-          "primary": false,
-          "unique": false
         }
       ],
       "checks": [],
