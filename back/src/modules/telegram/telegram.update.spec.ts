@@ -8,6 +8,7 @@ import { BookingProcessStep } from '../../infrastructure/database/entities/Booki
 import { ChatService, HANDOVER_REPLY } from '../chat/chat.service';
 import { SpaService } from '../spa/spa.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
+import { CancellationService } from '../cancellation/cancellation.service';
 import {
   ChatSessionStatus,
   HandoverReason,
@@ -22,6 +23,10 @@ describe('TelegramUpdate', () => {
   let chatService: any;
   let spaService: { getSpaContextBlock: jest.Mock };
   let spaReservationService: { requestSpa: jest.Mock };
+  let cancellationService: {
+    getGuestContextBlock: jest.Mock;
+    cancelForGuest: jest.Mock;
+  };
   let session: any;
 
   const mockTelegramUserId = '123456789';
@@ -75,6 +80,13 @@ describe('TelegramUpdate', () => {
           useValue: { requestSpa: jest.fn() },
         },
         {
+          provide: CancellationService,
+          useValue: {
+            getGuestContextBlock: jest.fn(),
+            cancelForGuest: jest.fn(),
+          },
+        },
+        {
           provide: MikroORM,
           // RequestContext.create forkea este em; el TelegramUpdate sigue usando el EntityManager inyectado.
           useValue: { em: { fork: () => ({ name: 'default' }) } },
@@ -103,6 +115,11 @@ describe('TelegramUpdate', () => {
     spaService = module.get(SpaService);
     spaReservationService = module.get(SpaReservationService);
     spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
+    cancellationService = module.get(CancellationService);
+    cancellationService.getGuestContextBlock.mockResolvedValue({
+      block: '[POLÍTICA DE CANCELACIÓN]',
+      canCancel: false,
+    });
 
     jest.spyOn(bookingProcessService, 'getActive').mockResolvedValue(null);
     jest
@@ -175,7 +192,66 @@ describe('TelegramUpdate', () => {
       [],
       null,
       '[SERVICIOS DEL HOTEL]',
+      { block: '[POLÍTICA DE CANCELACIÓN]', canCancel: false },
     );
+  });
+
+  describe('cancelación pedida por el huésped (CANCEL_RESERVATION)', () => {
+    const reservationId = '5b0f7f8e-6c53-4d3f-9a7c-1f6f1d0f0002';
+
+    it('cancela por el módulo de cancelación y responde con el texto fijo del backend (CA2, CA3)', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CANCEL_RESERVATION,
+        datos: { reservationId },
+      });
+      cancellationService.cancelForGuest.mockResolvedValue({
+        ok: true,
+        reply: 'Listo, cancelé tu reserva',
+      });
+
+      await update.onMessage('Sí, cancelala', mockCtx);
+
+      expect(cancellationService.cancelForGuest).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        reservationId,
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith('Listo, cancelé tu reserva', {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('le explica el motivo si no se puede cancelar', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CANCEL_RESERVATION,
+        datos: { reservationId },
+      });
+      cancellationService.cancelForGuest.mockResolvedValue({
+        ok: false,
+        reason: 'Esa reserva ya no se puede cancelar.',
+      });
+
+      await update.onMessage('Cancelala', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'Esa reserva ya no se puede cancelar.',
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('no cancela nada y pide aclarar si el id que manda el modelo no es válido', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CANCEL_RESERVATION,
+        datos: { reservationId: 'la-de-diciembre' },
+      });
+
+      await update.onMessage('Cancelá la de diciembre', mockCtx);
+
+      expect(cancellationService.cancelForGuest).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('cuál de tus reservas'),
+        { parse_mode: 'HTML' },
+      );
+    });
   });
 
   describe('solicitud de turno de spa (REQUEST_SPA_BOOKING)', () => {

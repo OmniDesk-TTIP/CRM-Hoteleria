@@ -52,6 +52,27 @@ export default function StatisticsDashboard({ stats }: { stats: BotStatistics })
         />
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-3">
+        <KpiCard
+          label="Retenido por cancelaciones"
+          value={formatCurrency(revenue.cancellationRetained)}
+          icon={WalletIcon}
+          hint="Seña que el hotel se quedó de reservas pagadas que se cancelaron (seña menos lo devuelto), según la fecha de cancelación."
+        />
+        <KpiCard
+          label="Devoluciones pendientes"
+          value={formatCurrency(revenue.refundsPending)}
+          icon={WalletIcon}
+          hint="Reintegros generados por cancelaciones que todavía no se hicieron."
+        />
+        <KpiCard
+          label="Devoluciones realizadas"
+          value={formatCurrency(revenue.refundsCompleted)}
+          icon={WalletIcon}
+          hint="Reintegros ya hechos, de cancelaciones del período."
+        />
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="flex min-w-0 *:min-w-0 *:flex-1">
           <SalesPieCard sales={sales} />

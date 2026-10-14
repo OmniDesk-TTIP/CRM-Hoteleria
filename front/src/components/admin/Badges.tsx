@@ -1,4 +1,5 @@
 import type {
+  AdminReservation,
   ChatSessionStatus,
   ReservationOrigin,
   ReservationStatus,
@@ -26,6 +27,32 @@ export function StatusBadge({ status }: { status: ReservationStatus }) {
     >
       {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+export function CancellationNote({ reservation }: { reservation: AdminReservation }) {
+  if (reservation.status !== 'CANCELLED' || reservation.refundAmount === null) return null;
+
+  const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+  const amount = Number(reservation.refundAmount);
+  const detail = reservation.cancellationPolicyName
+    ? `${reservation.refundPercentage ?? 0}% · ${reservation.cancellationPolicyName}`
+    : 'Sin política vigente';
+
+  return (
+    <p className="mt-1 text-xs text-textMuted">
+      {amount > 0 ? (
+        <>
+          Devolución {money.format(amount)}{' '}
+          <span className={reservation.refundStatus === 'COMPLETED' ? 'text-successText' : 'text-goldLight'}>
+            ({reservation.refundStatus === 'COMPLETED' ? 'realizada' : 'pendiente'})
+          </span>
+        </>
+      ) : (
+        'Sin devolución'
+      )}
+      <span className="block">{detail}</span>
+    </p>
   );
 }
 

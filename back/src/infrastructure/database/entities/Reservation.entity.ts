@@ -16,6 +16,12 @@ export enum ReservationStatus {
   CANCELLED = 'CANCELLED',
 }
 
+/** estado de la devolucion de la seña que genera una cancelacion con reintegro*/
+export enum RefundStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+}
+
 /** de donde salio la reserva si del bot o carga manual desde el panel. */
 export enum ReservationOrigin {
   BOT = 'BOT',
@@ -65,4 +71,26 @@ export class Reservation extends CustomBaseEntity {
 
   @Property({ type: 'varchar', nullable: true })
   mpPaymentId?: string;
+
+  @Property({
+    type: 'datetime',
+    columnType: 'timestamp(6)',
+    nullable: true,
+  })
+  cancelledAt?: Date;
+
+  @Property({ type: 'varchar', length: 120, nullable: true })
+  cancellationPolicyName?: string;
+
+  @Property({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  refundPercentage?: number;
+
+  @Property({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  refundAmount?: number;
+
+  @Enum({ items: () => RefundStatus, nullable: true })
+  refundStatus?: RefundStatus;
+
+  @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
+  refundedAt?: Date;
 }

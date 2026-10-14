@@ -17,10 +17,13 @@ import AppLayout from '@/components/layout/AppLayout';
 import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
 import StatisticsPage from '@/pages/admin/StatisticsPage';
 import HotelRulesPage from '@/pages/admin/HotelRulesPage';
+import RefundsPage from '@/pages/admin/RefundsPage';
+import CancellationPoliciesPage from '@/pages/admin/CancellationPoliciesPage';
 
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
   { to: '/admin/reservations/spa', label: 'Spa', badge: 'pendingSpaReservations' },
+  { to: '/admin/reservations/refunds', label: 'Devoluciones' },
 ];
 
 const SERVICE_TABS: TabItem[] = [
@@ -31,6 +34,7 @@ const SERVICE_TABS: TabItem[] = [
 const SETTINGS_TABS: TabItem[] = [
   { to: '/admin/settings', label: 'Reglas', end: true },
   { to: '/admin/settings/support-hours', label: 'Horarios' },
+  { to: '/admin/settings/cancellation', label: 'Cancelaciones' },
 ];
 
 function App() {
@@ -64,6 +68,7 @@ function App() {
                   >
                     <Route index element={<ReservationsPage />} />
                     <Route path="spa" element={<SpaReservationsPage />} />
+                    <Route path="refunds" element={<RefundsPage />} />
                   </Route>
                   <Route
                     path="/admin/services"
@@ -95,6 +100,7 @@ function App() {
                     >
                       <Route index element={<HotelRulesPage />} />
                       <Route path="support-hours" element={<SupportHoursPage />} />
+                      <Route path="cancellation" element={<CancellationPoliciesPage />} />
                     </Route>
                     <Route path="/admin/hotel-rules" element={<Navigate to="/admin/settings" replace />} />
                     <Route

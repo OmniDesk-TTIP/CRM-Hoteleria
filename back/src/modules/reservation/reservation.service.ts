@@ -9,6 +9,7 @@ import { Reservation } from '../../infrastructure/database/entities/Reservation.
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { RoomRepository } from '../room/room.repository';
+import { CancellationService } from '../cancellation/cancellation.service';
 import { ReservationRepository } from './reservation.repository';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
 import {
@@ -86,6 +87,7 @@ export class ReservationService {
     private readonly reservationRepository: ReservationRepository,
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
+    private readonly cancellationService: CancellationService,
   ) {}
 
   async searchAvailability(
@@ -186,6 +188,8 @@ export class ReservationService {
         this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
       const paymentFormUrl = `${frontendBaseUrl}/payment/form/${newReservation.id}`;
 
+      const policySummary = await this.cancellationService.getPolicySummary();
+
       botReply = [
         `Te estoy guardando la ${escapeHtml(roomToBook.category.name)} del ${savedCheckIn} al ${savedCheckOut}, a nombre de ${escapeHtml(guestData.fullName)}.`,
         '',
@@ -198,6 +202,7 @@ export class ReservationService {
         htmlLink(paymentFormUrl, paymentFormUrl),
         '',
         'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
+        ...(policySummary ? ['', policySummary] : []),
       ].join('\n');
     } else {
       botReply = `Uy, parece que alguien acaba de reservar la última habitación disponible para esas fechas mientras hablábamos. ¿Te gustaría buscar otra fecha?`;
@@ -289,7 +294,7 @@ export class ReservationService {
 
     const totalAmount = room.category.basePrice * nights;
     const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
-    return `Tenemos disponibilidad en nuestra ${escapeHtml(room.category.name)} del ${checkIn} al ${checkOut} por $${room.category.basePrice} la noche.\n\nEl total de tu estadía (${nights} noches) sería de $${totalAmount}, con una seña del 30% de $${depositAmount} para reservarla.\n\n¿Querés que te la reserve?`;
+    return `Tenemos disponibilidad en nuestra ${escapeHtml(room.category.name)} del ${checkIn} al ${checkOut} por $${Number(room.category.basePrice)} la noche.\n\nEl total de tu estadía (${nights} noches) sería de $${totalAmount}, con una seña del 30% de $${depositAmount} para reservarla.\n\n¿Querés que te la reserve?`;
   }
 
   private async findAlternativeDates(

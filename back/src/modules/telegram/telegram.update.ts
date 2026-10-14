@@ -3,7 +3,7 @@ import { Context } from 'telegraf';
 import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
+import { isUUID, validate } from 'class-validator';
 import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
 import {
   ReservationService,
@@ -13,6 +13,7 @@ import {
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
 import { SpaService } from '../spa/spa.service';
+import { CancellationService } from '../cancellation/cancellation.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
 import {
@@ -53,6 +54,7 @@ export class TelegramUpdate {
     private readonly chatService: ChatService,
     private readonly spaService: SpaService,
     private readonly spaReservationService: SpaReservationService,
+    private readonly cancellationService: CancellationService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -130,12 +132,15 @@ export class TelegramUpdate {
       const history = previousMessages.reverse();
       const servicesBlock =
         await this.spaService.getSpaContextBlock(telegramUserId);
+      const cancellation =
+        await this.cancellationService.getGuestContextBlock(telegramUserId);
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
         history,
         lastCompletedBooking,
         servicesBlock,
+        cancellation,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -250,12 +255,31 @@ export class TelegramUpdate {
         );
       case ChatAction.REQUEST_SPA_BOOKING:
         return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
+      case ChatAction.CANCEL_RESERVATION:
+        return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
       default:
         return (
           escapeHtml(aiResponse.texto || '') ||
           'Disculpá, no entendí bien eso. ¿Podés reformularlo?'
         );
     }
+  }
+
+  private async resolveCancelReservation(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const reservationId = (datos as { reservationId?: unknown } | null)
+      ?.reservationId;
+    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
+      return '¿Me confirmás cuál de tus reservas querés cancelar (fechas de entrada y salida)?';
+    }
+
+    const result = await this.cancellationService.cancelForGuest(
+      telegramUserId,
+      reservationId,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   private async resolveSpaBooking(
@@ -388,8 +412,6 @@ export class TelegramUpdate {
     const confirmDto = plainToInstance(ConfirmReservationDto, datos);
     const validationErrors = await validate(confirmDto);
     if (validationErrors.length > 0) {
-      // Apenas el huésped acepta, el modelo a veces llama a confirm_reservation sin tener todavía
-      // el nombre o el DNI. Cortar con un error técnico ahí es peor que seguir pidiendo los datos.
       const invalidFields = validationErrors.map((error) => error.property);
       this.logger.warn(
         `Confirmación incompleta de ${telegramUserId}; faltan o son inválidos: ${invalidFields.join(', ')}`,

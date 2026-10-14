@@ -96,11 +96,14 @@ export class ReservationRepository {
     return { items, total };
   }
 
-  async findById(id: string): Promise<Reservation | null> {
+  async findById(
+    id: string,
+    options: { refresh?: boolean } = {},
+  ): Promise<Reservation | null> {
     return this.em.findOne(
       Reservation,
       { id },
-      { populate: ['room', 'room.category'] },
+      { populate: ['room', 'room.category'], refresh: options.refresh },
     );
   }
 

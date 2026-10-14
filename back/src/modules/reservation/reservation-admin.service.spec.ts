@@ -7,6 +7,7 @@ import {
 import { ReservationAdminService } from './reservation-admin.service';
 import { ReservationRepository } from './reservation.repository';
 import { RoomRepository } from '../room/room.repository';
+import { CancellationService } from '../cancellation/cancellation.service';
 import { ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
 import { SaveReservationDto } from './dto/saveReservation.dto';
 import { ListReservationsQueryDto } from './dto/listReservations.dto';
@@ -15,6 +16,7 @@ describe('ReservationAdminService', () => {
   let service: ReservationAdminService;
   let reservationRepository: ReservationRepository;
   let roomRepository: RoomRepository;
+  let cancellationService: CancellationService;
 
   const mockRoom: any = {
     id: 'room-1',
@@ -49,8 +51,11 @@ describe('ReservationAdminService', () => {
             createManual: jest.fn(),
             saveNew: jest.fn(),
             applyUpdate: jest.fn(),
-            cancel: jest.fn(),
           },
+        },
+        {
+          provide: CancellationService,
+          useValue: { cancelReservation: jest.fn() },
         },
         {
           provide: RoomRepository,
@@ -66,6 +71,8 @@ describe('ReservationAdminService', () => {
       ReservationRepository,
     );
     roomRepository = module.get<RoomRepository>(RoomRepository);
+    cancellationService =
+      module.get<CancellationService>(CancellationService);
   });
 
   describe('list', () => {
@@ -216,30 +223,56 @@ describe('ReservationAdminService', () => {
   });
 
   describe('cancel', () => {
-    it('cancela la reserva cuando existe y no estaba cancelada (CA5)', async () => {
-      jest.spyOn(reservationRepository, 'cancel').mockResolvedValue(true);
-
-      await service.cancel('res-1');
-
-      expect(reservationRepository.cancel).toHaveBeenCalledWith('res-1');
-      expect(reservationRepository.findById).not.toHaveBeenCalled();
-    });
-
-    it('es idempotente: si ya estaba cancelada no rompe (una doble confirmación no debe fallar)', async () => {
-      jest.spyOn(reservationRepository, 'cancel').mockResolvedValue(false);
+    it('delega en el módulo de cancelación, que calcula la devolución (US-14 CA2)', async () => {
+      const outcome: any = { reservationId: 'res-1', refundAmount: 15000 };
       jest
-        .spyOn(reservationRepository, 'findById')
-        .mockResolvedValue({ id: 'res-1' } as any);
+        .spyOn(cancellationService, 'cancelReservation')
+        .mockResolvedValue(outcome);
 
-      await expect(service.cancel('res-1')).resolves.toBeUndefined();
+      await expect(service.cancel('res-1')).resolves.toBe(outcome);
+      expect(cancellationService.cancelReservation).toHaveBeenCalledWith(
+        'res-1',
+      );
     });
 
-    it('rechaza con 404 si la reserva no existe', async () => {
-      jest.spyOn(reservationRepository, 'cancel').mockResolvedValue(false);
-      jest.spyOn(reservationRepository, 'findById').mockResolvedValue(null);
+    it('propaga el 404 si la reserva no existe', async () => {
+      jest
+        .spyOn(cancellationService, 'cancelReservation')
+        .mockRejectedValue(new NotFoundException());
 
       await expect(service.cancel('no-existe')).rejects.toThrow(
         NotFoundException,
+      );
+    });
+  });
+
+  describe('update a CANCELLED', () => {
+    it('guarda los datos con el estado actual y cancela por el módulo de cancelación, para que se calcule la devolución', async () => {
+      const existing: any = {
+        id: 'res-1',
+        room: mockRoom,
+        status: ReservationStatus.CONFIRMED,
+      };
+      jest.spyOn(reservationRepository, 'findById').mockResolvedValue(existing);
+      jest.spyOn(roomRepository, 'findById').mockResolvedValue(mockRoom);
+      jest
+        .spyOn(reservationRepository, 'isRoomOccupied')
+        .mockResolvedValue(false);
+      jest
+        .spyOn(cancellationService, 'cancelReservation')
+        .mockResolvedValue({} as any);
+
+      await service.update(
+        'res-1',
+        buildPayload({ status: ReservationStatus.CANCELLED }),
+      );
+
+      expect(reservationRepository.applyUpdate).toHaveBeenCalledWith(
+        existing,
+        expect.objectContaining({ status: ReservationStatus.CONFIRMED }),
+      );
+      expect(cancellationService.cancelReservation).toHaveBeenCalledWith(
+        'res-1',
       );
     });
   });

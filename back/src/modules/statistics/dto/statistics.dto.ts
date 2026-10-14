@@ -25,10 +25,11 @@ export class StatisticsSalesDto {
 }
 
 export class StatisticsRevenueDto {
-  /** Seña cobrada por Mercado Pago en reservas del bot: lo realmente recaudado. */
   botDeposits!: number;
-  /** Valor total de esas mismas reservas (seña + saldo que se paga en el hotel). */
   botTotalValue!: number;
+  cancellationRetained!: number;
+  refundsPending!: number;
+  refundsCompleted!: number;
 }
 
 export class StatisticsHandoverDto {

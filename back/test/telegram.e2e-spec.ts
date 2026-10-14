@@ -128,7 +128,7 @@ describe('Telegram Flow (e2e)', () => {
     });
 
     await telegramUpdate.onMessage(
-      'Quiero reservar para 2 en noviembre',
+      'Quiero reservar una habitación para 2 personas en noviembre',
       mockCtx,
     );
 
@@ -156,6 +156,17 @@ describe('Telegram Flow (e2e)', () => {
       { telegramUserId: '999888777' },
       { populate: ['room'] },
     );
+
+    console.log({
+      room: reservation?.room.roomNumber,
+      expectedRoom: uniqueRoomNumber,
+      checkIn: reservation?.checkIn,
+      checkOut: reservation?.checkOut,
+      total: reservation?.totalAmount,
+    });
+    const category = await em.findOne(RoomCategory, { id: reservation?.room.category.id });
+    console.log('basePrice', category?.basePrice);
+
     expect(reservation).toBeDefined();
     expect(Number(reservation?.totalAmount)).toBe(60000);
     expect(reservation?.room.roomNumber).toBe(uniqueRoomNumber);
