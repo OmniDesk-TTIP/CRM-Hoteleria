@@ -18,6 +18,7 @@ import {
   HomeIcon,
   LogoutIcon,
   SettingsIcon,
+  StarIcon,
 } from '@/components/layout/icons';
 
 interface NavItem {
@@ -45,6 +46,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: BedIcon,
   },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
+  { to: '/admin/reviews', label: 'Reseñas', icon: StarIcon, roles: ['ADMIN'] },
   {
     to: '/admin/settings',
     label: 'Configuración',

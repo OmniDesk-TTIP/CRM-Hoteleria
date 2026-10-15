@@ -171,3 +171,29 @@ export function SpaReservationStatusBadge({ status }: { status: SpaReservationSt
     </span>
   );
 }
+type ReviewPublicationState = 'PUBLISHED' | 'CAN_PUBLISH' | 'NO_CONSENT';
+
+const REVIEW_PUBLICATION_LABEL: Record<ReviewPublicationState, string> = {
+  PUBLISHED: 'Publicada en la web',
+  CAN_PUBLISH: 'Autorizada para publicar',
+  NO_CONSENT: 'Sin autorización para publicar',
+};
+
+const REVIEW_PUBLICATION_CLASSES: Record<ReviewPublicationState, string> = {
+  PUBLISHED: 'bg-success/20 text-successText',
+  CAN_PUBLISH: 'bg-gold/15 text-goldLight',
+  NO_CONSENT: 'bg-surface text-textMuted',
+};
+
+/** Si la reseña se ve en la web del hotel, o si el huésped autorizó mostrarla (US-18). */
+export function ReviewPublicationBadge({ published, publishConsent }: { published: boolean; publishConsent: boolean }) {
+  const state: ReviewPublicationState = published ? 'PUBLISHED' : publishConsent ? 'CAN_PUBLISH' : 'NO_CONSENT';
+
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${REVIEW_PUBLICATION_CLASSES[state]}`}
+    >
+      {REVIEW_PUBLICATION_LABEL[state]}
+    </span>
+  );
+}

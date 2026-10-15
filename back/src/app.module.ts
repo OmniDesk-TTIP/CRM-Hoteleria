@@ -18,6 +18,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { SatisfactionSurveyModule } from './modules/satisfactionSurvey/satisfactionSurvey.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
     SpaModule,
     CancellationModule,
     DocumentsModule,
+    SatisfactionSurveyModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
