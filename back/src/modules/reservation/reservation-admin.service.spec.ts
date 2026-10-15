@@ -71,8 +71,7 @@ describe('ReservationAdminService', () => {
       ReservationRepository,
     );
     roomRepository = module.get<RoomRepository>(RoomRepository);
-    cancellationService =
-      module.get<CancellationService>(CancellationService);
+    cancellationService = module.get<CancellationService>(CancellationService);
   });
 
   describe('list', () => {

@@ -37,7 +37,6 @@ interface RefundFilters {
 export class CancellationRepository {
   constructor(private readonly em: EntityManager) {}
 
-
   async findAllPolicies(): Promise<CancellationPolicyModel[]> {
     const entities = await this.em.find(
       CancellationPolicy,
@@ -94,8 +93,14 @@ export class CancellationRepository {
     });
   }
 
-  async findReservation(id: string): Promise<CancellableReservationRecord | null> {
-    const entity = await this.em.findOne(Reservation, { id }, { refresh: true });
+  async findReservation(
+    id: string,
+  ): Promise<CancellableReservationRecord | null> {
+    const entity = await this.em.findOne(
+      Reservation,
+      { id },
+      { refresh: true },
+    );
     return entity ? this.toRecord(entity) : null;
   }
 
@@ -104,7 +109,9 @@ export class CancellationRepository {
       Reservation,
       {
         telegramUserId,
-        status: { $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED] },
+        status: {
+          $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED],
+        },
       },
       { orderBy: { checkIn: 'asc' }, refresh: true },
     );

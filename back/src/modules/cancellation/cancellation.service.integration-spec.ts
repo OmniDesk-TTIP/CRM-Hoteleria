@@ -98,7 +98,9 @@ describe('CancellationService (integración)', () => {
     await em.flush();
     reservationIds.push(reservation.id);
 
-    const now = new Date(checkIn - daysAhead * MS_PER_DAY + 15 * 60 * 60 * 1000);
+    const now = new Date(
+      checkIn - daysAhead * MS_PER_DAY + 15 * 60 * 60 * 1000,
+    );
     return {
       id: reservation.id,
       telegramUserId,
@@ -315,7 +317,9 @@ describe('CancellationService (integración)', () => {
 
       await service.activatePolicy(other.id);
 
-      const actives = await em.fork().find(CancellationPolicy, { active: true });
+      const actives = await em
+        .fork()
+        .find(CancellationPolicy, { active: true });
       expect(actives.map((policy) => policy.id)).toEqual([other.id]);
 
       // Se devuelve la vigente de los demás tests.
@@ -360,7 +364,10 @@ describe('CancellationService (integración)', () => {
     it('con 3 a 6 días de anticipación devuelve el 50%', async () => {
       const { stay, outcome } = await cancelPaid(5);
 
-      expect(outcome).toMatchObject({ refundPercentage: 50, refundAmount: 15000 });
+      expect(outcome).toMatchObject({
+        refundPercentage: 50,
+        refundAmount: 15000,
+      });
       expect(Number((await rowOf(stay.id)).refundAmount)).toBe(15000);
     });
 
@@ -478,7 +485,10 @@ describe('CancellationService (integración)', () => {
       // Usa el reloj real: la reserva es de 2099, así que cae en el escalón del 100%.
       const outcome = await adminService.cancel(stay.id);
 
-      expect(outcome).toMatchObject({ refundPercentage: 100, refundAmount: 30000 });
+      expect(outcome).toMatchObject({
+        refundPercentage: 100,
+        refundAmount: 30000,
+      });
       const row = await rowOf(stay.id);
       expect(row.status).toBe(ReservationStatus.CANCELLED);
       expect(row.refundStatus).toBe(RefundStatus.PENDING);
@@ -635,7 +645,9 @@ describe('CancellationService (integración)', () => {
       expect(block).toContain(policyName);
       expect(block).toContain('devolución del 100% de la seña');
       expect(block).toContain(`id=${stay.id}`);
-      expect(block).toContain('se le devuelven $15000 (50% de la seña de $30000)');
+      expect(block).toContain(
+        'se le devuelven $15000 (50% de la seña de $30000)',
+      );
     });
 
     it('a un cliente sin reservas le informa la política pero no habilita cancelar', async () => {

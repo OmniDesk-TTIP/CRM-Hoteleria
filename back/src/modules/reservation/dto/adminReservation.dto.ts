@@ -51,7 +51,9 @@ export class AdminReservationDto {
         ? Number(reservation.refundPercentage)
         : null;
     dto.refundAmount =
-      reservation.refundAmount != null ? Number(reservation.refundAmount) : null;
+      reservation.refundAmount != null
+        ? Number(reservation.refundAmount)
+        : null;
     dto.refundStatus = reservation.refundStatus ?? null;
     return dto;
   }

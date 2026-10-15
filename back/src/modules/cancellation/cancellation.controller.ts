@@ -68,7 +68,9 @@ export class CancellationController {
   }
 
   @Get('refunds')
-  listRefunds(@Query() query: ListRefundsQueryDto): Promise<PaginatedRefundsDto> {
+  listRefunds(
+    @Query() query: ListRefundsQueryDto,
+  ): Promise<PaginatedRefundsDto> {
     return this.cancellationService.listRefunds(query);
   }
 

@@ -81,7 +81,8 @@ const CANCEL_RESERVATION_DECLARATION: FunctionDeclaration = {
     properties: {
       reservationId: {
         type: SchemaType.STRING,
-        description: 'El id (uuid) de la reserva que el cliente quiere cancelar.',
+        description:
+          'El id (uuid) de la reserva que el cliente quiere cancelar.',
       },
     },
     required: ['reservationId'],

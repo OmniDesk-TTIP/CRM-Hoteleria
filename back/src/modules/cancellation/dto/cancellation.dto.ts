@@ -18,7 +18,10 @@ import {
 } from 'class-validator';
 import { trimString } from '../../../common/transforms';
 import { RefundStatus } from '../../../infrastructure/database/entities/Reservation.entity';
-import { CancellationPolicyModel, CancellationTier } from '../cancellation.model';
+import {
+  CancellationPolicyModel,
+  CancellationTier,
+} from '../cancellation.model';
 
 export class CancellationTierDto implements CancellationTier {
   @Type(() => Number)

@@ -33,8 +33,7 @@ export interface CancellationOutcome extends RefundCalculation {
 }
 
 export type GuestCancellationResult =
-  | { ok: true; reply: string }
-  | { ok: false; reason: string };
+  { ok: true; reply: string } | { ok: false; reason: string };
 
 @Injectable()
 export class CancellationService {
@@ -116,7 +115,6 @@ export class CancellationService {
 
     return { ...calculation, reservationId: id, alreadyCancelled: false };
   }
-
 
   async getGuestContextBlock(
     telegramUserId: string,

@@ -147,9 +147,14 @@ describe('calculateRefund', () => {
   });
 
   it('sin política vigente no devuelve nada, pero la reserva igual cuenta como paga', () => {
-    expect(calculateRefund(null, buildReservation(), '2026-10-01')).toMatchObject(
-      { wasPaid: true, policyName: null, refundPercentage: 0, refundAmount: 0 },
-    );
+    expect(
+      calculateRefund(null, buildReservation(), '2026-10-01'),
+    ).toMatchObject({
+      wasPaid: true,
+      policyName: null,
+      refundPercentage: 0,
+      refundAmount: 0,
+    });
   });
 
   it('una reserva pendiente de pago no tiene nada que devolver aunque la política lo permita', () => {
@@ -220,8 +225,12 @@ describe('buildCancellationBlock', () => {
       preview({ reservationId: 'b', wasPaid: false, refundAmount: 0 }),
     ]);
 
-    expect(block).toContain('id=a | del 20-10-2026 al 22-10-2026 | si cancela hoy no se le devuelve la seña de $30000');
-    expect(block).toContain('id=b | del 20-10-2026 al 22-10-2026 | todavía sin pagar');
+    expect(block).toContain(
+      'id=a | del 20-10-2026 al 22-10-2026 | si cancela hoy no se le devuelve la seña de $30000',
+    );
+    expect(block).toContain(
+      'id=b | del 20-10-2026 al 22-10-2026 | todavía sin pagar',
+    );
   });
 
   it('limita la cantidad de reservas para no inflar el prompt', () => {

@@ -72,7 +72,9 @@ export class StatisticsRepository {
     }));
   }
 
-  async cancellationTotals(from: Date | null): Promise<CancellationRevenueTotals> {
+  async cancellationTotals(
+    from: Date | null,
+  ): Promise<CancellationRevenueTotals> {
     const params: unknown[] = [ReservationStatus.CANCELLED];
     let where = 'status = ? AND refund_amount IS NOT NULL';
 

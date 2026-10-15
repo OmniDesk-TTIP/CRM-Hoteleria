@@ -164,7 +164,9 @@ describe('Telegram Flow (e2e)', () => {
       checkOut: reservation?.checkOut,
       total: reservation?.totalAmount,
     });
-    const category = await em.findOne(RoomCategory, { id: reservation?.room.category.id });
+    const category = await em.findOne(RoomCategory, {
+      id: reservation?.room.category.id,
+    });
     console.log('basePrice', category?.basePrice);
 
     expect(reservation).toBeDefined();
