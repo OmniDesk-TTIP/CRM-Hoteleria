@@ -29,6 +29,7 @@ export enum ChatAction {
   CONFIRM_RESERVATION = 'CONFIRM_RESERVATION',
   REQUEST_HUMAN = 'REQUEST_HUMAN',
   REQUEST_SPA_BOOKING = 'REQUEST_SPA_BOOKING',
+  CANCEL_RESERVATION = 'CANCEL_RESERVATION',
   REPLY = 'REPLY',
 }
 
@@ -68,6 +69,30 @@ const REQUEST_SPA_BOOKING_DECLARATION: FunctionDeclaration = {
     required: ['serviceId', 'date', 'time'],
   },
 };
+
+const CANCEL_RESERVATION_DECLARATION: FunctionDeclaration = {
+  name: 'cancel_reservation',
+  description:
+    'Llama a esta función ÚNICAMENTE cuando el cliente pidió cancelar una reserva suya, ya le informaste cuánto se le ' +
+    'devuelve según [POLÍTICA DE CANCELACIÓN] y te confirmó de forma explícita que quiere cancelarla. Usá el id tal ' +
+    'cual figura en la lista de reservas del cliente. La cancelación no se puede deshacer.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      reservationId: {
+        type: SchemaType.STRING,
+        description:
+          'El id (uuid) de la reserva que el cliente quiere cancelar.',
+      },
+    },
+    required: ['reservationId'],
+  },
+};
+
+export interface CancellationContext {
+  block: string;
+  canCancel: boolean;
+}
 
 export interface AiResponse {
   action: ChatAction;
@@ -131,6 +156,7 @@ export class RagService {
     history: ChatMessage[] = [],
     ultimaCompletada: BookingProcess | null = null,
     servicesBlock: string | null = null,
+    cancellation: CancellationContext | null = null,
   ): Promise<AiResponse> {
     const embeddingModel = this.genAI.getGenerativeModel({
       model: 'gemini-embedding-2',
@@ -144,9 +170,9 @@ export class RagService {
     const knowledgeText = similarDocs
       .map((doc) => doc.content)
       .join('\n\n---\n\n');
-    const contextText = servicesBlock
-      ? `${knowledgeText}\n\n---\n\n${servicesBlock}`
-      : knowledgeText;
+    const contextText = [knowledgeText, servicesBlock, cancellation?.block]
+      .filter((section): section is string => !!section)
+      .join('\n\n---\n\n');
 
     let contextoReserva = '';
     if (reservaActiva?.step === BookingProcessStep.PENDING_CONFIRMATION) {
@@ -164,6 +190,7 @@ export class RagService {
       systemInstruction: this.buildSystemInstruction(
         contextText,
         servicesBlock !== null,
+        cancellation !== null,
       ),
       tools: [
         {
@@ -230,6 +257,9 @@ export class RagService {
             ...(servicesBlock !== null
               ? [REQUEST_SPA_BOOKING_DECLARATION]
               : []),
+            ...(cancellation?.canCancel
+              ? [CANCEL_RESERVATION_DECLARATION]
+              : []),
           ],
         },
       ],
@@ -255,6 +285,9 @@ export class RagService {
       }
       if (name === 'request_human')
         return { action: ChatAction.REQUEST_HUMAN, datos: args };
+      if (name === 'cancel_reservation' && cancellation?.canCancel) {
+        return { action: ChatAction.CANCEL_RESERVATION, datos: args };
+      }
       if (name === 'request_spa_booking' && servicesBlock !== null) {
         return {
           action: ChatAction.REQUEST_SPA_BOOKING,
@@ -305,12 +338,17 @@ export class RagService {
   private buildSystemInstruction(
     contextText: string,
     hasSpaContext = false,
+    hasCancellationContext = false,
   ): string {
+    const cancellationRule = hasCancellationContext
+      ? `REGLA PARA CANCELACIONES: Si el cliente pregunta por cancelar, por devoluciones o por la seña, respondé ÚNICAMENTE con la sección [POLÍTICA DE CANCELACIÓN] del contexto (tramos y porcentajes sobre la seña) y no inventes montos ni excepciones. Si quiere cancelar una de sus reservas: identificá cuál (si tiene una sola, es esa), decile con claridad cuánto se le devuelve si cancela hoy (el monto figura en su lista de reservas), avisale que la cancelación no se puede deshacer y preguntale si confirma. Recién cuando te diga que sí de forma explícita usa 'cancel_reservation' con el id de esa reserva. Nunca canceles por tu cuenta ni por una duda como "¿se puede cancelar?".`
+      : `REGLA PARA CANCELACIONES: No tenés información de la política de cancelación en este momento. No prometas devoluciones ni montos; ofrecele derivarlo a recepción.`;
+
     const servicesRule = hasSpaContext
       ? `REGLA PARA EL SPA: Podés informar y ofrecer el spa a cualquier cliente usando ÚNICAMENTE la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). Esa sección te dice si el cliente es HUÉSPED (el spa es SIN CARGO) o EXTERNO (paga el servicio): respetalo y no inventes precios, descuentos ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecer el spa por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Para reservar necesitás el servicio, el día (DD-MM-YYYY) y la hora (HH:mm). Si el cliente es EXTERNO, además pedile su nombre completo y su DNI antes de reservar y avisale que el turno se confirma cuando pague el link de pago que vas a enviarle. Recién cuando tengas todos los datos usa 'request_spa_booking' con el id del servicio. Nunca le digas que el turno quedó confirmado: eso lo informa el sistema (a los huéspedes los confirma recepción y a los externos se confirma al acreditarse el pago).`
       : `REGLA PARA EL SPA: No tenés información del spa en este momento. No inventes servicios, precios ni horarios; ofrecele derivarlo a recepción.`;
 
-    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Nunca digas que unas fechas están disponibles u ocupadas sin haber usado 'search_availability' con esas fechas en este mismo mensaje: si el usuario pregunta por unas fechas (aunque ya las hayas mencionado antes o le hayas ofrecido otras opciones), volvé a usar 'search_availability' con esas fechas y la cantidad de personas de la conversación. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${servicesRule}\n\nREGLA SOBRE EL HISTORIAL: Para datos generales del hotel (servicios, horarios, precios, políticas, requisitos), el CONTEXTO es la única fuente de verdad. Si en el historial figura un dato del hotel que no está en el CONTEXTO, o que lo contradice, no lo repitas: respondé según el CONTEXTO o, si no está ahí, decí que no tenés esa información. Esto no aplica a lo que el huésped te contó ni a los datos de su reserva en curso.\n\nCONTEXTO:\n${contextText}`;
+    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Nunca digas que unas fechas están disponibles u ocupadas sin haber usado 'search_availability' con esas fechas en este mismo mensaje: si el usuario pregunta por unas fechas (aunque ya las hayas mencionado antes o le hayas ofrecido otras opciones), volvé a usar 'search_availability' con esas fechas y la cantidad de personas de la conversación. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${servicesRule}\n\n${cancellationRule}\n\nREGLA SOBRE EL HISTORIAL: Para datos generales del hotel (servicios, horarios, precios, políticas, requisitos), el CONTEXTO es la única fuente de verdad. Si en el historial figura un dato del hotel que no está en el CONTEXTO, o que lo contradice, no lo repitas: respondé según el CONTEXTO o, si no está ahí, decí que no tenés esa información. Esto no aplica a lo que el huésped te contó ni a los datos de su reserva en curso.\n\nCONTEXTO:\n${contextText}`;
   }
 
   private chunkText(

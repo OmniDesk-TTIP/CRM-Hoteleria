@@ -13,6 +13,7 @@ import { SupportHoursModule } from './modules/supportHours/supportHours.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { SpaModule } from './modules/spa/spa.module';
+import { CancellationModule } from './modules/cancellation/cancellation.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -34,6 +35,7 @@ import { SatisfactionSurveyModule } from './modules/satisfactionSurvey/satisfact
     DashboardModule,
     StatisticsModule,
     SpaModule,
+    CancellationModule,
     DocumentsModule,
     SatisfactionSurveyModule,
     TelegrafModule.forRootAsync({

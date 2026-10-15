@@ -5,6 +5,7 @@ import { BookingProcessService } from '../bookingProcess/bookingProcess.service'
 import { RoomRepository } from '../room/room.repository';
 import { ReservationRepository } from './reservation.repository';
 import { PaymentService } from '../payment/payment.service';
+import { CancellationService } from '../cancellation/cancellation.service';
 import { BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
 
 describe('ReservationService', () => {
@@ -63,6 +64,10 @@ describe('ReservationService', () => {
               initPoint: 'https://mp.example/pref-1',
             }),
           },
+        },
+        {
+          provide: CancellationService,
+          useValue: { getPolicySummary: jest.fn().mockResolvedValue(null) },
         },
         {
           provide: ConfigService,

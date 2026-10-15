@@ -1,4 +1,5 @@
 import {
+  RefundStatus,
   Reservation,
   ReservationOrigin,
   ReservationStatus,
@@ -20,6 +21,11 @@ export class AdminReservationDto {
     categoryName: string;
   };
   createdAt!: Date;
+  cancelledAt!: Date | null;
+  cancellationPolicyName!: string | null;
+  refundPercentage!: number | null;
+  refundAmount!: number | null;
+  refundStatus!: RefundStatus | null;
 
   static fromEntity(reservation: Reservation): AdminReservationDto {
     const dto = new AdminReservationDto();
@@ -38,6 +44,17 @@ export class AdminReservationDto {
       categoryName: reservation.room.category?.name ?? '',
     };
     dto.createdAt = reservation.createdAt;
+    dto.cancelledAt = reservation.cancelledAt ?? null;
+    dto.cancellationPolicyName = reservation.cancellationPolicyName ?? null;
+    dto.refundPercentage =
+      reservation.refundPercentage != null
+        ? Number(reservation.refundPercentage)
+        : null;
+    dto.refundAmount =
+      reservation.refundAmount != null
+        ? Number(reservation.refundAmount)
+        : null;
+    dto.refundStatus = reservation.refundStatus ?? null;
     return dto;
   }
 }

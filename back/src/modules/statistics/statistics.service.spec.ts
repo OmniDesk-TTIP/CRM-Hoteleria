@@ -31,6 +31,11 @@ describe('StatisticsService', () => {
       handoverCounts: jest
         .fn()
         .mockResolvedValue({ totalSessions: 8, handedOver: 2 }),
+      cancellationTotals: jest.fn().mockResolvedValue({
+        retained: 0,
+        refundsPending: 0,
+        refundsCompleted: 0,
+      }),
     } as unknown as jest.Mocked<StatisticsRepository>;
 
     supportHours = { getTimeZone: jest.fn().mockReturnValue(TIMEZONE) };
@@ -86,7 +91,32 @@ describe('StatisticsService', () => {
   it('los ingresos del bot son la seña cobrada y, aparte, el valor total de esas reservas (CA3)', async () => {
     const { revenue } = await service.getStatistics('month', NOW);
 
-    expect(revenue).toEqual({ botDeposits: 60000, botTotalValue: 200000 });
+    expect(revenue).toEqual({
+      botDeposits: 60000,
+      botTotalValue: 200000,
+      cancellationRetained: 0,
+      refundsPending: 0,
+      refundsCompleted: 0,
+    });
+  });
+
+  it('suma a los ingresos lo que dejan las cancelaciones con seña paga: lo retenido y las devoluciones (US-14 CA6)', async () => {
+    repository.cancellationTotals.mockResolvedValue({
+      retained: 15000.456,
+      refundsPending: 5000,
+      refundsCompleted: 10000,
+    });
+
+    const { revenue } = await service.getStatistics('month', NOW);
+
+    expect(revenue).toMatchObject({
+      cancellationRetained: 15000.46,
+      refundsPending: 5000,
+      refundsCompleted: 10000,
+    });
+    expect(repository.cancellationTotals).toHaveBeenCalledWith(
+      new Date('2026-10-01T03:00:00.000Z'),
+    );
   });
 
   it('calcula la tasa de intervención sobre las conversaciones del período (CA2)', async () => {
@@ -115,7 +145,13 @@ describe('StatisticsService', () => {
       botPct: 0,
       manualPct: 0,
     });
-    expect(stats.revenue).toEqual({ botDeposits: 0, botTotalValue: 0 });
+    expect(stats.revenue).toEqual({
+      botDeposits: 0,
+      botTotalValue: 0,
+      cancellationRetained: 0,
+      refundsPending: 0,
+      refundsCompleted: 0,
+    });
     expect(stats.handover.ratePct).toBe(0);
   });
 
@@ -133,7 +169,7 @@ describe('StatisticsService', () => {
 
     expect(sales.botPct).toBe(0);
     expect(sales.manualPct).toBe(100);
-    expect(revenue).toEqual({ botDeposits: 0, botTotalValue: 0 });
+    expect(revenue).toMatchObject({ botDeposits: 0, botTotalValue: 0 });
   });
 
   it('ignora orígenes desconocidos para que Bot vs Manual siga sumando 100%', async () => {

@@ -73,6 +73,59 @@ export interface AdminReservation {
     categoryName: string;
   };
   createdAt: string;
+  /** US-14: lo que quedó registrado al cancelar. Todo null si la reserva no se canceló. */
+  cancelledAt: string | null;
+  cancellationPolicyName: string | null;
+  refundPercentage: number | null;
+  /** Null si no había nada pagado; 0 si la política no devolvía nada. */
+  refundAmount: number | null;
+  refundStatus: RefundStatus | null;
+}
+
+/* ───────── Cancelaciones y devoluciones (US-14) ───────── */
+
+export type RefundStatus = 'PENDING' | 'COMPLETED';
+
+/** Con al menos `minDaysBeforeCheckIn` días de anticipación se devuelve ese % de la seña. */
+export interface CancellationTier {
+  minDaysBeforeCheckIn: number;
+  refundPercentage: number;
+}
+
+export interface CancellationPolicy {
+  id: string;
+  name: string;
+  /** Ordenados de más a menos anticipación. */
+  tiers: CancellationTier[];
+  /** Solo una política está vigente: es la que se aplica al cancelar. */
+  active: boolean;
+}
+
+export interface CancellationPolicyFormData {
+  name: string;
+  tiers: CancellationTier[];
+}
+
+/** Fila del listado de devoluciones; `reservationId` identifica la devolución (una por reserva). */
+export interface Refund {
+  reservationId: string;
+  guestFullName: string;
+  guestDni: string;
+  roomNumber: string;
+  checkIn: string;
+  checkOut: string;
+  amount: number;
+  percentage: number;
+  policyName: string | null;
+  status: RefundStatus;
+  cancelledAt: string | null;
+  refundedAt: string | null;
+}
+
+export interface RefundListFilters {
+  page: number;
+  pageSize: number;
+  status: RefundStatus | 'ALL';
 }
 
 /** Respuesta paginada genérica de la API. */
@@ -390,7 +443,16 @@ export interface BotStatistics {
   from: string | null;
   sales: { total: number; bot: number; manual: number; botPct: number; manualPct: number };
   /** `botDeposits` es la seña cobrada por Mercado Pago; `botTotalValue`, el valor total de esas reservas. */
-  revenue: { botDeposits: number; botTotalValue: number };
+  revenue: {
+    botDeposits: number;
+    botTotalValue: number;
+    /** US-14: seña retenida de reservas pagadas que se cancelaron (seña menos lo devuelto). */
+    cancellationRetained: number;
+    /** US-14: devoluciones generadas que todavía no se hicieron. */
+    refundsPending: number;
+    /** US-14: devoluciones ya realizadas. */
+    refundsCompleted: number;
+  };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
 

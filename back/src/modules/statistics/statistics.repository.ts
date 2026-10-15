@@ -12,6 +12,15 @@ export interface SalesByOriginRow {
   total: number;
 }
 
+export interface CancellationRevenueTotals {
+  /** Seña que el hotel se quedó de reservas pagadas y canceladas (seña menos lo devuelto). */
+  retained: number;
+  /** Devoluciones generadas por cancelaciones que todavía no se hicieron. */
+  refundsPending: number;
+  /** Devoluciones ya realizadas. */
+  refundsCompleted: number;
+}
+
 interface HandoverRow {
   total: string;
   handed_over: string;
@@ -61,6 +70,41 @@ export class StatisticsRepository {
       deposits: Number(row.deposits),
       total: Number(row.total),
     }));
+  }
+
+  async cancellationTotals(
+    from: Date | null,
+  ): Promise<CancellationRevenueTotals> {
+    const params: unknown[] = [ReservationStatus.CANCELLED];
+    let where = 'status = ? AND refund_amount IS NOT NULL';
+
+    if (from) {
+      where += ' AND cancelled_at >= ?::timestamp';
+      params.push(from.toISOString());
+    }
+
+    const [row] = await this.em.getConnection().execute<
+      {
+        retained: string;
+        refunds_pending: string;
+        refunds_completed: string;
+      }[]
+    >(
+      `
+      SELECT COALESCE(SUM(deposit_amount - refund_amount), 0) AS retained,
+             COALESCE(SUM(refund_amount) FILTER (WHERE refund_status = 'PENDING'), 0) AS refunds_pending,
+             COALESCE(SUM(refund_amount) FILTER (WHERE refund_status = 'COMPLETED'), 0) AS refunds_completed
+      FROM reservations
+      WHERE ${where}
+      `,
+      params,
+    );
+
+    return {
+      retained: Number(row?.retained ?? 0),
+      refundsPending: Number(row?.refunds_pending ?? 0),
+      refundsCompleted: Number(row?.refunds_completed ?? 0),
+    };
   }
 
   async handoverCounts(from: Date | null): Promise<HandoverCounts> {
