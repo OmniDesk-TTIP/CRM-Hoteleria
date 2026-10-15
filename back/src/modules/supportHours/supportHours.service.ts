@@ -3,15 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SupportHoursRepository } from './supportHours.repository';
 import { SupportHoursDayDto, SupportHoursDto } from './dto/supportHours.dto';
 import { UpdateSupportHoursDto } from './dto/updateSupportHours.dto';
-import {
-  DaySchedule,
-  describeNextOpening,
-  findNextOpening,
-  isOpenAt,
-  isValidTimeZone,
-  toMinutes,
-  zonedNow,
-} from './supportHours.util';
+import { DaySchedule, describeNextOpening, findNextOpening, isOpenAt, isValidTimeZone, toMinutes, zonedNow } from './supportHours.util';
 
 const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires';
 const DEFAULT_OPENS_AT = '09:00';
@@ -56,9 +48,7 @@ export class SupportHoursService {
     };
   }
 
-  async replaceSchedule(
-    payload: UpdateSupportHoursDto,
-  ): Promise<SupportHoursDto> {
+  async replaceSchedule( payload: UpdateSupportHoursDto ): Promise<SupportHoursDto> {
     const weekdays = payload.days.map((day) => day.weekday);
     if (new Set(weekdays).size !== 7) {
       throw new BadRequestException(
@@ -106,7 +96,6 @@ export class SupportHoursService {
     };
   }
 
-  /** Alta inicial de la semana por defecto; la usa el seeder. */
   async seedDefaultSchedule(): Promise<void> {
     for (let weekday = 0; weekday < 7; weekday++) {
       this.supportHoursRepository.create({

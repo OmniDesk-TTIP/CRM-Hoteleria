@@ -5,36 +5,22 @@ import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { isUUID, validate } from 'class-validator';
 import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
-import {
-  ReservationService,
-  AlternativeDates,
-  ALTERNATIVE_DATES_WINDOW_DAYS,
-} from '../reservation/reservation.service';
+import { ReservationService, AlternativeDates, ALTERNATIVE_DATES_WINDOW_DAYS } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
 import { SpaService } from '../spa/spa.service';
 import { CancellationService } from '../cancellation/cancellation.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
-import {
-  detectHumanRequest,
-  isUnresolvedReply,
-} from '../chat/handover.detector';
+import { detectHumanRequest, isUnresolvedReply } from '../chat/handover.detector';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import { ConfirmReservationDto } from '../reservation/dto/confirmReservation.dto';
 import { ChatMessage } from '../../infrastructure/database/entities/ChatMessage.entity';
-import {
-  ChatSession,
-  HandoverReason,
-} from '../../infrastructure/database/entities/ChatSession.entity';
-import {
-  BookingProcess,
-  BookingProcessStep,
-} from '../../infrastructure/database/entities/BookingProcess.entity';
+import { ChatSession, HandoverReason } from '../../infrastructure/database/entities/ChatSession.entity';
+import { BookingProcess, BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
 import { TelegramProfile } from '../chat/chat.repository';
 import { escapeHtml } from './telegram.format';
 
-/** Cuántos mensajes previos se le pasan a Gemini como contexto conversacional. */
 const HISTORY_SIZE = 6;
 
 const GENERIC_FALLBACK =
@@ -213,10 +199,6 @@ export class TelegramUpdate {
     }
   }
 
-  /**
-   * El middleware de request de @mikro-orm/nestjs solo corre en HTTP; los updates de Telegraf
-   * quedaban fuera y compartían el EntityManager global entre conversaciones.
-   */
   private withRequestContext<T>(work: () => Promise<T>): Promise<T> {
     return RequestContext.create(this.orm.em, work);
   }
@@ -289,13 +271,10 @@ export class TelegramUpdate {
     const bookingDto = plainToInstance(RequestSpaBookingDto, datos);
     const validationErrors = await validate(bookingDto);
     if (validationErrors.length > 0) {
-      // El modelo a veces dispara la tool sin tener todos los datos; se los pedimos en vez de
-      // cortar con un error técnico.
       const invalidFields = validationErrors.map((error) => error.property);
       this.logger.warn(
         `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${invalidFields.join(', ')}`,
       );
-      // Si lo que falló son los datos de quien paga, es eso lo que hay que volver a pedir.
       if (invalidFields.includes('fullName') || invalidFields.includes('dni')) {
         return '¿Me pasás tu nombre completo y tu DNI (solo los números, sin puntos)?';
       }
@@ -326,8 +305,7 @@ export class TelegramUpdate {
       );
     }
 
-    // Si ya le ofrecimos esa misma habitación y estamos esperando su respuesta, un "sí" no es un
-    // pedido de búsqueda nueva: es la aceptación. Repetir la oferta deja la charla en bucle.
+
     if (this.isOfferAlreadyPending(activeBooking, searchDto)) {
       this.logger.log(
         `Se ignora una búsqueda repetida de ${telegramUserId}: ya hay una oferta esperando confirmación`,
@@ -358,7 +336,6 @@ export class TelegramUpdate {
     );
   }
 
-  /** Por si Gemini no devuelve texto: listamos las alternativas tal cual las calculó el backend. */
   private formatAlternativesFallback(alternatives: AlternativeDates[]): string {
     const options = alternatives.map(
       ({
@@ -379,7 +356,6 @@ export class TelegramUpdate {
     ].join('\n');
   }
 
-  /** La búsqueda repite, dato por dato, la oferta que el huésped todavía no respondió. */
   private isOfferAlreadyPending(
     activeBooking: BookingProcess | null,
     searchDto: SearchAvailabilityDto,
