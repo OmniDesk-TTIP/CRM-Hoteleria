@@ -299,4 +299,58 @@ describe('Encuesta de satisfacción (e2e)', () => {
       expect(second.body.message).toBe('Ya respondiste esta encuesta');
     });
   });
+  describe('reseñas públicas para la web', () => {
+    it('lista las reseñas publicadas sin autenticación y sin datos de la reserva', async () => {
+      const { token, surveyId } = await seedSurvey();
+      await request(app.getHttpServer())
+        .post(`/public/surveys/${token}`)
+        .send(VALID_ANSWER)
+        .expect(201);
+      await request(app.getHttpServer())
+        .patch(`/surveys/${surveyId}/publication`)
+        .set('Authorization', bearer(admin.accessToken))
+        .send({ published: true })
+        .expect(200);
+
+      const response = await request(app.getHttpServer())
+        .get('/public/reviews')
+        .query({ pageSize: 24 })
+        .expect(200);
+
+      const review = (response.body.items as { id: string }[]).find(
+        (item) => item.id === surveyId,
+      );
+      expect(review).toEqual({
+        id: surveyId,
+        authorName: 'Beto H.',
+        overallRating: 5,
+        comment: 'Muy buena atención',
+        stayMonth: '2097-01',
+        publishedAt: expect.any(String),
+      });
+      const body = JSON.stringify(response.body);
+      expect(body).not.toContain('30111222');
+      expect(body).not.toContain('Beto Huésped');
+    });
+
+    it('el resumen es público', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/public/reviews/summary')
+        .expect(200);
+
+      expect(Object.keys(response.body).sort()).toEqual([
+        'averageRating',
+        'ratingsCount',
+      ]);
+    });
+
+    it('limita el tamaño de página', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/public/reviews')
+        .query({ pageSize: 25 })
+        .expect(400);
+
+      expect(response.body.message).toBe('pageSize no puede superar 24');
+    });
+  });
 });

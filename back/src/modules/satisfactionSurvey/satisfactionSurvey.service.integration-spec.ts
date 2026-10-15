@@ -605,4 +605,138 @@ describe('SatisfactionSurveyService (integración)', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
+  describe('reseñas en la web del hotel', () => {
+    // 15/11/2098 13:00 en el hotel.
+    const NOW = new Date(Date.UTC(2098, 10, 15, 16, 0));
+    const ANSWERED_AT = new Date(Date.UTC(2098, 10, 16, 15, 0));
+
+    let older: string;
+    let newer: string;
+    let notPublished: string;
+    let withoutConsent: string;
+
+    const answer = async (
+      reservation: Reservation,
+      extra: Partial<SubmitSurveyDto> = {},
+    ) => {
+      await service.submit(
+        tokenSentTo(reservation.telegramUserId!),
+        { ...RATINGS, ...extra },
+        ANSWERED_AT,
+      );
+      return (await surveyOf(reservation.id))!.id;
+    };
+
+    /** Las reseñas de esta suite en la página pedida (la base de test es compartida). */
+    const ours = async (pageSize = 24) => {
+      const page = await service.listPublicReviews({ page: 1, pageSize });
+      const ids = [older, newer, notPublished, withoutConsent];
+      return page.items.filter((item) => ids.includes(item.id));
+    };
+
+    beforeAll(async () => {
+      const first = await seedReservation('2098-11-14', {
+        guestFullName: 'Valentina Medina',
+      });
+      const second = await seedReservation('2098-11-13');
+      const third = await seedReservation('2098-11-12');
+      const fourth = await seedReservation('2098-11-11');
+      await service.sendInvitations(NOW);
+
+      older = await answer(first, {
+        comment: 'Hermosa estadía',
+        publishConsent: true,
+      });
+      newer = await answer(second, { overallRating: 4, publishConsent: true });
+      notPublished = await answer(third, { publishConsent: true });
+      withoutConsent = await answer(fourth, { comment: 'Privado' });
+
+      await service.setPublication(
+        older,
+        true,
+        new Date(Date.UTC(2098, 10, 20)),
+      );
+      await service.setPublication(
+        newer,
+        true,
+        new Date(Date.UTC(2098, 10, 21)),
+      );
+    });
+
+    it('muestra solo las publicadas, de la más reciente a la más vieja', async () => {
+      expect((await ours()).map((review) => review.id)).toEqual([newer, older]);
+    });
+
+    it('expone solo lo que el huésped autorizó', async () => {
+      const review = (await ours()).find((item) => item.id === older);
+
+      expect(review).toEqual({
+        id: older,
+        authorName: 'Valentina M.',
+        overallRating: 5,
+        comment: 'Hermosa estadía',
+        stayMonth: '2098-11',
+        publishedAt: new Date(Date.UTC(2098, 10, 20)).toISOString(),
+      });
+      expect((await ours()).find((item) => item.id === newer)).toMatchObject({
+        authorName: 'Ana P.',
+        overallRating: 4,
+        comment: null,
+      });
+    });
+
+    it('una reseña sin consentimiento no sale aunque figure publicada en la base', async () => {
+      await em.nativeUpdate(
+        SatisfactionSurvey,
+        { id: withoutConsent },
+        { publishedAt: new Date(Date.UTC(2098, 10, 22)) },
+      );
+
+      try {
+        expect((await ours()).map((review) => review.id)).not.toContain(
+          withoutConsent,
+        );
+      } finally {
+        await em.nativeUpdate(
+          SatisfactionSurvey,
+          { id: withoutConsent },
+          { publishedAt: null },
+        );
+      }
+    });
+
+    it('al ocultarla desaparece de la web', async () => {
+      await service.setPublication(newer, false, NOW);
+      try {
+        expect((await ours()).map((review) => review.id)).toEqual([older]);
+      } finally {
+        await service.setPublication(
+          newer,
+          true,
+          new Date(Date.UTC(2098, 10, 21)),
+        );
+      }
+    });
+
+    it('pagina las reseñas', async () => {
+      // Las de esta suite son las más recientes de la base: ocupan la primera página.
+      const first = await service.listPublicReviews({ page: 1, pageSize: 1 });
+      const second = await service.listPublicReviews({ page: 2, pageSize: 1 });
+
+      expect(first.items.map((review) => review.id)).toEqual([newer]);
+      expect(second.items.map((review) => review.id)).toEqual([older]);
+      expect(first.total).toBeGreaterThanOrEqual(2);
+    });
+
+    it('el resumen cuenta todas las respuestas, publicadas o no', async () => {
+      const before = await service.getPublicReviewsSummary();
+      const reservation = await seedReservation('2098-11-14');
+      await service.sendInvitations(NOW);
+      await answer(reservation, { overallRating: 1 });
+
+      const after = await service.getPublicReviewsSummary();
+      expect(after.ratingsCount).toBe(before.ratingsCount + 1);
+      expect(after.averageRating).not.toBeNull();
+    });
+  });
 });

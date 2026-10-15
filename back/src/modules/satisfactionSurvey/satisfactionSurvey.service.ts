@@ -31,6 +31,12 @@ import {
 import { SubmitSurveyDto } from './dto/submitSurvey.dto';
 import { PublicSurveyDto } from './dto/publicSurvey.dto';
 import {
+  ListPublicReviewsQueryDto,
+  PaginatedPublicReviewsDto,
+  PublicReviewDto,
+  PublicReviewsSummaryDto,
+} from './dto/publicReview.dto';
+import {
   ListSurveysQueryDto,
   SurveyPeriodQueryDto,
 } from './dto/listSurveys.dto';
@@ -215,6 +221,32 @@ export class SatisfactionSurveyService {
     if (state === 'EXPIRED') {
       throw new GoneException('El link de la encuesta venció');
     }
+  }
+
+  // ───────── Reseñas en la web del hotel ─────────
+
+  async listPublicReviews(
+    query: ListPublicReviewsQueryDto,
+  ): Promise<PaginatedPublicReviewsDto> {
+    const { items, total } = await this.surveyRepository.findPublishedPaginated(
+      query.page,
+      query.pageSize,
+    );
+
+    return {
+      items: items.map((model) => PublicReviewDto.fromModel(model)),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+  }
+
+  async getPublicReviewsSummary(): Promise<PublicReviewsSummaryDto> {
+    const { overall, responses } = await this.surveyRepository.averages({
+      from: null,
+      to: null,
+    });
+    return { averageRating: overall, ratingsCount: responses };
   }
 
   // ───────── Panel (solo Administradores) ─────────

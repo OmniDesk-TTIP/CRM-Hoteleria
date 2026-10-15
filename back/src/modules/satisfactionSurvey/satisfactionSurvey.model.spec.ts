@@ -1,6 +1,7 @@
 import { SatisfactionSurveyStatus } from '../../infrastructure/database/entities/SatisfactionSurvey.entity';
 import {
   buildInvitationMessage,
+  formatAuthorName,
   hashSurveyToken,
   SatisfactionSurveyModel,
   SatisfactionSurveyProps,
@@ -167,5 +168,22 @@ describe('buildInvitationMessage', () => {
 
     expect(message).toMatch(/^¡Hola Ana!/);
     expect(message).toContain('https://hotel.test/encuesta/abc');
+  });
+});
+
+describe('formatAuthorName', () => {
+  it.each([
+    ['nombre y apellido', 'Valentina Medina', 'Valentina M.'],
+    [
+      'dos nombres: la inicial es del último apellido',
+      'Ana María Pérez',
+      'Ana P.',
+    ],
+    ['espacios de más', '  Lucía   díaz ', 'Lucía D.'],
+    ['apellido con tilde', 'Martín Álvarez', 'Martín Á.'],
+    ['un solo nombre', 'Lautaro', 'Lautaro'],
+    ['sin nombre', '   ', 'Huésped'],
+  ])('%s', (_label, fullName, expected) => {
+    expect(formatAuthorName(fullName)).toBe(expected);
   });
 });

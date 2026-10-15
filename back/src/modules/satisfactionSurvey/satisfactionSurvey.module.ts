@@ -5,10 +5,15 @@ import { SatisfactionSurveyController } from './satisfactionSurvey.controller';
 import { SatisfactionSurveyRepository } from './satisfactionSurvey.repository';
 import { SatisfactionSurveyService } from './satisfactionSurvey.service';
 import { SurveyPublicController } from './surveyPublic.controller';
+import { ReviewsPublicController } from './reviewsPublic.controller';
 
 @Module({
   imports: [ChatModule, SupportHoursModule],
-  controllers: [SatisfactionSurveyController, SurveyPublicController],
+  controllers: [
+    SatisfactionSurveyController,
+    SurveyPublicController,
+    ReviewsPublicController,
+  ],
   providers: [SatisfactionSurveyRepository, SatisfactionSurveyService],
 })
 export class SatisfactionSurveyModule {}

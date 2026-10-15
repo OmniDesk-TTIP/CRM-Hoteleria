@@ -81,6 +81,19 @@ export function surveyCheckOutWindow(
   return { from: addDays(today, -SURVEY_LOOKBACK_DAYS), to };
 }
 
+/**
+ * Nombre con el que se muestra una reseña en la web: el primer nombre y la inicial del último
+ * apellido ("Ana María Pérez" → "Ana P."). Es lo que el huésped autoriza en la encuesta.
+ */
+export function formatAuthorName(guestFullName: string): string {
+  const words = guestFullName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'Huésped';
+
+  const [firstName] = words;
+  if (words.length === 1) return firstName;
+  return `${firstName} ${words[words.length - 1].charAt(0).toLocaleUpperCase('es-AR')}.`;
+}
+
 /** Mensaje de Chamber con el link a la encuesta. Va como texto plano. */
 export function buildInvitationMessage(
   guestFullName: string,

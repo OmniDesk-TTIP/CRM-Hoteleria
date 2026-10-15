@@ -216,6 +216,33 @@ export class SatisfactionSurveyRepository {
     return { items: entities.map((entity) => this.toModel(entity)), total };
   }
 
+  /**
+   * Reseñas visibles en la web: publicadas por el admin, de la más reciente a la más vieja. El
+   * consentimiento se vuelve a exigir acá aunque el modelo ya no deje publicar sin él: si alguien
+   * cambiara la fila a mano, la reseña igual no sale.
+   */
+  async findPublishedPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ items: SatisfactionSurveyModel[]; total: number }> {
+    const [entities, total] = await this.em.findAndCount(
+      SatisfactionSurvey,
+      {
+        status: SatisfactionSurveyStatus.ANSWERED,
+        publishConsent: true,
+        publishedAt: { $ne: null },
+      },
+      {
+        populate: ['reservation.room'],
+        orderBy: { publishedAt: 'desc', id: 'asc' },
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      },
+    );
+
+    return { items: entities.map((entity) => this.toModel(entity)), total };
+  }
+
   /** Cantidad de respuestas y promedio de cada calificación en el período (CA5). */
   async averages(period: SurveyPeriod): Promise<SurveyAverages> {
     const params: unknown[] = [SatisfactionSurveyStatus.ANSWERED];
