@@ -135,6 +135,27 @@ export const BotIcon = (props: IconProps) => (
   </svg>
 );
 
+export const StarIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />
+  </svg>
+);
+
+export const SparklesIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M10 4c.6 3.4 2.6 5.4 6 6-3.4.6-5.4 2.6-6 6-.6-3.4-2.6-5.4-6-6 3.4-.6 5.4-2.6 6-6Z" />
+    <path d="M18 14c.3 1.6 1.2 2.5 2.8 2.8-1.6.3-2.5 1.2-2.8 2.8-.3-1.6-1.2-2.5-2.8-2.8 1.6-.3 2.5-1.2 2.8-2.8Z" />
+  </svg>
+);
+
+export const BellIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M4 17h16" />
+    <path d="M5.5 17a6.5 6.5 0 0 1 13 0" />
+    <path d="M12 8.5V7M10.5 7h3M3 20h18" />
+  </svg>
+);
+
 export function BookIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

@@ -394,6 +394,60 @@ export interface BotStatistics {
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
 
+/* ───────── Encuesta de satisfacción (US-18) ───────── */
+
+/** Período de `/surveys` y `/surveys/summary`: días del calendario del hotel, ambos incluidos. */
+export interface SurveyPeriod {
+  /** YYYY-MM-DD */
+  from?: string;
+  /** YYYY-MM-DD */
+  to?: string;
+}
+
+/** Respuesta de un huésped tal como la devuelve `GET /surveys`. Calificaciones de 1 a 5. */
+export interface SurveyResponse {
+  id: string;
+  reservationId: string;
+  guestFullName: string;
+  roomNumber: string | null;
+  /** YYYY-MM-DD */
+  checkIn: string | null;
+  /** YYYY-MM-DD */
+  checkOut: string | null;
+  answeredAt: string;
+  overallRating: number;
+  cleanlinessRating: number;
+  attentionRating: number;
+  servicesRating: number;
+  comment: string | null;
+  /** El huésped autorizó mostrar su reseña en la web del hotel. */
+  publishConsent: boolean;
+  published: boolean;
+  publishedAt: string | null;
+}
+
+export interface PaginatedSurveyResponses {
+  items: SurveyResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Respuesta de `GET /surveys/summary`. Los promedios son null si no hubo respuestas. */
+export interface SurveySummary {
+  from: string | null;
+  to: string | null;
+  responses: number;
+  averages: {
+    overall: number | null;
+    cleanliness: number | null;
+    attention: number | null;
+    services: number | null;
+  };
+  /** Encuestas enviadas en el período y cuántas de esas ya se respondieron. */
+  invitations: { sent: number; answered: number; responseRatePct: number };
+}
+
 /* ───────── Spa y turnos de spa (US-17) ───────── */
 
 export type SpaServiceStatus = 'ACTIVE' | 'INACTIVE';

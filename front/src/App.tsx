@@ -17,6 +17,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
 import StatisticsPage from '@/pages/admin/StatisticsPage';
 import HotelRulesPage from '@/pages/admin/HotelRulesPage';
+import ReviewsPage from '@/pages/admin/ReviewsPage';
 
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
@@ -87,6 +88,7 @@ function App() {
 
                   <Route element={<ProtectedRoute roles={['ADMIN']} />}>
                     <Route path="/admin/statistics" element={<StatisticsPage />} />
+                    <Route path="/admin/reviews" element={<ReviewsPage />} />
 
                     {/* Configuración: las reglas del bot y los horarios de la recepción, la primera es Reglas */}
                     <Route
