@@ -194,16 +194,26 @@ describe('CancellationService (integración)', () => {
   });
 
   afterAll(async () => {
-    try {
-      if (previousActivePolicyId) {
-        await service.activatePolicy(previousActivePolicyId);
+    // Cada paso por separado: si uno falla, los demás igual limpian. Si no, la habitación queda
+    // libre en la base compartida y otras suites (telegram e2e) la terminan reservando.
+    const steps = [
+      () =>
+        previousActivePolicyId
+          ? service.activatePolicy(previousActivePolicyId)
+          : undefined,
+      () => em.nativeDelete(Reservation, { id: { $in: reservationIds } }),
+      () => (roomId ? em.nativeDelete(Reservation, { room: roomId }) : 0),
+      () => em.nativeDelete(CancellationPolicy, { id: { $in: policyIds } }),
+      () => (roomId ? em.nativeDelete(Room, { id: roomId }) : 0),
+      () =>
+        categoryId ? em.nativeDelete(RoomCategory, { id: categoryId }) : 0,
+    ];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch {
+        // no-op: limpieza best-effort
       }
-      await em.nativeDelete(Reservation, { id: { $in: reservationIds } });
-      await em.nativeDelete(CancellationPolicy, { id: { $in: policyIds } });
-      await em.nativeDelete(Room, { id: roomId });
-      await em.nativeDelete(RoomCategory, { id: categoryId });
-    } catch {
-      // no-op: limpieza best-effort
     }
     if (app) await app.close();
   });
