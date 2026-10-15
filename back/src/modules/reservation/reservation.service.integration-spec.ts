@@ -427,4 +427,31 @@ describe('ReservationService – noches sueltas (integración)', () => {
       expect(await em.fork().count(Reservation, { id: created.id })).toBe(1);
     });
   });
+
+  describe('US-4 CA4 – habitaciones deshabilitadas', () => {
+    it('nunca ofrece una habitación INACTIVE, ni en la oferta ni en las alternativas', async () => {
+      await seedReservation(roomB, 10, 14);
+      await em.nativeUpdate(
+        Room,
+        { id: roomA.id },
+        { status: RoomStatus.INACTIVE },
+      );
+
+      try {
+        const { result } = await search(ROOMS_A_AND_B, 10, 14);
+
+        const alternatives = alternativesOf(result);
+        expect(alternatives.length).toBeGreaterThan(0);
+        expect(
+          alternatives.every((a) => a.roomCategory === categoryB.name),
+        ).toBe(true);
+      } finally {
+        await em.nativeUpdate(
+          Room,
+          { id: roomA.id },
+          { status: RoomStatus.ACTIVE },
+        );
+      }
+    });
+  });
 });
