@@ -17,7 +17,9 @@ const MONDAY_09_00 = new Date('2026-09-21T12:00:00Z');
 const MONDAY_08_59 = new Date('2026-09-21T11:59:00Z');
 const MONDAY_21_30 = new Date('2026-09-22T00:30:00Z');
 
-function buildWeek(overrides: Partial<Record<number, Partial<Day>>> = {}): Day[] {
+function buildWeek(
+  overrides: Partial<Record<number, Partial<Day>>> = {},
+): Day[] {
   return Array.from({ length: 7 }, (_, weekday) => ({
     weekday,
     isClosed: false,
@@ -142,9 +144,7 @@ describe('SupportHoursService (integración)', () => {
     });
 
     it('con la semana entera cerrada no promete ninguna apertura', async () => {
-      await saveWeek(
-        buildWeek().map((day) => ({ ...day, isClosed: true })),
-      );
+      await saveWeek(buildWeek().map((day) => ({ ...day, isClosed: true })));
 
       await expect(service.getAvailability(MONDAY_09_00)).resolves.toEqual({
         isOpen: false,

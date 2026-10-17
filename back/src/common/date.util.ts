@@ -39,7 +39,6 @@ export function toDateKey(value: Date | string): string {
     : value.toISOString().slice(0, 10);
 }
 
-
 function offsetMinutes(date: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -76,4 +75,3 @@ export function zonedStartOfDay(key: string, timeZone: string): Date {
 
   return new Date(second);
 }
-

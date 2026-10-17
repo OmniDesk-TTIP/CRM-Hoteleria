@@ -181,6 +181,7 @@ describe('StatisticsService (integración)', () => {
         telegramUserId: { $like: `stats-int-${suffix}-%` },
       });
     } catch {
+      // no-op: limpieza best-effort
     } finally {
       if (app) await app.close();
     }

@@ -5,19 +5,32 @@ import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { isUUID, validate } from 'class-validator';
 import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
-import { ReservationService, AlternativeDates, ALTERNATIVE_DATES_WINDOW_DAYS } from '../reservation/reservation.service';
+import {
+  ReservationService,
+  AlternativeDates,
+  ALTERNATIVE_DATES_WINDOW_DAYS,
+} from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
 import { SpaService } from '../spa/spa.service';
 import { CancellationService } from '../cancellation/cancellation.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
-import { detectHumanRequest, isUnresolvedReply } from '../chat/handover.detector';
+import {
+  detectHumanRequest,
+  isUnresolvedReply,
+} from '../chat/handover.detector';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import { ConfirmReservationDto } from '../reservation/dto/confirmReservation.dto';
 import { ChatMessage } from '../../infrastructure/database/entities/ChatMessage.entity';
-import { ChatSession, HandoverReason } from '../../infrastructure/database/entities/ChatSession.entity';
-import { BookingProcess, BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
+import {
+  ChatSession,
+  HandoverReason,
+} from '../../infrastructure/database/entities/ChatSession.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../infrastructure/database/entities/BookingProcess.entity';
 import { TelegramProfile } from '../chat/chat.repository';
 import { escapeHtml } from './telegram.format';
 
@@ -304,7 +317,6 @@ export class TelegramUpdate {
           'Datos de búsqueda de disponibilidad inválidos',
       );
     }
-
 
     if (this.isOfferAlreadyPending(activeBooking, searchDto)) {
       this.logger.log(

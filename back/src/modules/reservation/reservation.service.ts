@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BookingProcess, BookingProcessStep } from '../../infrastructure/database/entities/BookingProcess.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../infrastructure/database/entities/BookingProcess.entity';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
@@ -9,7 +12,10 @@ import { RoomRepository } from '../room/room.repository';
 import { CancellationService } from '../cancellation/cancellation.service';
 import { ReservationRepository } from './reservation.repository';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
-import { PaymentService, RESERVATION_HOLD_MINUTES } from '../payment/payment.service';
+import {
+  PaymentService,
+  RESERVATION_HOLD_MINUTES,
+} from '../payment/payment.service';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { ConfirmReservationDto } from './dto/confirmReservation.dto';
 import {

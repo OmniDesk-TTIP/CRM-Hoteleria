@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, INestApplication, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  INestApplication,
+  NotFoundException,
+} from '@nestjs/common';
 import { getBotToken } from 'nestjs-telegraf';
 import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { AppModule } from '../../app.module';
@@ -7,9 +11,15 @@ import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
 import { ReservationAdminService } from './reservation-admin.service';
 import { SaveReservationDto } from './dto/saveReservation.dto';
-import { Room, RoomStatus } from '../../infrastructure/database/entities/Room.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
-import { Reservation, ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
+import {
+  Reservation,
+  ReservationStatus,
+} from '../../infrastructure/database/entities/Reservation.entity';
 
 describe('ReservationAdminService (integración)', () => {
   let app: INestApplication;
@@ -92,7 +102,7 @@ describe('ReservationAdminService (integración)', () => {
         await em.nativeDelete(RoomCategory, { id: categoryId });
       }
     } catch {
-
+      // no-op: limpieza best-effort
     } finally {
       if (app) await app.close();
     }
