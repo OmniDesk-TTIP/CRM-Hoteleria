@@ -1,25 +1,13 @@
 import { createHash, randomBytes } from 'crypto';
 import { v4 } from 'uuid';
-import { addDays } from '../dashboard/dashboard.util';
+import { addDays } from '../../common/date.util';
 import { toMinutes } from '../supportHours/supportHours.util';
 import { SatisfactionSurveyStatus } from '../../infrastructure/database/entities/SatisfactionSurvey.entity';
 
-/** Días que el link de la encuesta sigue abierto desde que se crea la invitación. */
 export const SURVEY_TTL_DAYS = 30;
-
-/**
- * Hora del hotel desde la que se manda la encuesta el mismo día del checkout: antes de eso el
- * huésped puede seguir en el hotel.
- */
 export const SURVEY_SEND_AFTER = '12:00';
-
-/**
- * Las estadías que terminaron hace más de estos días no reciben encuesta. Sin este límite, al
- * desplegar la feature se invitaría a todos los huéspedes históricos.
- */
 export const SURVEY_LOOKBACK_DAYS = 7;
 
-/** Aspectos que el huésped califica además de la calificación general (CA2). */
 export const SURVEY_ASPECTS = [
   { field: 'cleanlinessRating', label: 'Limpieza' },
   { field: 'attentionRating', label: 'Atención' },
@@ -38,15 +26,11 @@ export interface SurveyAnswer extends SurveyRatings {
   publishConsent: boolean;
 }
 
-/** Lo que el huésped ve al abrir el link. */
 export type SurveyPublicState = 'OPEN' | 'ANSWERED' | 'EXPIRED';
 
-/** Datos de la estadía para mostrar junto a la encuesta. */
 export interface SurveyStay {
   guestFullName: string;
-  /** YYYY-MM-DD */
   checkIn: string;
-  /** YYYY-MM-DD */
   checkOut: string;
   roomNumber: string | null;
 }
@@ -68,10 +52,6 @@ export function hashSurveyToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/**
- * Rango de checkouts (YYYY-MM-DD, calendario del hotel) que ya pueden recibir la encuesta. Los
- * que salen hoy entran recién después de SURVEY_SEND_AFTER.
- */
 export function surveyCheckOutWindow(
   today: string,
   nowMinutes: number,
@@ -81,10 +61,6 @@ export function surveyCheckOutWindow(
   return { from: addDays(today, -SURVEY_LOOKBACK_DAYS), to };
 }
 
-/**
- * Nombre con el que se muestra una reseña en la web: el primer nombre y la inicial del último
- * apellido ("Ana María Pérez" → "Ana P."). Es lo que el huésped autoriza en la encuesta.
- */
 export function formatAuthorName(guestFullName: string): string {
   const words = guestFullName.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'Huésped';
@@ -94,7 +70,6 @@ export function formatAuthorName(guestFullName: string): string {
   return `${firstName} ${words[words.length - 1].charAt(0).toLocaleUpperCase('es-AR')}.`;
 }
 
-/** Mensaje de Chamber con el link a la encuesta. Va como texto plano. */
 export function buildInvitationMessage(
   guestFullName: string,
   link: string,
@@ -110,10 +85,6 @@ export function buildInvitationMessage(
   ].join('\n');
 }
 
-/**
- * Regla de negocio de una encuesta de satisfacción. Pura: sin DB ni ORM.
- * El repository la convierte desde y hacia la entidad.
- */
 export class SatisfactionSurveyModel {
   readonly id: string;
   readonly reservationId: string;
@@ -139,10 +110,6 @@ export class SatisfactionSurveyModel {
     this.stay = props.stay;
   }
 
-  /**
-   * Nueva invitación para una reserva. El token solo existe en el valor devuelto (va en el link
-   * de Telegram); la encuesta guarda su hash.
-   */
   static createInvitation(input: {
     reservationId: string;
     telegramUserId: string;
@@ -166,10 +133,6 @@ export class SatisfactionSurveyModel {
     return { survey, token, tokenHash: hashSurveyToken(token) };
   }
 
-  /**
-   * Una encuesta sin responder se puede contestar hasta que vence, aunque Telegram haya dado
-   * error al mandarla: el token viaja solo en ese mensaje, así que quien lo tiene lo recibió.
-   */
   getPublicState(now: Date): SurveyPublicState {
     if (this.status === SatisfactionSurveyStatus.ANSWERED) return 'ANSWERED';
     if (this.expiresAt.getTime() <= now.getTime()) return 'EXPIRED';
@@ -180,10 +143,6 @@ export class SatisfactionSurveyModel {
     return this.publishedAt !== null;
   }
 
-  /**
-   * Publicar o despublicar la reseña en la web del hotel. Solo se publica una encuesta
-   * respondida y con el consentimiento del huésped. Devuelve el motivo si no se pudo, o null.
-   */
   setPublished(published: boolean, now: Date): string | null {
     if (this.status !== SatisfactionSurveyStatus.ANSWERED || !this.answer) {
       return 'La encuesta todavía no fue respondida';

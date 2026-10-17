@@ -11,6 +11,7 @@ import {
 } from './reservation.service';
 import { ReservationAdminService } from './reservation-admin.service';
 import { toDayNumber } from './reservation.model';
+import { formatDate } from '../bookingProcess/date.util';
 import {
   Room,
   RoomStatus,
@@ -26,13 +27,13 @@ import {
 } from '../../infrastructure/database/entities/BookingProcess.entity';
 
 /**
- * US-12 contra la base de test: reservas, habitaciones y procesos de reserva son filas reales;
- * Mercado Pago, Gemini y Telegram están simulados. Las reglas puras del hueco están en reservation.model.spec.ts; acá se prueba el flujo completo del service.
+ * Flujo del bot (US-7 y US-12) contra la base de test: reservas, habitaciones y procesos de reserva
+ * son filas reales; Mercado Pago, Gemini y Telegram están simulados. Las reglas puras del hueco están en reservation.model.spec.ts; acá se prueba el flujo completo del service.
  * Todo ocurre en octubre de 2099 (nunca es "pasado"). Las dos habitaciones de prueba se distinguen por capacidad, así cada test elige con quién compite:
  * - pidiendo 92 personas solo califica la habitación B;
  * - pidiendo 91 califican la A y la B.
  */
-describe('ReservationService – noches sueltas (integración)', () => {
+describe('ReservationService (integración)', () => {
   let app: INestApplication;
   let orm: MikroORM;
   let em: EntityManager;
@@ -61,12 +62,15 @@ describe('ReservationService – noches sueltas (integración)', () => {
   /** DD-MM-YYYY de un día de octubre de 2099, el formato que usa el bot. */
   const d = (day: number) => `${String(day).padStart(2, '0')}-10-2099`;
 
-  const seedReservation = async (room: Room, from: number, to: number) => {
-    const day = (n: number) => new Date(2099, 9, n, 12); // mediodía local
+  const seedReservationOn = async (
+    room: Room,
+    checkIn: Date,
+    checkOut: Date,
+  ) => {
     const reservation = em.create(Reservation, {
       room: em.getReference(Room, room.id),
-      checkIn: day(from),
-      checkOut: day(to),
+      checkIn,
+      checkOut,
       status: ReservationStatus.CONFIRMED,
       totalAmount: 100000,
       depositAmount: 30000,
@@ -76,6 +80,11 @@ describe('ReservationService – noches sueltas (integración)', () => {
     em.persist(reservation);
     await em.flush();
     reservationIds.push(reservation.id);
+  };
+
+  const seedReservation = (room: Room, from: number, to: number) => {
+    const day = (n: number) => new Date(2099, 9, n, 12); // mediodía local
+    return seedReservationOn(room, day(from), day(to));
   };
 
   const newBooking = async (
@@ -385,6 +394,7 @@ describe('ReservationService – noches sueltas (integración)', () => {
       );
 
       expect(reply).toContain('alguien acaba de reservar');
+      expect(booking.step).toBe(BookingProcessStep.IN_PROGRESS);
       expect(createPreference).not.toHaveBeenCalled();
     });
   });
@@ -425,6 +435,189 @@ describe('ReservationService – noches sueltas (integración)', () => {
 
       expect(created.id).toBeDefined();
       expect(await em.fork().count(Reservation, { id: created.id })).toBe(1);
+    });
+
+    it('una reserva cargada desde el panel (fechas a medianoche UTC) bloquea exactamente sus noches', async () => {
+      const created = await adminService.create({
+        guestFullName: 'Cliente Manual',
+        guestDni: '30111222',
+        roomId: roomB.id,
+        checkIn: '2099-10-10',
+        checkOut: '2099-10-15',
+        status: ReservationStatus.CONFIRMED,
+        totalAmount: 5 * PRICE_B,
+        depositAmount: 30000,
+      });
+      reservationIds.push(created.id);
+
+      const { result } = await search(ONLY_ROOM_B, 10, 15);
+
+      expect(alternativesOf(result).map((a) => a.checkIn)).toEqual([
+        d(15),
+        d(5),
+        d(17),
+      ]);
+    });
+
+    it('no ofrece alternativas que empiecen antes de hoy', async () => {
+      const now = new Date();
+      const fromToday = (days: number) =>
+        new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, 12);
+      await seedReservationOn(roomB, fromToday(2), fromToday(7));
+
+      const result = await service.searchAvailability(
+        (await newBooking()).telegramUserId,
+        null,
+        {
+          checkIn: formatDate(fromToday(2)),
+          checkOut: formatDate(fromToday(7)),
+          capacity: ONLY_ROOM_B,
+        },
+      );
+
+      expect(alternativesOf(result).map((a) => a.checkIn)).toEqual(
+        [7, 9, 8].map((days) => formatDate(fromToday(days))),
+      );
+    });
+  });
+
+  describe('US-7 – estadías más cortas como alternativa', () => {
+    it('prioriza una estadía más corta que se superpone con lo pedido antes que las completas corridas', async () => {
+      await seedReservation(roomB, 9, 12);
+
+      const { result } = await search(ONLY_ROOM_B, 10, 15);
+
+      expect(alternativesOf(result)).toEqual([
+        {
+          checkIn: d(12),
+          checkOut: d(16),
+          nights: 4,
+          isShorterStay: true,
+          roomCategory: categoryB.name,
+          totalAmount: 4 * PRICE_B,
+        },
+        {
+          checkIn: d(12),
+          checkOut: d(17),
+          nights: 5,
+          isShorterStay: false,
+          roomCategory: categoryB.name,
+          totalAmount: 5 * PRICE_B,
+        },
+        {
+          checkIn: d(14),
+          checkOut: d(19),
+          nights: 5,
+          isShorterStay: false,
+          roomCategory: categoryB.name,
+          totalAmount: 5 * PRICE_B,
+        },
+      ]);
+    });
+
+    it('completa con más estadías cortas cuando no hay suficientes completas', async () => {
+      await seedReservation(roomA, 1, 11);
+      await seedReservation(roomA, 15, 30);
+      await seedReservation(roomB, 1, 10);
+      await seedReservation(roomB, 13, 30);
+
+      const { result } = await search(ROOMS_A_AND_B, 10, 15);
+
+      expect(alternativesOf(result)).toEqual([
+        expect.objectContaining({
+          checkIn: d(11),
+          checkOut: d(15),
+          isShorterStay: true,
+          roomCategory: categoryA.name,
+        }),
+        expect.objectContaining({
+          checkIn: d(10),
+          checkOut: d(13),
+          isShorterStay: true,
+          roomCategory: categoryB.name,
+        }),
+      ]);
+    });
+
+    it('no ofrece estadías por debajo de la mitad de las noches pedidas', async () => {
+      await seedReservation(roomB, 1, 9);
+      await seedReservation(roomB, 11, 30);
+
+      const { result } = await search(ONLY_ROOM_B, 10, 17);
+
+      expect(alternativesOf(result)).toEqual([]);
+    });
+  });
+
+  describe('US-12 – oferta y confirmación', () => {
+    it('la oferta y la reserva calculan el total y la seña del 30%, y la respuesta trae el link de pago', async () => {
+      const { result, booking } = await search(ONLY_ROOM_B, 10, 14);
+      expect(offerOf(result)).toContain(
+        `El total de tu estadía (4 noches) sería de $${4 * PRICE_B}, con una seña del 30% de $${0.3 * 4 * PRICE_B}`,
+      );
+
+      const reply = await service.confirmReservation(
+        booking.telegramUserId,
+        booking,
+        { fullName: 'Ana Pagadora', dni: '30111222' },
+      );
+      await orm.em.flush();
+
+      const [saved] = await em.fork().find(Reservation, {
+        telegramUserId: booking.telegramUserId,
+      });
+      expect(Number(saved.depositAmount)).toBe(0.3 * 4 * PRICE_B);
+      expect(reply).toContain(`Total de la estadía: $${4 * PRICE_B}`);
+      expect(reply).toContain(`Seña para reservarla: $${0.3 * 4 * PRICE_B}`);
+      expect(reply).toContain(
+        `${process.env.FRONTEND_BASE_URL}/payment/form/${saved.id}`,
+      );
+    });
+
+    it('si Mercado Pago falla, propaga el error y no deja la reserva guardada', async () => {
+      const { booking } = await search(ONLY_ROOM_B, 10, 14);
+      createPreference.mockRejectedValueOnce(
+        new Error('Mercado Pago no responde'),
+      );
+
+      await expect(
+        service.confirmReservation(booking.telegramUserId, booking, {
+          fullName: 'Ana Sin Pago',
+          dni: '30111222',
+        }),
+      ).rejects.toThrow('Mercado Pago no responde');
+      expect(
+        await em
+          .fork()
+          .count(Reservation, { telegramUserId: booking.telegramUserId }),
+      ).toBe(0);
+    });
+  });
+
+  describe('US-4 CA4 – habitaciones deshabilitadas', () => {
+    it('nunca ofrece una habitación INACTIVE, ni en la oferta ni en las alternativas', async () => {
+      await seedReservation(roomB, 10, 14);
+      await em.nativeUpdate(
+        Room,
+        { id: roomA.id },
+        { status: RoomStatus.INACTIVE },
+      );
+
+      try {
+        const { result } = await search(ROOMS_A_AND_B, 10, 14);
+
+        const alternatives = alternativesOf(result);
+        expect(alternatives.length).toBeGreaterThan(0);
+        expect(
+          alternatives.every((a) => a.roomCategory === categoryB.name),
+        ).toBe(true);
+      } finally {
+        await em.nativeUpdate(
+          Room,
+          { id: roomA.id },
+          { status: RoomStatus.ACTIVE },
+        );
+      }
     });
   });
 });

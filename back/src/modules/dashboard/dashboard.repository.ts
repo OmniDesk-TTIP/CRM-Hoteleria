@@ -12,7 +12,7 @@ import {
   Room,
   RoomStatus,
 } from '../../infrastructure/database/entities/Room.entity';
-import { keyToUtc } from './dashboard.util';
+import { keyToUtc } from '../../common/date.util';
 
 const LIVE_STATUSES = [
   ReservationStatus.PENDING_PAYMENT,
