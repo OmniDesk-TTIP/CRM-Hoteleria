@@ -2,6 +2,7 @@ import apiClient from '@/config/api';
 import type {
   CancellationPolicy,
   CancellationPolicyFormData,
+  CompletedRefund,
   PaginatedResult,
   Refund,
   RefundListFilters,
@@ -40,9 +41,9 @@ export const listRefunds = async (filters: RefundListFilters): Promise<Paginated
   return data;
 };
 
-export const completeRefund = async (reservationId: string, refundedAt?: string): Promise<Refund> => {
-  const { data } = await apiClient.patch<Refund>(`/refunds/${reservationId}/complete`, {
+export const completeRefund = async (reservationId: string, refundedAt?: string): Promise<CompletedRefund> => {
+  const { data } = await apiClient.patch<CompletedRefund>(`/refunds/${reservationId}/complete`, {
     ...(refundedAt ? { refundedAt } : {}),
   });
   return data;
-};
+};

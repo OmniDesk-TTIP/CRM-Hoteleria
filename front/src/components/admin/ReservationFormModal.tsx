@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { AdminReservation, ReservationFormData, RoomOption } from '@/config/types';
 import { createReservation, updateReservation } from '@/services/reservation.service';
 import { listRoomOptions } from '@/services/room.service';
+import ConfirmCancelModal from './ConfirmCancelModal';
 
 interface ReservationFormModalProps {
   reservation: AdminReservation | null; // Si es null, opera en modo Create
@@ -30,6 +31,8 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // US-5 CA5 / US-14 CA7: pasar a Cancelada desde el formulario también pide la doble confirmación.
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
 
   const [formData, setFormData] = useState<ReservationFormData>({
     guestFullName: reservation?.guestFullName || '',
@@ -67,6 +70,8 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
     });
   };
 
+  const isCancelling = Boolean(reservation) && reservation?.status !== 'CANCELLED' && formData.status === 'CANCELLED';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -76,6 +81,15 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
       return;
     }
 
+    if (isCancelling) {
+      setIsConfirmingCancel(true);
+      return;
+    }
+
+    await save();
+  };
+
+  const save = async () => {
     setIsSubmitting(true);
     try {
       if (isEdit && reservation) {
@@ -91,84 +105,113 @@ export default function ReservationFormModal({ reservation, onClose, onSuccess }
     }
   };
 
+  // Lo que se va a cancelar con los datos del formulario (la devolución se calcula con estos),
+  // pero con el estado actual: si estaba pagada, corresponde devolución.
+  const selectedRoom = rooms.find((room) => room.id === formData.roomId);
+  const reservationToCancel: AdminReservation | null = reservation
+    ? {
+        ...reservation,
+        guestFullName: formData.guestFullName,
+        checkIn: formData.checkIn,
+        checkOut: formData.checkOut,
+        depositAmount: formData.depositAmount,
+        room: selectedRoom
+          ? { id: selectedRoom.id, roomNumber: selectedRoom.roomNumber, categoryName: selectedRoom.categoryName }
+          : reservation.room,
+      }
+    : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-4 shadow-xl sm:p-6">
-        <h2 className="mb-4 text-xl font-bold text-text">
-          {isEdit ? 'Editar Reserva' : 'Nueva Reserva Manual'}
-        </h2>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-goldLight/20 bg-card p-4 shadow-xl sm:p-6">
+          <h2 className="mb-4 text-xl font-bold text-text">
+            {isEdit ? 'Editar Reserva' : 'Nueva Reserva Manual'}
+          </h2>
 
-        {error && (
-          <div className="mb-4 rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="mb-4 rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                Nombre Completo *
+                <input required name="guestFullName" value={formData.guestFullName} onChange={handleChange} className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                DNI *
+                <input required name="guestDni" value={formData.guestDni} onChange={handleChange} className={inputClasses} />
+              </label>
+            </div>
+
             <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Nombre Completo *
-              <input required name="guestFullName" value={formData.guestFullName} onChange={handleChange} className={inputClasses} />
+              Habitación *
+              <select required name="roomId" value={formData.roomId} onChange={handleChange} disabled={isLoadingRooms} className={inputClasses}>
+                <option value="" disabled>Selecciona una habitación</option>
+                {rooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.categoryName} - Hab. {room.roomNumber} (Cap: {room.capacity})
+                  </option>
+                ))}
+              </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm text-textMuted">
-              DNI *
-              <input required name="guestDni" value={formData.guestDni} onChange={handleChange} className={inputClasses} />
-            </label>
-          </div>
 
-          <label className="flex flex-col gap-1 text-sm text-textMuted">
-            Habitación *
-            <select required name="roomId" value={formData.roomId} onChange={handleChange} disabled={isLoadingRooms} className={inputClasses}>
-              <option value="" disabled>Selecciona una habitación</option>
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {room.categoryName} - Hab. {room.roomNumber} (Cap: {room.capacity})
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                Check-in *
+                <input required type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                Check-out *
+                <input required type="date" name="checkOut" value={formData.checkOut} onChange={handleChange} className={inputClasses} />
+              </label>
+            </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Check-in *
-              <input required type="date" name="checkIn" value={formData.checkIn} onChange={handleChange} className={inputClasses} />
+              Estado inicial *
+              <select required name="status" value={formData.status} onChange={handleChange} className={inputClasses}>
+                <option value="PENDING_PAYMENT">Pendiente</option>
+                <option value="CONFIRMED">Confirmada</option>
+                <option value="CANCELLED">Cancelada</option>
+              </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Check-out *
-              <input required type="date" name="checkOut" value={formData.checkOut} onChange={handleChange} className={inputClasses} />
-            </label>
-          </div>
 
-          <label className="flex flex-col gap-1 text-sm text-textMuted">
-            Estado inicial *
-            <select required name="status" value={formData.status} onChange={handleChange} className={inputClasses}>
-              <option value="PENDING_PAYMENT">Pendiente</option>
-              <option value="CONFIRMED">Confirmada</option>
-              <option value="CANCELLED">Cancelada</option>
-            </select>
-          </label>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                Monto Total *
+                <input required type="number" min="0" step="0.01" name="totalAmount" value={formData.totalAmount} onChange={handleChange} className={inputClasses} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-textMuted">
+                Seña *
+                <input required type="number" min="0" step="0.01" name="depositAmount" value={formData.depositAmount} onChange={handleChange} className={inputClasses} />
+              </label>
+            </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Monto Total *
-              <input required type="number" min="0" step="0.01" name="totalAmount" value={formData.totalAmount} onChange={handleChange} className={inputClasses} />
-            </label>
-            <label className="flex flex-col gap-1 text-sm text-textMuted">
-              Seña *
-              <input required type="number" min="0" step="0.01" name="depositAmount" value={formData.depositAmount} onChange={handleChange} className={inputClasses} />
-            </label>
-          </div>
-
-          <div className="mt-6 flex justify-end gap-3 border-t border-goldLight/10 pt-4">
-            <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-xl px-4 py-2 font-medium text-textMuted transition hover:text-text">
-              Cancelar
-            </button>
-            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:opacity-50">
-              {isSubmitting ? 'Guardando...' : 'Guardar'}
-            </button>
-          </div>
-        </form>
+            <div className="mt-6 flex justify-end gap-3 border-t border-goldLight/10 pt-4">
+              <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-xl px-4 py-2 font-medium text-textMuted transition hover:text-text">
+                Cancelar
+              </button>
+              <button type="submit" disabled={isSubmitting} className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:opacity-50">
+                {isSubmitting ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+
+      {isConfirmingCancel && reservationToCancel && (
+        <ConfirmCancelModal
+          reservation={reservationToCancel}
+          onClose={() => setIsConfirmingCancel(false)}
+          onConfirm={() => {
+            setIsConfirmingCancel(false);
+            save();
+          }}
+        />
+      )}
+    </>
   );
 }

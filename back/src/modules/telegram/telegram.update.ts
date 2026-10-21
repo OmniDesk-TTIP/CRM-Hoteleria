@@ -49,6 +49,12 @@ export class TelegramUpdate {
   private static readonly ASK_GUEST_DATA =
     'Genial, te la reservo. Para tomarla necesito el nombre completo y el DNI del huésped que se aloja.';
 
+  private static readonly NO_PENDING_PAYMENT =
+    'No tenés ninguna reserva esperando el pago de la seña. Si querés, buscamos disponibilidad: decime las fechas de entrada y salida y para cuántas personas.';
+
+  private static readonly ASK_WHICH_OPTION =
+    'Antes de tomar la reserva necesito que me confirmes cuál de las opciones que te pasé preferís (fechas de entrada y salida).';
+
   constructor(
     private readonly ragService: RagService,
     private readonly reservationService: ReservationService,
@@ -140,6 +146,8 @@ export class TelegramUpdate {
         await this.restaurantService.getChatContext(telegramUserId);
       const cancellation =
         await this.cancellationService.getGuestContextBlock(telegramUserId);
+      const hasPendingPayment =
+        await this.reservationService.hasPendingPayment(telegramUserId);
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
@@ -147,6 +155,7 @@ export class TelegramUpdate {
         lastCompletedBooking,
         servicesBlock,
         cancellation,
+        hasPendingPayment,
         restaurant,
       );
 
@@ -254,7 +263,12 @@ export class TelegramUpdate {
           aiResponse.datos,
           telegramUserId,
           activeBooking,
-          escapeHtml(aiResponse.texto || ''),
+        );
+      case ChatAction.SEND_PAYMENT_LINK:
+        return (
+          (await this.reservationService.buildPendingPaymentReply(
+            telegramUserId,
+          )) ?? TelegramUpdate.NO_PENDING_PAYMENT
         );
       case ChatAction.REQUEST_SPA_BOOKING:
         return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
@@ -262,6 +276,11 @@ export class TelegramUpdate {
         return this.resolveTableBooking(aiResponse.datos, telegramUserId);
       case ChatAction.CANCEL_RESERVATION:
         return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
+      case ChatAction.REGISTER_REFUND_ACCOUNT:
+        return this.resolveRegisterRefundAccount(
+          aiResponse.datos,
+          telegramUserId,
+        );
       default:
         return (
           escapeHtml(aiResponse.texto || '') ||
@@ -283,6 +302,28 @@ export class TelegramUpdate {
     const result = await this.cancellationService.cancelForGuest(
       telegramUserId,
       reservationId,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  private async resolveRegisterRefundAccount(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const { reservationId, alias, holderName } = (datos ?? {}) as {
+      reservationId?: unknown;
+      alias?: unknown;
+      holderName?: unknown;
+    };
+    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
+      return '¿Me confirmás de qué reserva es la devolución (fechas de entrada y salida)?';
+    }
+
+    const result = await this.cancellationService.registerRefundAccountForGuest(
+      telegramUserId,
+      reservationId,
+      alias,
+      holderName,
     );
     return result.ok ? result.reply : escapeHtml(result.reason);
   }
@@ -415,15 +456,25 @@ export class TelegramUpdate {
     datos: unknown,
     telegramUserId: string,
     activeBooking: BookingProcess | null,
-    fallbackReply: string,
   ): Promise<string> {
+    // Nunca se responde con el texto del modelo: si no hay nada que confirmar, Gemini suele
+    // contestar como si hubiera reservado ("ya registré tus datos") sin que exista la reserva.
+    if (activeBooking?.step === BookingProcessStep.IN_PROGRESS) {
+      return activeBooking.checkIn &&
+        activeBooking.checkOut &&
+        activeBooking.capacity
+        ? TelegramUpdate.ASK_WHICH_OPTION
+        : '¿Para qué fechas de entrada y salida, y para cuántas personas, buscamos la habitación?';
+    }
     if (
       !activeBooking ||
       activeBooking.step !== BookingProcessStep.PENDING_CONFIRMATION
     ) {
       return (
-        fallbackReply ||
-        'Ya procesamos esa reserva. Si necesitás algo más, decime.'
+        (await this.reservationService.buildPendingPaymentReply(
+          telegramUserId,
+        )) ??
+        'Para tomar una reserva primero necesito las fechas de entrada y salida y para cuántas personas es.'
       );
     }
 

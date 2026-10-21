@@ -15,11 +15,11 @@ import { UserRole } from '../../infrastructure/database/entities/User.entity';
 import { CancellationService } from './cancellation.service';
 import {
   CancellationPolicyDto,
+  CompletedRefundDto,
   CompleteRefundDto,
   CreateCancellationPolicyDto,
   ListRefundsQueryDto,
   PaginatedRefundsDto,
-  RefundDto,
   UpdateCancellationPolicyDto,
 } from './dto/cancellation.dto';
 
@@ -80,7 +80,7 @@ export class CancellationController {
   completeRefund(
     @Param('reservationId', ParseUUIDPipe) reservationId: string,
     @Body() body: CompleteRefundDto,
-  ): Promise<RefundDto> {
+  ): Promise<CompletedRefundDto> {
     return this.cancellationService.completeRefund(reservationId, body);
   }
 }

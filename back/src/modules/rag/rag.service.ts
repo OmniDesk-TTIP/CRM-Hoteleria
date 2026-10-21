@@ -31,6 +31,8 @@ export enum ChatAction {
   REQUEST_SPA_BOOKING = 'REQUEST_SPA_BOOKING',
   REQUEST_TABLE_BOOKING = 'REQUEST_TABLE_BOOKING',
   CANCEL_RESERVATION = 'CANCEL_RESERVATION',
+  REGISTER_REFUND_ACCOUNT = 'REGISTER_REFUND_ACCOUNT',
+  SEND_PAYMENT_LINK = 'SEND_PAYMENT_LINK',
   REPLY = 'REPLY',
 }
 
@@ -120,9 +122,55 @@ const CANCEL_RESERVATION_DECLARATION: FunctionDeclaration = {
   },
 };
 
+const REGISTER_REFUND_ACCOUNT_DECLARATION: FunctionDeclaration = {
+  name: 'register_refund_account',
+  description:
+    'Llama a esta función cuando el cliente te haya dado el alias de su cuenta bancaria o billetera virtual Y el ' +
+    'nombre completo del titular para recibir una devolución que figura en DEVOLUCIONES PENDIENTES DEL CLIENTE, ' +
+    'o cuando quiera corregir esos datos. Si falta alguno de los dos, pedíselo antes. Usá el id de la devolución tal ' +
+    'cual figura en la lista. No inventes ni completes datos que el cliente no te dio.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      reservationId: {
+        type: SchemaType.STRING,
+        description: 'El id (uuid) de la devolución pendiente.',
+      },
+      alias: {
+        type: SchemaType.STRING,
+        description:
+          'El alias de la cuenta, tal cual lo escribió el cliente (por ejemplo "mi.alias.mp").',
+      },
+      holderName: {
+        type: SchemaType.STRING,
+        description: 'Nombre completo del titular de la cuenta.',
+      },
+    },
+    required: ['reservationId', 'alias', 'holderName'],
+  },
+};
+
+const SEND_PAYMENT_LINK_DECLARATION: FunctionDeclaration = {
+  name: 'send_payment_link',
+  description:
+    'Llama a esta función cuando el cliente pregunte cómo, dónde o con qué link pagar la seña de una reserva que ' +
+    'ya tomó y todavía no pagó, o pida que le reenvíes el link de pago. Nunca escribas un link de pago por tu cuenta.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      reason: {
+        type: SchemaType.STRING,
+        description: 'En pocas palabras, qué pidió el cliente.',
+      },
+    },
+  },
+};
+
 export interface CancellationContext {
   block: string;
   canCancel: boolean;
+  /** Hay devoluciones pendientes del cliente: puede informar o corregir la cuenta. */
+  canRegisterRefundAccount?: boolean;
 }
 
 export interface RestaurantContext {
@@ -194,6 +242,7 @@ export class RagService {
     ultimaCompletada: BookingProcess | null = null,
     servicesBlock: string | null = null,
     cancellation: CancellationContext | null = null,
+    hasPendingPayment = false,
     restaurant: RestaurantContext | null = null,
   ): Promise<AiResponse> {
     const embeddingModel = this.genAI.getGenerativeModel({
@@ -223,7 +272,7 @@ export class RagService {
     } else if (reservaActiva) {
       contextoReserva = `\n[ESTADO ACTUAL: Faltan datos. CheckIn=${reservaActiva.checkIn || 'No'}, CheckOut=${reservaActiva.checkOut || 'No'}, Capacidad=${reservaActiva.capacity || 'No'}]`;
     } else if (ultimaCompletada) {
-      contextoReserva = `\n[ESTADO ACTUAL: La reserva del ${ultimaCompletada.checkIn} al ${ultimaCompletada.checkOut} ya fue tomada y está a la espera del pago de la seña. PROHIBIDO usar las herramientas para estos datos; no le digas al usuario que está confirmada hasta que le avisemos que se acreditó el pago.]`;
+      contextoReserva = `\n[ESTADO ACTUAL: La reserva del ${ultimaCompletada.checkIn} al ${ultimaCompletada.checkOut} ya fue tomada y está a la espera del pago de la seña. PROHIBIDO usar las herramientas para estos datos; no le digas al usuario que está confirmada hasta que le avisemos que se acreditó el pago.${hasPendingPayment ? " Si pregunta cómo o dónde pagar la seña, o pide el link, usá 'send_payment_link'." : ''}]`;
     }
 
     const historyText = this.formatHistory(history);
@@ -305,6 +354,10 @@ export class RagService {
             ...(cancellation?.canCancel
               ? [CANCEL_RESERVATION_DECLARATION]
               : []),
+            ...(cancellation?.canRegisterRefundAccount
+              ? [REGISTER_REFUND_ACCOUNT_DECLARATION]
+              : []),
+            ...(hasPendingPayment ? [SEND_PAYMENT_LINK_DECLARATION] : []),
           ],
         },
       ],
@@ -332,6 +385,15 @@ export class RagService {
         return { action: ChatAction.REQUEST_HUMAN, datos: args };
       if (name === 'cancel_reservation' && cancellation?.canCancel) {
         return { action: ChatAction.CANCEL_RESERVATION, datos: args };
+      }
+      if (
+        name === 'register_refund_account' &&
+        cancellation?.canRegisterRefundAccount
+      ) {
+        return { action: ChatAction.REGISTER_REFUND_ACCOUNT, datos: args };
+      }
+      if (name === 'send_payment_link' && hasPendingPayment) {
+        return { action: ChatAction.SEND_PAYMENT_LINK, datos: args };
       }
       if (name === 'request_spa_booking' && servicesBlock !== null) {
         return {
@@ -394,7 +456,7 @@ export class RagService {
       : `REGLA PARA EL RESTAURANTE: No tenés información del restaurante en este momento. No inventes platos, precios ni horarios; ofrecele derivarlo a recepción.`;
 
     const cancellationRule = hasCancellationContext
-      ? `REGLA PARA CANCELACIONES: Si el cliente pregunta por cancelar, por devoluciones o por la seña, respondé ÚNICAMENTE con la sección [POLÍTICA DE CANCELACIÓN] del contexto (tramos y porcentajes sobre la seña) y no inventes montos ni excepciones. Si quiere cancelar una de sus reservas: identificá cuál (si tiene una sola, es esa), decile con claridad cuánto se le devuelve si cancela hoy (el monto figura en su lista de reservas), avisale que la cancelación no se puede deshacer y preguntale si confirma. Recién cuando te diga que sí de forma explícita usa 'cancel_reservation' con el id de esa reserva. Nunca canceles por tu cuenta ni por una duda como "¿se puede cancelar?".`
+      ? `REGLA PARA CANCELACIONES: Si el cliente pregunta por cancelar, por devoluciones o por la seña, respondé ÚNICAMENTE con la sección [POLÍTICA DE CANCELACIÓN] del contexto (tramos y porcentajes sobre la seña) y no inventes montos ni excepciones. Si quiere cancelar una de sus reservas: identificá cuál (si tiene una sola, es esa), decile con claridad cuánto se le devuelve si cancela hoy (el monto figura en su lista de reservas), avisale que la cancelación no se puede deshacer y preguntale si confirma. Recién cuando te diga que sí de forma explícita usa 'cancel_reservation' con el id de esa reserva. Nunca canceles por tu cuenta ni por una duda como "¿se puede cancelar?". Si en DEVOLUCIONES PENDIENTES DEL CLIENTE una devolución dice FALTA LA CUENTA, pedile al cliente el alias de su cuenta bancaria o billetera virtual y el nombre completo del titular (si ya te dio uno de los dos, pedile solo el otro); cuando tengas los dos usa 'register_refund_account' con el id de esa devolución. Si quiere corregir una cuenta ya informada, también usá 'register_refund_account'. No le digas que la devolución ya se hizo: eso se lo avisa el sistema cuando recepción la transfiere.`
       : `REGLA PARA CANCELACIONES: No tenés información de la política de cancelación en este momento. No prometas devoluciones ni montos; ofrecele derivarlo a recepción.`;
 
     const servicesRule = hasSpaContext

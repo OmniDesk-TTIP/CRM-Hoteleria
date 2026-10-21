@@ -275,7 +275,8 @@ describe('RagService', () => {
       const ask = (
         text: string,
         restaurant: { block: string; canBook: boolean } | null,
-      ) => service.askQuestion(text, null, [], null, null, null, restaurant);
+      ) =>
+        service.askQuestion(text, null, [], null, null, null, false, restaurant);
 
       beforeEach(() => {
         chatModelMock.generateContent.mockResolvedValue(

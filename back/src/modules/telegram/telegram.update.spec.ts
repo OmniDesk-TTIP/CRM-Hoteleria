@@ -30,6 +30,7 @@ describe('TelegramUpdate', () => {
   let cancellationService: {
     getGuestContextBlock: jest.Mock;
     cancelForGuest: jest.Mock;
+    registerRefundAccountForGuest: jest.Mock;
   };
   let session: any;
 
@@ -52,6 +53,8 @@ describe('TelegramUpdate', () => {
           useValue: {
             searchAvailability: jest.fn(),
             confirmReservation: jest.fn(),
+            hasPendingPayment: jest.fn().mockResolvedValue(false),
+            buildPendingPaymentReply: jest.fn().mockResolvedValue(null),
           },
         },
         {
@@ -96,6 +99,7 @@ describe('TelegramUpdate', () => {
           useValue: {
             getGuestContextBlock: jest.fn(),
             cancelForGuest: jest.fn(),
+            registerRefundAccountForGuest: jest.fn(),
           },
         },
         {
@@ -211,6 +215,7 @@ describe('TelegramUpdate', () => {
       null,
       '[SERVICIOS DEL HOTEL]',
       { block: '[POLÍTICA DE CANCELACIÓN]', canCancel: false },
+      false,
       { block: '[RESTAURANTE]', canBook: true },
     );
   });
@@ -340,6 +345,183 @@ describe('TelegramUpdate', () => {
       expect(cancellationService.cancelForGuest).not.toHaveBeenCalled();
       expect(mockCtx.reply).toHaveBeenCalledWith(
         expect.stringContaining('cuál de tus reservas'),
+        { parse_mode: 'HTML' },
+      );
+    });
+  });
+
+  describe('confirmación sin nada para confirmar y link de pago', () => {
+    const PENDING_LINK_REPLY =
+      'Reserva del 30-10-2026 al 04-11-2026: seña de <b>$18000</b>.\nAboná acá: link';
+
+    it('con opciones de fechas sin elegir no reserva ni repite el texto del modelo', async () => {
+      jest.spyOn(bookingProcessService, 'getActive').mockResolvedValue({
+        telegramUserId: mockTelegramUserId,
+        step: BookingProcessStep.IN_PROGRESS,
+        checkIn: '30-10-2026',
+        checkOut: '04-11-2026',
+        capacity: 2,
+      } as any);
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CONFIRM_RESERVATION,
+        datos: { fullName: 'Patricia', dni: '34908567' },
+        texto: '¡Perfecto, Patricia! Ya registré tus datos.',
+      });
+
+      await update.onMessage('Patricia 34908567', mockCtx);
+
+      expect(reservationService.confirmReservation).not.toHaveBeenCalled();
+      const [reply] = mockCtx.reply.mock.calls[0];
+      expect(reply).toContain('cuál de las opciones');
+      expect(reply).not.toContain('Ya registré tus datos');
+    });
+
+    it('si la reserva ya se tomó, reenvía el link de pago en vez de inventar una confirmación', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CONFIRM_RESERVATION,
+        datos: { fullName: 'Patricia', dni: '34908567' },
+        texto: '¡Perfecto, Patricia! Ya registré tus datos.',
+      });
+      jest
+        .spyOn(reservationService, 'buildPendingPaymentReply')
+        .mockResolvedValue(PENDING_LINK_REPLY);
+
+      await update.onMessage('Patricia 34908567', mockCtx);
+
+      expect(reservationService.confirmReservation).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(PENDING_LINK_REPLY, {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('sin búsqueda ni reserva pendiente pide las fechas', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CONFIRM_RESERVATION,
+        datos: { fullName: 'Patricia', dni: '34908567' },
+        texto: 'Listo, reservado',
+      });
+
+      await update.onMessage('Patricia 34908567', mockCtx);
+
+      const [reply] = mockCtx.reply.mock.calls[0];
+      expect(reply).toContain('fechas de entrada y salida');
+      expect(reply).not.toContain('Listo, reservado');
+    });
+
+    it('le avisa al modelo si hay una reserva esperando el pago', async () => {
+      jest
+        .spyOn(reservationService, 'hasPendingPayment')
+        .mockResolvedValue(true);
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REPLY,
+        texto: 'Hola',
+      });
+
+      await update.onMessage('Hola', mockCtx);
+
+      expect(ragService.askQuestion).toHaveBeenCalledWith(
+        'Hola',
+        null,
+        [],
+        null,
+        '[SERVICIOS DEL HOTEL]',
+        expect.anything(),
+        true,
+        expect.anything(),
+      );
+    });
+
+    it('SEND_PAYMENT_LINK responde con el link que arma el backend', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.SEND_PAYMENT_LINK,
+        datos: {},
+      });
+      jest
+        .spyOn(reservationService, 'buildPendingPaymentReply')
+        .mockResolvedValue(PENDING_LINK_REPLY);
+
+      await update.onMessage('¿a dónde debo abonar la seña?', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(PENDING_LINK_REPLY, {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('SEND_PAYMENT_LINK sin reservas esperando el pago no inventa un link', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.SEND_PAYMENT_LINK,
+        datos: {},
+      });
+
+      await update.onMessage('pasame el link', mockCtx);
+
+      const [reply] = mockCtx.reply.mock.calls[0];
+      expect(reply).toContain('No tenés ninguna reserva esperando el pago');
+    });
+  });
+
+  describe('cuenta para la devolución (REGISTER_REFUND_ACCOUNT)', () => {
+    const reservationId = '5b0f7f8e-6c53-4d3f-9a7c-1f6f1d0f0003';
+
+    it('guarda la cuenta por el módulo de cancelación y responde con su texto', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REGISTER_REFUND_ACCOUNT,
+        datos: {
+          reservationId,
+          alias: 'ana.perez.mp',
+          holderName: 'Ana Pérez',
+        },
+      });
+      cancellationService.registerRefundAccountForGuest.mockResolvedValue({
+        ok: true,
+        reply: 'Listo, anoté la cuenta',
+      });
+
+      await update.onMessage('ana.perez.mp, Ana Pérez', mockCtx);
+
+      expect(
+        cancellationService.registerRefundAccountForGuest,
+      ).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        reservationId,
+        'ana.perez.mp',
+        'Ana Pérez',
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith('Listo, anoté la cuenta', {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('le explica el motivo si los datos no sirven', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REGISTER_REFUND_ACCOUNT,
+        datos: { reservationId, alias: 'x', holderName: 'Ana Pérez' },
+      });
+      cancellationService.registerRefundAccountForGuest.mockResolvedValue({
+        ok: false,
+        reason: 'Ese alias no parece válido',
+      });
+
+      await update.onMessage('x', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith('Ese alias no parece válido', {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it('no guarda nada si el id que manda el modelo no es válido', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REGISTER_REFUND_ACCOUNT,
+        datos: { reservationId: 'la-ultima', alias: 'ana.perez.mp' },
+      });
+
+      await update.onMessage('ana.perez.mp', mockCtx);
+
+      expect(
+        cancellationService.registerRefundAccountForGuest,
+      ).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('de qué reserva es la devolución'),
         { parse_mode: 'HTML' },
       );
     });

@@ -127,6 +127,16 @@ export class RefundDto {
   status!: RefundStatus;
   cancelledAt!: Date | null;
   refundedAt!: Date | null;
+  /** Cuenta que informó el huésped por Telegram para recibir la devolución. */
+  accountAlias!: string | null;
+  accountHolder!: string | null;
+  /** La reserva vino del bot: al marcarla como realizada se le avisa al huésped por Telegram. */
+  notifiableByTelegram!: boolean;
+}
+
+export class CompletedRefundDto extends RefundDto {
+  /** Si el aviso por Telegram le llegó al huésped. */
+  guestNotified!: boolean;
 }
 
 export class PaginatedRefundsDto {

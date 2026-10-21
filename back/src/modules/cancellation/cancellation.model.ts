@@ -223,6 +223,115 @@ export function buildCancellationBlock(
   return lines.join('\n');
 }
 
+/** Devolución pendiente de un huésped, con la cuenta que ya informó (si la informó). */
+export interface PendingRefundPreview {
+  reservationId: string;
+  checkIn: string;
+  checkOut: string;
+  amount: number;
+  accountAlias: string | null;
+  accountHolder: string | null;
+}
+
+export interface RefundAccount {
+  alias: string;
+  holder: string;
+}
+
+/** Alias de CBU/CVU: de 6 a 20 caracteres, solo letras, números, puntos y guiones. */
+const ALIAS_PATTERN = /^[a-z0-9.-]{6,20}$/;
+const HOLDER_MIN_LENGTH = 3;
+const HOLDER_MAX_LENGTH = 150;
+
+/** Normaliza y valida lo que dio el huésped. Devuelve la cuenta lista para guardar o el motivo del rechazo. */
+export function parseRefundAccount(
+  alias: unknown,
+  holder: unknown,
+): { ok: true; account: RefundAccount } | { ok: false; reason: string } {
+  const normalizedAlias =
+    typeof alias === 'string' ? alias.trim().toLowerCase() : '';
+  const normalizedHolder =
+    typeof holder === 'string' ? holder.trim().replace(/\s+/g, ' ') : '';
+
+  if (!normalizedAlias && !normalizedHolder) {
+    return {
+      ok: false,
+      reason:
+        'Para hacerte la devolución necesito el alias de tu cuenta bancaria o billetera virtual y el nombre completo del titular.',
+    };
+  }
+  if (!ALIAS_PATTERN.test(normalizedAlias)) {
+    return {
+      ok: false,
+      reason:
+        'Ese alias no parece válido: tiene que tener entre 6 y 20 caracteres, solo letras, números, puntos o guiones. ¿Me lo pasás de nuevo?',
+    };
+  }
+  if (
+    normalizedHolder.length < HOLDER_MIN_LENGTH ||
+    normalizedHolder.length > HOLDER_MAX_LENGTH
+  ) {
+    return {
+      ok: false,
+      reason: '¿Me pasás el nombre completo del titular de la cuenta?',
+    };
+  }
+  return {
+    ok: true,
+    account: { alias: normalizedAlias, holder: normalizedHolder },
+  };
+}
+
+export function buildRefundAccountBlock(
+  refunds: PendingRefundPreview[],
+): string | null {
+  if (refunds.length === 0) return null;
+
+  const lines = ['DEVOLUCIONES PENDIENTES DEL CLIENTE:'];
+  for (const refund of refunds.slice(0, MAX_RESERVATIONS_IN_BLOCK)) {
+    const account = refund.accountAlias
+      ? `cuenta informada: alias ${refund.accountAlias}, titular ${refund.accountHolder ?? 'sin informar'}`
+      : 'FALTA LA CUENTA: pedile el alias y el nombre del titular';
+    lines.push(
+      `- id=${refund.reservationId} | reserva del ${toChatDate(refund.checkIn)} al ${toChatDate(refund.checkOut)} | a devolver $${refund.amount} | ${account}`,
+    );
+  }
+  return lines.join('\n');
+}
+
+export function buildRefundAccountReply(
+  account: RefundAccount,
+  refund: { amount: number },
+): string {
+  return [
+    `Listo, anoté la cuenta para la devolución de <b>$${refund.amount}</b>:`,
+    `• Alias: <b>${escapeHtml(account.alias)}</b>`,
+    `• Titular: <b>${escapeHtml(account.holder)}</b>`,
+    '',
+    'Te escribo por acá cuando hagamos la transferencia. Si algún dato está mal, decime y lo corrijo.',
+  ].join('\n');
+}
+
+/** Mensaje que recibe el huésped por Telegram cuando recepción marca la devolución como realizada. */
+export function buildRefundCompletedMessage(refund: {
+  guestFullName: string;
+  checkIn: string;
+  checkOut: string;
+  amount: number;
+  accountAlias: string | null;
+}): string {
+  const [firstName] = refund.guestFullName.trim().split(/\s+/);
+  const greeting = firstName ? `¡Hola, ${escapeHtml(firstName)}!` : '¡Hola!';
+  const destination = refund.accountAlias
+    ? ` a la cuenta con alias <b>${escapeHtml(refund.accountAlias)}</b>`
+    : '';
+  return [
+    `${greeting} Te confirmamos que la cancelación de tu reserva del ${toChatDate(refund.checkIn)} al ${toChatDate(refund.checkOut)} quedó cerrada.`,
+    '',
+    `Ya te transferimos la devolución de <b>$${refund.amount}</b>${destination}. Revisá tu cuenta y, si no ves el dinero acreditado, escribinos por acá.`,
+  ].join('\n');
+}
+
 export function buildPolicySummary(policy: CancellationPolicyModel): string {
   return [
     `<b>Política de cancelación</b> (sobre la seña abonada):`,
@@ -243,5 +352,9 @@ export function buildGuestCancellationReply(
   if (calculation.refundAmount <= 0) {
     return `${base} Según la política de cancelación no corresponde devolución de la seña.`;
   }
-  return `${base} Te corresponde la devolución de <b>$${calculation.refundAmount}</b> (${calculation.refundPercentage}% de la seña). Queda registrada como pendiente y recepción te va a avisar cuando esté hecha.`;
+  return [
+    `${base} Te corresponde la devolución de <b>$${calculation.refundAmount}</b> (${calculation.refundPercentage}% de la seña) y queda registrada como pendiente.`,
+    '',
+    'Para hacerte la transferencia, pasame el <b>alias</b> de tu cuenta bancaria o billetera virtual y el <b>nombre completo del titular</b>.',
+  ].join('\n');
 }
