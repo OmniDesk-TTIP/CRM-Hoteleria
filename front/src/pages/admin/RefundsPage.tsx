@@ -35,6 +35,39 @@ function RefundStatusBadge({ status }: { status: RefundStatus }) {
   );
 }
 
+/** Cuenta que informó el huésped por Telegram para recibir la transferencia. */
+function AccountDetails({ refund }: { refund: Refund }) {
+  if (refund.accountAlias) {
+    return (
+      <>
+        <p className="break-all font-mono text-text">{refund.accountAlias}</p>
+        {refund.accountHolder && <p className="text-xs text-textMuted">{refund.accountHolder}</p>}
+      </>
+    );
+  }
+  if (refund.status === 'COMPLETED') return <p className="text-textMuted">—</p>;
+  return (
+    <p className="text-xs text-textMuted">
+      {refund.notifiableByTelegram ? 'Esperando que el huésped la informe por Telegram' : 'Sin datos: coordinar con el huésped'}
+    </p>
+  );
+}
+
+type Notice = { text: string; tone: 'success' | 'warning' };
+
+const completionNotice = (refund: Refund, guestNotified: boolean): Notice => {
+  if (guestNotified) {
+    return { text: `Devolución registrada. Le avisamos a ${refund.guestFullName} por Telegram.`, tone: 'success' };
+  }
+  if (refund.notifiableByTelegram) {
+    return {
+      text: `Devolución registrada, pero no pudimos avisarle a ${refund.guestFullName} por Telegram. Avisale por otro medio.`,
+      tone: 'warning',
+    };
+  }
+  return { text: 'Devolución registrada.', tone: 'success' };
+};
+
 /** US-14 CA4 y CA5: devoluciones que generan las cancelaciones con reintegro. */
 export default function RefundsPage() {
   const { user } = useAuth();
@@ -46,6 +79,7 @@ export default function RefundsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const [completing, setCompleting] = useState<Refund | null>(null);
   const [refundedAt, setRefundedAt] = useState(todayLocal());
@@ -72,6 +106,7 @@ export default function RefundsPage() {
 
   const openCompleteModal = (refund: Refund) => {
     setActionError(null);
+    setNotice(null);
     setModalError(null);
     setRefundedAt(todayLocal());
     setCompleting(refund);
@@ -84,7 +119,8 @@ export default function RefundsPage() {
     setIsSubmitting(true);
     setModalError(null);
     try {
-      await completeRefund(completing.reservationId, refundedAt);
+      const { guestNotified } = await completeRefund(completing.reservationId, refundedAt);
+      setNotice(completionNotice(completing, guestNotified));
       setCompleting(null);
       fetchRefunds();
     } catch (err: unknown) {
@@ -146,14 +182,28 @@ export default function RefundsPage() {
         </div>
       )}
 
+      {notice && (
+        <div
+          role="status"
+          className={`rounded-lg border p-3 text-sm ${
+            notice.tone === 'success'
+              ? 'border-success/20 bg-success/10 text-successText'
+              : 'border-gold/25 bg-gold/10 text-goldLight'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
         <div className="hidden overflow-x-auto lg:block">
-          <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[960px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-goldLight/10 text-xs uppercase tracking-wide text-textMuted">
                 <th className="px-4 py-3 font-medium sm:px-5">Reserva</th>
                 <th className="px-4 py-3 font-medium sm:px-5">Huésped</th>
                 <th className="px-4 py-3 font-medium sm:px-5">Monto</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Cuenta</th>
                 <th className="px-4 py-3 font-medium sm:px-5">Cancelación</th>
                 <th className="px-4 py-3 font-medium sm:px-5">Estado</th>
                 <th className="px-4 py-3 text-right font-medium sm:px-5">Acciones</th>
@@ -162,7 +212,7 @@ export default function RefundsPage() {
             <tbody className="divide-y divide-goldLight/10">
               {message && (
                 <tr>
-                  <td colSpan={6} className={`px-5 py-10 text-center ${message.tone}`}>
+                  <td colSpan={7} className={`px-5 py-10 text-center ${message.tone}`}>
                     {message.text}
                   </td>
                 </tr>
@@ -185,6 +235,9 @@ export default function RefundsPage() {
                     <p className="text-xs text-textMuted">
                       {refund.percentage}% de la seña{refund.policyName ? ` · ${refund.policyName}` : ''}
                     </p>
+                  </td>
+                  <td className="max-w-[220px] px-4 py-3 sm:px-5">
+                    <AccountDetails refund={refund} />
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 sm:px-5 text-text">{formatDateTime(refund.cancelledAt)}</td>
                   <td className="px-4 py-3 sm:px-5">
@@ -230,6 +283,12 @@ export default function RefundsPage() {
                       <dd className="text-text">{formatDateTime(refund.cancelledAt)}</dd>
                     </div>
                     <div className="col-span-2">
+                      <dt className="text-xs text-textMuted">Cuenta</dt>
+                      <dd className="text-text">
+                        <AccountDetails refund={refund} />
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
                       <dt className="text-xs text-textMuted">Reserva</dt>
                       <dd className="text-text">
                         {formatDay(refund.checkIn)} — {formatDay(refund.checkOut)} · Hab. {refund.roomNumber}
@@ -269,6 +328,18 @@ export default function RefundsPage() {
               Devolución de <strong className="text-text">{formatMoney(completing.amount)}</strong> a{' '}
               <strong className="text-text">{completing.guestFullName}</strong>. Registrá la fecha en que se hizo.
             </p>
+
+            <div className="rounded-xl border border-goldLight/15 bg-surface p-3 text-sm">
+              <p className="mb-1 text-xs text-textMuted">Cuenta para la transferencia</p>
+              <AccountDetails refund={completing} />
+            </div>
+
+            {completing.notifiableByTelegram && (
+              <p className="text-xs text-textMuted">
+                Al confirmar, Chamber le avisa al huésped por Telegram que la devolución está hecha y que revise su
+                cuenta.
+              </p>
+            )}
 
             {modalError && (
               <div role="alert" className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">
@@ -310,4 +381,4 @@ export default function RefundsPage() {
       )}
     </div>
   );
-}
+}

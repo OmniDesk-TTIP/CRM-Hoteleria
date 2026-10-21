@@ -76,6 +76,28 @@ export class ReservationRepository {
     this.em.persist(reservation);
   }
 
+  /** Saca del unit of work una reserva creada que todavía no se guardó, para que ningún flush la inserte. */
+  discard(reservation: Reservation): void {
+    this.em.remove(reservation);
+  }
+
+  /** Reservas del bot que esperan la seña y ya tienen el link de Mercado Pago generado. */
+  async findAwaitingPaymentByTelegramUserId(
+    telegramUserId: string,
+    createdAfter: Date,
+  ): Promise<Reservation[]> {
+    return this.em.find(
+      Reservation,
+      {
+        telegramUserId,
+        status: ReservationStatus.PENDING_PAYMENT,
+        mpInitPoint: { $ne: null },
+        createdAt: { $gt: createdAfter },
+      },
+      { orderBy: { createdAt: 'desc' }, refresh: true },
+    );
+  }
+
   async findManyPaginated(
     filters: AdminReservationFilters,
   ): Promise<{ items: Reservation[]; total: number }> {

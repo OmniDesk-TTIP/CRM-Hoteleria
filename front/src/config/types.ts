@@ -80,6 +80,9 @@ export interface AdminReservation {
   /** Null si no había nada pagado; 0 si la política no devolvía nada. */
   refundAmount: number | null;
   refundStatus: RefundStatus | null;
+  /** Cuenta para la devolución que informó el huésped por Telegram. */
+  refundAccountAlias: string | null;
+  refundAccountHolder: string | null;
 }
 
 /* ───────── Cancelaciones y devoluciones (US-14) ───────── */
@@ -120,6 +123,17 @@ export interface Refund {
   status: RefundStatus;
   cancelledAt: string | null;
   refundedAt: string | null;
+  /** Cuenta que informó el huésped por Telegram para la transferencia. */
+  accountAlias: string | null;
+  accountHolder: string | null;
+  /** La reserva vino del bot: al marcarla como realizada se le avisa por Telegram. */
+  notifiableByTelegram: boolean;
+}
+
+/** Respuesta de marcar una devolución como realizada. */
+export interface CompletedRefund extends Refund {
+  /** Si el aviso por Telegram le llegó al huésped. */
+  guestNotified: boolean;
 }
 
 export interface RefundListFilters {
@@ -598,4 +612,4 @@ export interface KnowledgeDocument {
   errorMessage?: string;
   /** ISO 8601. */
   createdAt: string;
-}
+}

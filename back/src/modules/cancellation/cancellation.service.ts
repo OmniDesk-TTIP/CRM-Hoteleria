@@ -2,23 +2,38 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
+import { InjectBot } from 'nestjs-telegraf';
+import { Context, Telegraf } from 'telegraf';
+import {
+  RefundStatus,
+  ReservationStatus,
+} from '../../infrastructure/database/entities/Reservation.entity';
+import { ChatService } from '../chat/chat.service';
 import { SupportHoursService } from '../supportHours/supportHours.service';
 import { todayIn } from '../spa/model/spa.model';
-import { CancellationRepository } from './cancellation.repository';
+import {
+  CancellationRepository,
+  GuestRefundRecord,
+} from './cancellation.repository';
 import {
   buildCancellationBlock,
   buildGuestCancellationReply,
   buildPolicySummary,
+  buildRefundAccountBlock,
+  buildRefundAccountReply,
+  buildRefundCompletedMessage,
   calculateRefund,
   CancellationPolicyModel,
   CancellationPreview,
   canCompleteRefund,
+  parseRefundAccount,
   RefundCalculation,
 } from './cancellation.model';
 import {
+  CompletedRefundDto,
   CompleteRefundDto,
   CreateCancellationPolicyDto,
   ListRefundsQueryDto,
@@ -35,11 +50,24 @@ export interface CancellationOutcome extends RefundCalculation {
 export type GuestCancellationResult =
   { ok: true; reply: string } | { ok: false; reason: string };
 
+export type GuestRefundAccountResult = GuestCancellationResult;
+
+export interface GuestCancellationContext {
+  block: string;
+  canCancel: boolean;
+  /** Tiene devoluciones pendientes: Chamber puede pedirle (o corregirle) la cuenta. */
+  canRegisterRefundAccount: boolean;
+}
+
 @Injectable()
 export class CancellationService {
+  private readonly logger = new Logger(CancellationService.name);
+
   constructor(
     private readonly cancellationRepository: CancellationRepository,
     private readonly supportHoursService: SupportHoursService,
+    private readonly chatService: ChatService,
+    @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
   listPolicies(): Promise<CancellationPolicyModel[]> {
@@ -119,11 +147,14 @@ export class CancellationService {
   async getGuestContextBlock(
     telegramUserId: string,
     now: Date = new Date(),
-  ): Promise<{ block: string; canCancel: boolean }> {
+  ): Promise<GuestCancellationContext> {
     const today = this.today(now);
-    const [policy, reservations] = await Promise.all([
+    const [policy, reservations, pendingRefunds] = await Promise.all([
       this.cancellationRepository.findActivePolicy(),
       this.cancellationRepository.findCancellableByTelegramUserId(
+        telegramUserId,
+      ),
+      this.cancellationRepository.findPendingRefundsByTelegramUserId(
         telegramUserId,
       ),
     ]);
@@ -143,9 +174,13 @@ export class CancellationService {
         };
       });
 
+    const refundBlock = buildRefundAccountBlock(pendingRefunds);
     return {
-      block: buildCancellationBlock(policy, previews),
+      block: [buildCancellationBlock(policy, previews), refundBlock]
+        .filter((section): section is string => !!section)
+        .join('\n'),
       canCancel: previews.length > 0,
+      canRegisterRefundAccount: pendingRefunds.length > 0,
     };
   }
 
@@ -185,6 +220,49 @@ export class CancellationService {
     };
   }
 
+  async registerRefundAccountForGuest(
+    telegramUserId: string,
+    reservationId: string,
+    alias: unknown,
+    holder: unknown,
+  ): Promise<GuestRefundAccountResult> {
+    const refund =
+      await this.cancellationRepository.findGuestRefund(reservationId);
+    if (!refund || refund.telegramUserId !== telegramUserId) {
+      return {
+        ok: false,
+        reason:
+          'No encontré una devolución a tu nombre para esa reserva. ¿Me confirmás de qué reserva es?',
+      };
+    }
+    if (refund.status !== RefundStatus.PENDING) {
+      return {
+        ok: false,
+        reason:
+          'Esa devolución ya figura como realizada, así que no puedo cambiar la cuenta. Si no te llegó, escribinos y lo revisamos.',
+      };
+    }
+
+    const parsed = parseRefundAccount(alias, holder);
+    if (!parsed.ok) return parsed;
+
+    const saved = await this.cancellationRepository.saveRefundAccount(
+      reservationId,
+      parsed.account,
+    );
+    if (!saved) {
+      return {
+        ok: false,
+        reason:
+          'Esa devolución ya figura como realizada, así que no puedo cambiar la cuenta. Si no te llegó, escribinos y lo revisamos.',
+      };
+    }
+    return {
+      ok: true,
+      reply: buildRefundAccountReply(parsed.account, refund),
+    };
+  }
+
   async listRefunds(query: ListRefundsQueryDto): Promise<PaginatedRefundsDto> {
     const { items, total } = await this.cancellationRepository.findRefunds({
       status: query.status,
@@ -198,7 +276,7 @@ export class CancellationService {
     reservationId: string,
     payload: CompleteRefundDto,
     now: Date = new Date(),
-  ): Promise<RefundDto> {
+  ): Promise<CompletedRefundDto> {
     const refund = await this.cancellationRepository.findRefund(reservationId);
     if (!refund) throw new NotFoundException('Devolución no encontrada');
     if (!canCompleteRefund(refund.status)) {
@@ -223,9 +301,47 @@ export class CancellationService {
         'La devolución ya estaba marcada como realizada',
       );
     }
-    return (await this.cancellationRepository.findRefund(
+    const completedRefund = (await this.cancellationRepository.findRefund(
       reservationId,
     )) as RefundDto;
+    const guestRefund =
+      await this.cancellationRepository.findGuestRefund(reservationId);
+    const guestNotified = guestRefund
+      ? await this.notifyRefundCompleted(guestRefund)
+      : false;
+
+    return { ...completedRefund, guestNotified };
+  }
+
+  /** Avisa al huésped por Telegram. Si falla, la devolución ya quedó registrada igual. */
+  private async notifyRefundCompleted(
+    refund: GuestRefundRecord,
+  ): Promise<boolean> {
+    if (!refund.telegramUserId) return false;
+
+    const message = buildRefundCompletedMessage(refund);
+    try {
+      await this.bot.telegram.sendMessage(refund.telegramUserId, message, {
+        parse_mode: 'HTML',
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo avisar la devolución de la reserva ${refund.reservationId} a ${refund.telegramUserId}: ${String(error)}`,
+      );
+      return false;
+    }
+
+    try {
+      const session = await this.chatService.getOrCreateSession(
+        refund.telegramUserId,
+      );
+      await this.chatService.recordBotMessage(session, message);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo registrar el aviso de devolución en el chat de ${refund.telegramUserId}: ${String(error)}`,
+      );
+    }
+    return true;
   }
 
   private today(now: Date): string {

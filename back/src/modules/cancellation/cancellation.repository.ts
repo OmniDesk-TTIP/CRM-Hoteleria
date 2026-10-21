@@ -10,6 +10,8 @@ import { toCalendarDayString } from '../spa/model/spa.model';
 import {
   CancellableReservation,
   CancellationPolicyModel,
+  PendingRefundPreview,
+  RefundAccount,
   RefundCalculation,
 } from './cancellation.model';
 import { RefundDto } from './dto/cancellation.dto';
@@ -25,6 +27,13 @@ export interface StoredCancellation {
 export interface CancellableReservationRecord extends CancellableReservation {
   telegramUserId: string | null;
   refund: StoredCancellation | null;
+}
+
+/** Devolución con los datos para hablarle al huésped por Telegram. */
+export interface GuestRefundRecord extends PendingRefundPreview {
+  telegramUserId: string | null;
+  guestFullName: string;
+  status: RefundStatus;
 }
 
 interface RefundFilters {
@@ -146,6 +155,44 @@ export class CancellationRepository {
     return affected === 1;
   }
 
+  async findPendingRefundsByTelegramUserId(
+    telegramUserId: string,
+  ): Promise<PendingRefundPreview[]> {
+    const entities = await this.em.find(
+      Reservation,
+      { telegramUserId, refundStatus: RefundStatus.PENDING },
+      { orderBy: { cancelledAt: 'desc', id: 'asc' }, refresh: true },
+    );
+    return entities.map((entity) => this.toGuestRefund(entity));
+  }
+
+  async findGuestRefund(
+    reservationId: string,
+  ): Promise<GuestRefundRecord | null> {
+    const entity = await this.em.findOne(
+      Reservation,
+      { id: reservationId, refundStatus: { $ne: null } },
+      { refresh: true },
+    );
+    return entity ? this.toGuestRefund(entity) : null;
+  }
+
+  /** Solo se puede cargar o corregir la cuenta mientras la devolución está pendiente. */
+  async saveRefundAccount(
+    reservationId: string,
+    account: RefundAccount,
+  ): Promise<boolean> {
+    const affected = await this.em.nativeUpdate(
+      Reservation,
+      { id: reservationId, refundStatus: RefundStatus.PENDING },
+      {
+        refundAccountAlias: account.alias,
+        refundAccountHolder: account.holder,
+      },
+    );
+    return affected === 1;
+  }
+
   async findRefunds(
     filters: RefundFilters,
   ): Promise<{ items: RefundDto[]; total: number }> {
@@ -229,6 +276,23 @@ export class CancellationRepository {
       status: entity.refundStatus as RefundStatus,
       cancelledAt: entity.cancelledAt ?? null,
       refundedAt: entity.refundedAt ?? null,
+      accountAlias: entity.refundAccountAlias ?? null,
+      accountHolder: entity.refundAccountHolder ?? null,
+      notifiableByTelegram: !!entity.telegramUserId,
+    };
+  }
+
+  private toGuestRefund(entity: Reservation): GuestRefundRecord {
+    return {
+      reservationId: entity.id,
+      telegramUserId: entity.telegramUserId ?? null,
+      guestFullName: entity.guestFullName,
+      status: entity.refundStatus as RefundStatus,
+      checkIn: toCalendarDayString(entity.checkIn),
+      checkOut: toCalendarDayString(entity.checkOut),
+      amount: Number(entity.refundAmount),
+      accountAlias: entity.refundAccountAlias ?? null,
+      accountHolder: entity.refundAccountHolder ?? null,
     };
   }
 }

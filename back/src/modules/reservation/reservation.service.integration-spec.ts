@@ -586,11 +586,101 @@ describe('ReservationService (integración)', () => {
           dni: '30111222',
         }),
       ).rejects.toThrow('Mercado Pago no responde');
+      // El manejo de errores de Telegram hace flush (para contar el fallo del bot): no tiene que
+      // arrastrar la reserva a medio hacer ni dar por terminada la búsqueda.
+      await orm.em.flush();
       expect(
         await em
           .fork()
           .count(Reservation, { telegramUserId: booking.telegramUserId }),
       ).toBe(0);
+      expect(
+        (
+          await em
+            .fork()
+            .findOneOrFail(
+              BookingProcess,
+              { id: booking.id },
+              { refresh: true },
+            )
+        ).step,
+      ).toBe(BookingProcessStep.PENDING_CONFIRMATION);
+    });
+
+    it('después de un error de Mercado Pago se puede volver a confirmar', async () => {
+      const { booking } = await search(ONLY_ROOM_B, 10, 14);
+      createPreference.mockRejectedValueOnce(
+        new Error('Mercado Pago no responde'),
+      );
+      const guest = { fullName: 'Ana Reintenta', dni: '30111222' };
+      await expect(
+        service.confirmReservation(booking.telegramUserId, booking, guest),
+      ).rejects.toThrow();
+      await orm.em.flush();
+
+      const reply = await service.confirmReservation(
+        booking.telegramUserId,
+        booking,
+        guest,
+      );
+      await orm.em.flush();
+
+      expect(reply).toContain('Aboná la seña acá:');
+      expect(
+        await em
+          .fork()
+          .count(Reservation, { telegramUserId: booking.telegramUserId }),
+      ).toBe(1);
+    });
+
+    it('reenvía el link de pago de la reserva que espera la seña', async () => {
+      const { booking } = await search(ONLY_ROOM_B, 10, 14);
+      expect(await service.hasPendingPayment(booking.telegramUserId)).toBe(
+        false,
+      );
+      await service.confirmReservation(booking.telegramUserId, booking, {
+        fullName: 'Ana Link',
+        dni: '30111222',
+      });
+      await orm.em.flush();
+      const [saved] = await em
+        .fork()
+        .find(Reservation, { telegramUserId: booking.telegramUserId });
+
+      expect(await service.hasPendingPayment(booking.telegramUserId)).toBe(
+        true,
+      );
+      const reply = await service.buildPendingPaymentReply(
+        booking.telegramUserId,
+      );
+      expect(reply).toContain(
+        `${process.env.FRONTEND_BASE_URL}/payment/form/${saved.id}`,
+      );
+      expect(reply).toContain(`$${0.3 * 4 * PRICE_B}`);
+      expect(reply).toContain('minutos más');
+    });
+
+    it('no reenvía links de reservas vencidas, pagadas o sin link', async () => {
+      const { booking } = await search(ONLY_ROOM_B, 10, 14);
+      await service.confirmReservation(booking.telegramUserId, booking, {
+        fullName: 'Ana Vencida',
+        dni: '30111222',
+      });
+      await orm.em.flush();
+      const later = new Date(Date.now() + 31 * 60 * 1000);
+
+      expect(
+        await service.buildPendingPaymentReply(booking.telegramUserId, later),
+      ).toBeNull();
+
+      await em.nativeUpdate(
+        Reservation,
+        { telegramUserId: booking.telegramUserId },
+        { mpInitPoint: null },
+      );
+      expect(await service.hasPendingPayment(booking.telegramUserId)).toBe(
+        false,
+      );
     });
   });
 

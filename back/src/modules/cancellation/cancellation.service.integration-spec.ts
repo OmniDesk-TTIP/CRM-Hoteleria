@@ -26,6 +26,11 @@ import {
   RoomStatus,
 } from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
+import {
+  ChatMessage,
+  MessageRole,
+} from '../../infrastructure/database/entities/ChatMessage.entity';
+import { ChatSession } from '../../infrastructure/database/entities/ChatSession.entity';
 
 describe('CancellationService (integración)', () => {
   let app: INestApplication;
@@ -35,6 +40,7 @@ describe('CancellationService (integración)', () => {
   let reservationRepository: ReservationRepository;
   let adminService: ReservationAdminService;
   let statisticsRepository: StatisticsRepository;
+  const sendMessage = jest.fn();
 
   const suffix = Date.now();
   let seq = 0;
@@ -151,6 +157,7 @@ describe('CancellationService (integración)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        telegram: { sendMessage },
       })
       .compile();
 
@@ -207,6 +214,14 @@ describe('CancellationService (integración)', () => {
       () => (roomId ? em.nativeDelete(Room, { id: roomId }) : 0),
       () =>
         categoryId ? em.nativeDelete(RoomCategory, { id: categoryId }) : 0,
+      () =>
+        em.nativeDelete(ChatMessage, {
+          telegramUserId: { $like: 'tg-cancel-%' },
+        }),
+      () =>
+        em.nativeDelete(ChatSession, {
+          telegramUserId: { $like: 'tg-cancel-%' },
+        }),
     ];
     for (const step of steps) {
       try {
@@ -676,7 +691,7 @@ describe('CancellationService (integración)', () => {
       ledger.pending += 30000;
       const past = await seed({ daysAhead: -30 });
 
-      const { block } = await service.getGuestContextBlock(
+      const { block, canCancel } = await service.getGuestContextBlock(
         cancelled.telegramUserId,
         cancelled.now,
       );
@@ -685,7 +700,10 @@ describe('CancellationService (integración)', () => {
         past.now,
       );
 
-      expect(block).not.toContain(`id=${cancelled.id}`);
+      // La cancelada solo puede aparecer como devolución pendiente, nunca entre las que se pueden cancelar.
+      const [cancellable] = block.split('DEVOLUCIONES PENDIENTES DEL CLIENTE');
+      expect(canCancel).toBe(false);
+      expect(cancellable).not.toContain(`id=${cancelled.id}`);
       expect(pastBlock.canCancel).toBe(false);
     });
 
@@ -740,6 +758,215 @@ describe('CancellationService (integración)', () => {
       );
 
       expect(again).toMatchObject({ ok: false });
+    });
+  });
+
+  describe('cuenta para la devolución y aviso al huésped', () => {
+    const ALIAS = 'ana.cancela.mp';
+    const HOLDER = 'Ana Cancelaciones';
+
+    beforeEach(() => {
+      sendMessage.mockReset();
+      sendMessage.mockResolvedValue({});
+    });
+
+    const refundRow = async (id: string) =>
+      (await service.listRefunds({ page: 1, pageSize: 100 })).data.find(
+        (refund) => refund.reservationId === id,
+      );
+
+    it('después de cancelar, Chamber ve la devolución sin cuenta y puede pedirla', async () => {
+      const { stay } = await cancelPaid(5);
+
+      const context = await service.getGuestContextBlock(
+        stay.telegramUserId,
+        stay.now,
+      );
+
+      expect(context.canCancel).toBe(false);
+      expect(context.canRegisterRefundAccount).toBe(true);
+      expect(context.block).toContain('DEVOLUCIONES PENDIENTES DEL CLIENTE');
+      expect(context.block).toContain(`id=${stay.id}`);
+      expect(context.block).toContain('a devolver $15000 | FALTA LA CUENTA');
+    });
+
+    it('sin devoluciones pendientes no habilita cargar una cuenta', async () => {
+      const stay = await seed({ daysAhead: 5 });
+
+      const context = await service.getGuestContextBlock(
+        stay.telegramUserId,
+        stay.now,
+      );
+
+      expect(context.canRegisterRefundAccount).toBe(false);
+      expect(context.block).not.toContain('DEVOLUCIONES PENDIENTES');
+    });
+
+    it('guarda el alias normalizado y el titular, y el panel los muestra', async () => {
+      const { stay } = await cancelPaid(5);
+
+      const result = await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        '  Ana.Cancela.MP ',
+        HOLDER,
+      );
+
+      expect(result).toMatchObject({
+        ok: true,
+        reply: expect.stringContaining(`Alias: <b>${ALIAS}</b>`),
+      });
+      const row = await rowOf(stay.id);
+      expect(row.refundAccountAlias).toBe(ALIAS);
+      expect(row.refundAccountHolder).toBe(HOLDER);
+      expect(await refundRow(stay.id)).toMatchObject({
+        accountAlias: ALIAS,
+        accountHolder: HOLDER,
+        notifiableByTelegram: true,
+      });
+
+      const { block } = await service.getGuestContextBlock(
+        stay.telegramUserId,
+        stay.now,
+      );
+      expect(block).toContain(
+        `cuenta informada: alias ${ALIAS}, titular ${HOLDER}`,
+      );
+    });
+
+    it('deja corregir la cuenta mientras la devolución está pendiente', async () => {
+      const { stay } = await cancelPaid(5);
+      await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        ALIAS,
+        HOLDER,
+      );
+
+      await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        'otro.alias.uala',
+        'Juan Pérez',
+      );
+
+      expect(await rowOf(stay.id)).toMatchObject({
+        refundAccountAlias: 'otro.alias.uala',
+        refundAccountHolder: 'Juan Pérez',
+      });
+    });
+
+    it('rechaza un alias inválido sin guardar nada', async () => {
+      const { stay } = await cancelPaid(5);
+
+      const result = await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        'mal alias',
+        HOLDER,
+      );
+
+      expect(result).toMatchObject({ ok: false });
+      expect((await rowOf(stay.id)).refundAccountAlias ?? null).toBeNull();
+    });
+
+    it('no deja cargar la cuenta en la devolución de otra persona', async () => {
+      const { stay } = await cancelPaid(5);
+
+      const result = await service.registerRefundAccountForGuest(
+        `tg-otro-${next()}`,
+        stay.id,
+        ALIAS,
+        HOLDER,
+      );
+
+      expect(result).toMatchObject({ ok: false });
+      expect((await rowOf(stay.id)).refundAccountAlias ?? null).toBeNull();
+    });
+
+    it('no deja cambiar la cuenta de una devolución ya realizada', async () => {
+      const { stay } = await cancelPaid(5);
+      await service.completeRefund(stay.id, {}, stay.now);
+      ledger.pending -= 15000;
+      ledger.completed += 15000;
+
+      const result = await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        ALIAS,
+        HOLDER,
+      );
+
+      expect(result).toMatchObject({
+        ok: false,
+        reason: expect.stringContaining('ya figura como realizada'),
+      });
+    });
+
+    it('al marcarla como realizada le avisa al huésped por Telegram y lo deja en el chat', async () => {
+      const { stay } = await cancelPaid(5);
+      await service.registerRefundAccountForGuest(
+        stay.telegramUserId,
+        stay.id,
+        ALIAS,
+        HOLDER,
+      );
+
+      const completed = await service.completeRefund(stay.id, {}, stay.now);
+      ledger.pending -= 15000;
+      ledger.completed += 15000;
+
+      expect(completed).toMatchObject({
+        status: RefundStatus.COMPLETED,
+        guestNotified: true,
+      });
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      const [chatId, text, options] = sendMessage.mock.calls[0];
+      expect(chatId).toBe(stay.telegramUserId);
+      expect(text).toContain('<b>$15000</b>');
+      expect(text).toContain(`alias <b>${ALIAS}</b>`);
+      expect(text).toContain('Revisá tu cuenta');
+      expect(options).toEqual({ parse_mode: 'HTML' });
+
+      const recorded = await em.fork().findOne(ChatMessage, {
+        telegramUserId: stay.telegramUserId,
+        role: MessageRole.BOT,
+      });
+      expect(recorded?.content).toBe(text);
+    });
+
+    it('si Telegram falla, la devolución queda realizada igual', async () => {
+      const { stay } = await cancelPaid(5);
+      sendMessage.mockRejectedValue(new Error('Forbidden: bot was blocked'));
+
+      const completed = await service.completeRefund(stay.id, {}, stay.now);
+      ledger.pending -= 15000;
+      ledger.completed += 15000;
+
+      expect(completed).toMatchObject({
+        status: RefundStatus.COMPLETED,
+        guestNotified: false,
+      });
+      expect((await rowOf(stay.id)).refundStatus).toBe(RefundStatus.COMPLETED);
+    });
+
+    it('una reserva cargada desde el panel no tiene a quién avisarle', async () => {
+      const { stay } = await cancelPaid(5);
+      await em
+        .fork()
+        .nativeUpdate(Reservation, { id: stay.id }, { telegramUserId: null });
+      // El service usa el EntityManager global: sin esto devolvería la fila cacheada con el telegramUserId.
+      orm.em.clear();
+      expect(await refundRow(stay.id)).toMatchObject({
+        notifiableByTelegram: false,
+      });
+
+      const completed = await service.completeRefund(stay.id, {}, stay.now);
+      ledger.pending -= 15000;
+      ledger.completed += 15000;
+
+      expect(completed.guestNotified).toBe(false);
+      expect(sendMessage).not.toHaveBeenCalled();
     });
   });
 

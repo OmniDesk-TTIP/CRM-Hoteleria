@@ -52,6 +52,12 @@ export function CancellationNote({ reservation }: { reservation: AdminReservatio
         'Sin devolución'
       )}
       <span className="block">{detail}</span>
+      {reservation.refundAccountAlias && (
+        <span className="block">
+          Cuenta: <span className="font-mono">{reservation.refundAccountAlias}</span>
+          {reservation.refundAccountHolder ? ` · ${reservation.refundAccountHolder}` : ''}
+        </span>
+      )}
     </p>
   );
 }
