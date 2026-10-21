@@ -19,7 +19,7 @@ import {
   daysInMonth,
   toDateKey,
   zonedDateKey,
-} from './dashboard.util';
+} from '../../common/date.util';
 
 const OCCUPANCY_DAYS = 14;
 const REVENUE_MONTHS = 12;
