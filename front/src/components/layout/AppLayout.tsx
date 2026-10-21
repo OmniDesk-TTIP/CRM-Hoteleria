@@ -6,6 +6,7 @@ import { useSocket } from '@/context/socket.context';
 import { useChatActivityRefresh } from '@/hooks/useChatActivityRefresh';
 import { getDashboardStatus } from '@/services/dashboard.service';
 import { listSpaReservations } from '@/services/spaReservation.service';
+import { listRestaurantReservations } from '@/services/restaurantReservation.service';
 import ThemeToggle from '@/components/layout/ThemeToggle';
 import type { LayoutContext } from '@/components/layout/layout.context';
 import type { DashboardStatus, UserRole } from '@/config/types';
@@ -31,14 +32,14 @@ interface NavItem {
   roles?: UserRole[];
   /** `end` para que Home no quede activo en todas las rutas /admin/*. */
   end?: boolean;
-  /** Contador sobre el ícono: chats esperando operador o turnos de spa pendientes. */
-  badge?: 'chat' | 'spaReservations';
+  /** Contador sobre el ícono: chats esperando operador o turnos de spa y mesas pendientes. */
+  badge?: 'chat' | 'serviceRequests';
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/admin', label: 'Home', icon: HomeIcon, end: true },
   { to: '/admin/chats', label: 'Chats', icon: ChatIcon, badge: 'chat' },
-  { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon, badge: 'spaReservations' },
+  { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon, badge: 'serviceRequests' },
   {
     to: '/admin/services',
     label: 'Habitaciones y servicios',
@@ -83,6 +84,7 @@ export default function AppLayout() {
   const now = useClock();
   const [status, setStatus] = useState<DashboardStatus | null>(null);
   const [pendingSpaReservations, setPendingSpaReservations] = useState(0);
+  const [pendingRestaurantReservations, setPendingRestaurantReservations] = useState(0);
 
   const fetchStatus = useCallback(() => {
     getDashboardStatus()
@@ -105,23 +107,39 @@ export default function AppLayout() {
       .catch(() => undefined);
   }, []);
 
+  const fetchPendingRestaurantReservations = useCallback(() => {
+    listRestaurantReservations({ status: 'PENDING', page: 1, pageSize: 1 })
+      .then((result) => setPendingRestaurantReservations(result.total))
+      .catch(() => undefined);
+  }, []);
+
   useEffect(() => {
-    fetchPendingSpaReservations();
-    // Los turnos los crea el bot sin avisar por socket: se relee seguido, la consulta es mínima.
-    const id = setInterval(fetchPendingSpaReservations, 60_000);
+    const fetchPending = () => {
+      fetchPendingSpaReservations();
+      fetchPendingRestaurantReservations();
+    };
+    fetchPending();
+    // Los turnos y las mesas los crea el bot sin avisar por socket: se relee seguido, la consulta es mínima.
+    const id = setInterval(fetchPending, 60_000);
     return () => clearInterval(id);
-  }, [fetchPendingSpaReservations]);
+  }, [fetchPendingSpaReservations, fetchPendingRestaurantReservations]);
 
   const items = NAV_ITEMS.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
   const waitingHuman = status?.waitingHuman ?? 0;
   const layoutContext: LayoutContext = {
     pendingSpaReservations,
     refreshPendingSpaReservations: fetchPendingSpaReservations,
+    pendingRestaurantReservations,
+    refreshPendingRestaurantReservations: fetchPendingRestaurantReservations,
   };
   const badgeFor = (badge: NavItem['badge']) =>
-    badge === 'chat' ? waitingHuman : badge === 'spaReservations' ? pendingSpaReservations : 0;
+    badge === 'chat'
+      ? waitingHuman
+      : badge === 'serviceRequests'
+        ? pendingSpaReservations + pendingRestaurantReservations
+        : 0;
   const badgeLabel = (badge: NavItem['badge']) =>
-    badge === 'chat' ? 'chats esperando un operador' : 'turnos de spa pendientes';
+    badge === 'chat' ? 'chats esperando un operador' : 'turnos de spa y mesas pendientes';
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-shell md:flex-row">

@@ -1,0 +1,135 @@
+import { Injectable } from '@nestjs/common';
+import { EntityManager } from '@mikro-orm/core';
+import { RestaurantSettings } from '../../infrastructure/database/entities/RestaurantSettings.entity';
+import {
+  MenuItemStatus,
+  RestaurantMenuItem,
+} from '../../infrastructure/database/entities/RestaurantMenuItem.entity';
+import {
+  MenuItemModel,
+  RestaurantSettingsModel,
+} from './model/restaurant.model';
+
+/** Único lugar que conoce a la vez las entidades del ORM y los modelos del restó. */
+@Injectable()
+export class RestaurantRepository {
+  constructor(private readonly em: EntityManager) {}
+
+  // ───────── Información ─────────
+
+  /** La configuración del restó, o null si el admin todavía no la cargó. */
+  async findSettings(): Promise<RestaurantSettingsModel | null> {
+    const [entity] = await this.em.find(
+      RestaurantSettings,
+      {},
+      { orderBy: { createdAt: 'asc' }, limit: 1 },
+    );
+    return entity ? this.toSettingsModel(entity) : null;
+  }
+
+  /** Hay una sola fila: la crea la primera vez y después la actualiza. */
+  async saveSettings(model: RestaurantSettingsModel): Promise<void> {
+    const [entity] = await this.em.find(
+      RestaurantSettings,
+      {},
+      { orderBy: { createdAt: 'asc' }, limit: 1 },
+    );
+    const data = {
+      status: model.status,
+      description: model.description,
+      availableWeekdays: model.availableWeekdays,
+      shifts: model.shifts,
+      maxPartySize: model.maxPartySize,
+    };
+
+    if (entity) Object.assign(entity, data);
+    else {
+      this.em.persist(
+        this.em.create(RestaurantSettings, { id: model.id, ...data }),
+      );
+    }
+    await this.em.flush();
+  }
+
+  // ───────── Carta ─────────
+
+  async findAllMenuItems(): Promise<MenuItemModel[]> {
+    const entities = await this.em.find(
+      RestaurantMenuItem,
+      {},
+      { orderBy: { category: 'asc', name: 'asc' } },
+    );
+    return entities.map((entity) => this.toMenuItemModel(entity));
+  }
+
+  async findActiveMenuItems(): Promise<MenuItemModel[]> {
+    const entities = await this.em.find(
+      RestaurantMenuItem,
+      { status: MenuItemStatus.ACTIVE },
+      { orderBy: { category: 'asc', name: 'asc' } },
+    );
+    return entities.map((entity) => this.toMenuItemModel(entity));
+  }
+
+  async findMenuItemById(id: string): Promise<MenuItemModel | null> {
+    const entity = await this.em.findOne(RestaurantMenuItem, { id });
+    return entity ? this.toMenuItemModel(entity) : null;
+  }
+
+  async findMenuItemByName(
+    name: string,
+    excludeId?: string,
+  ): Promise<MenuItemModel | null> {
+    const entity = await this.em.findOne(RestaurantMenuItem, {
+      name: { $ilike: name },
+      ...(excludeId ? { id: { $ne: excludeId } } : {}),
+    });
+    return entity ? this.toMenuItemModel(entity) : null;
+  }
+
+  async insertMenuItem(model: MenuItemModel): Promise<void> {
+    this.em.persist(this.em.create(RestaurantMenuItem, { ...model }));
+    await this.em.flush();
+  }
+
+  async updateMenuItem(model: MenuItemModel): Promise<void> {
+    const entity = await this.em.findOneOrFail(RestaurantMenuItem, {
+      id: model.id,
+    });
+    // Asignación directa y no em.assign(): Postgres devuelve `decimal` como string y assign()
+    // rechazaría el price numérico (mismo caso que los servicios de spa).
+    entity.name = model.name;
+    entity.description = model.description;
+    entity.category = model.category;
+    entity.price = model.price;
+    entity.status = model.status;
+    await this.em.flush();
+  }
+
+  async deleteMenuItem(id: string): Promise<void> {
+    await this.em.nativeDelete(RestaurantMenuItem, { id });
+  }
+
+  private toSettingsModel(entity: RestaurantSettings): RestaurantSettingsModel {
+    return new RestaurantSettingsModel({
+      id: entity.id,
+      status: entity.status,
+      description: entity.description ?? null,
+      availableWeekdays: entity.availableWeekdays,
+      shifts: entity.shifts,
+      maxPartySize: entity.maxPartySize,
+    });
+  }
+
+  private toMenuItemModel(entity: RestaurantMenuItem): MenuItemModel {
+    return new MenuItemModel({
+      id: entity.id,
+      name: entity.name,
+      description: entity.description ?? null,
+      category: entity.category,
+      // decimal llega como string desde pg.
+      price: Number(entity.price),
+      status: entity.status,
+    });
+  }
+}
