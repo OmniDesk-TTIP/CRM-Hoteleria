@@ -18,6 +18,7 @@ import {
 } from '../payment/payment.service';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { ConfirmReservationDto } from './dto/confirmReservation.dto';
+import { toCalendarDayString } from '../spa/model/spa.model';
 import {
   DayRange,
   findGapFreeVariants,
@@ -41,6 +42,10 @@ const GAP_LOOKUP_MARGIN_DAYS = 3;
 const GAP_EDGE_MARGIN_DAYS = 2;
 
 const MS_PER_DAY = 1000 * 3600 * 24;
+
+/** Fecha de una columna `date` como DD-MM-YYYY, sin que el huso horario corra el día. */
+const toChatDay = (value: Date | string): string =>
+  toCalendarDayString(value).split('-').reverse().join('-');
 
 export interface AlternativeDates {
   checkIn: string;
@@ -176,17 +181,26 @@ export class ReservationService {
         guestDni: guestData.dni,
       });
 
+      // Primero el link de pago: si Mercado Pago falla, la reserva no se guarda (ni la arrastra el
+      // flush que hace después el manejo de errores) y la búsqueda sigue esperando confirmación,
+      // así el huésped puede volver a intentar.
+      let preference: { preferenceId: string; initPoint: string };
+      try {
+        preference = await this.paymentService.createPreference(
+          newReservation,
+          guestData,
+        );
+      } catch (error) {
+        this.reservationRepository.discard(newReservation);
+        throw error;
+      }
+      newReservation.mpPreferenceId = preference.preferenceId;
+      newReservation.mpInitPoint = preference.initPoint;
+
       this.reservationRepository.persist(newReservation);
       this.bookingProcessService.markCompleted(activeBooking);
 
-      const { preferenceId, initPoint } =
-        await this.paymentService.createPreference(newReservation, guestData);
-      newReservation.mpPreferenceId = preferenceId;
-      newReservation.mpInitPoint = initPoint;
-
-      const frontendBaseUrl =
-        this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
-      const paymentFormUrl = `${frontendBaseUrl}/payment/form/${newReservation.id}`;
+      const paymentFormUrl = this.paymentFormUrl(newReservation.id);
 
       const policySummary = await this.cancellationService.getPolicySummary();
 
@@ -210,6 +224,63 @@ export class ReservationService {
     }
 
     return botReply;
+  }
+
+  async hasPendingPayment(
+    telegramUserId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    const reservations = await this.findAwaitingPayment(telegramUserId, now);
+    return reservations.length > 0;
+  }
+
+  /** Respuesta fija con el link de pago de las reservas que todavía esperan la seña. */
+  async buildPendingPaymentReply(
+    telegramUserId: string,
+    now: Date = new Date(),
+  ): Promise<string | null> {
+    const reservations = await this.findAwaitingPayment(telegramUserId, now);
+    if (reservations.length === 0) return null;
+
+    const lines = reservations.map((reservation) => {
+      const link = this.paymentFormUrl(reservation.id);
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil(
+          (reservation.createdAt.getTime() +
+            RESERVATION_HOLD_MINUTES * 60 * 1000 -
+            now.getTime()) /
+            60000,
+        ),
+      );
+      return [
+        `Reserva del ${toChatDay(reservation.checkIn)} al ${toChatDay(reservation.checkOut)}: seña de <b>$${Number(reservation.depositAmount)}</b>.`,
+        `Aboná acá: ${htmlLink(link, link)}`,
+        `Te la guardo ${minutesLeft} ${minutesLeft === 1 ? 'minuto' : 'minutos'} más; si no entra el pago, se libera.`,
+      ].join('\n');
+    });
+
+    return [
+      ...lines,
+      '',
+      'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
+    ].join('\n');
+  }
+
+  private findAwaitingPayment(
+    telegramUserId: string,
+    now: Date,
+  ): Promise<Reservation[]> {
+    return this.reservationRepository.findAwaitingPaymentByTelegramUserId(
+      telegramUserId,
+      new Date(now.getTime() - RESERVATION_HOLD_MINUTES * 60 * 1000),
+    );
+  }
+
+  private paymentFormUrl(reservationId: string): string {
+    const frontendBaseUrl =
+      this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
+    return `${frontendBaseUrl.replace(/\/+$/, '')}/payment/form/${reservationId}`;
   }
 
   private calculateNights(checkIn: string, checkOut: string): number {

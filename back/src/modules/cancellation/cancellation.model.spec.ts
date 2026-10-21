@@ -2,6 +2,11 @@ import { ReservationStatus } from '../../infrastructure/database/entities/Reserv
 import {
   buildCancellationBlock,
   buildGuestCancellationReply,
+  buildRefundAccountBlock,
+  buildRefundAccountReply,
+  buildRefundCompletedMessage,
+  parseRefundAccount,
+  PendingRefundPreview,
   calculateRefund,
   CancellableReservation,
   CancellationPolicyModel,
@@ -253,21 +258,24 @@ describe('buildGuestCancellationReply', () => {
     '2026-10-15',
   );
 
-  it('informa el monto a reintegrar y que queda pendiente', () => {
+  it('informa el monto a reintegrar, que queda pendiente y pide la cuenta', () => {
     const reply = buildGuestCancellationReply(calculation, stay);
 
     expect(reply).toContain('del 20-10-2026 al 22-10-2026');
     expect(reply).toContain('<b>$15000</b> (50% de la seña)');
     expect(reply).toContain('pendiente');
+    expect(reply).toContain('<b>alias</b>');
+    expect(reply).toContain('<b>nombre completo del titular</b>');
   });
 
-  it('aclara cuando la política no devuelve nada', () => {
+  it('aclara cuando la política no devuelve nada y no pide cuenta', () => {
     const reply = buildGuestCancellationReply(
       { ...calculation, refundAmount: 0, refundPercentage: 0 },
       stay,
     );
 
     expect(reply).toContain('no corresponde devolución');
+    expect(reply).not.toContain('alias');
   });
 
   it('aclara cuando no había seña paga', () => {
@@ -277,5 +285,128 @@ describe('buildGuestCancellationReply', () => {
     );
 
     expect(reply).toContain('No habías abonado la seña');
+  });
+});
+
+describe('parseRefundAccount', () => {
+  it('normaliza el alias a minúsculas y los espacios del titular', () => {
+    expect(
+      parseRefundAccount('  Ana.Perez.MP ', '  Ana   María  Pérez '),
+    ).toEqual({
+      ok: true,
+      account: { alias: 'ana.perez.mp', holder: 'Ana María Pérez' },
+    });
+  });
+
+  it.each([
+    ['corto', 'muy corto'],
+    ['un.alias.demasiado.largo', 'más de 20 caracteres'],
+    ['alias con espacios', 'espacios'],
+    ['alias_guion_bajo', 'guion bajo'],
+    ['0000003100010000000001', 'un CBU de 22 dígitos'],
+  ])('rechaza el alias "%s" (%s)', (alias) => {
+    const result = parseRefundAccount(alias, 'Ana Pérez');
+    expect(result.ok).toBe(false);
+  });
+
+  it('acepta letras, números, puntos y guiones', () => {
+    expect(parseRefundAccount('casa-2026.mp', 'Ana Pérez').ok).toBe(true);
+  });
+
+  it('pide el titular si falta o es muy corto', () => {
+    const result = parseRefundAccount('ana.perez.mp', ' A ');
+    expect(result).toEqual({
+      ok: false,
+      reason: expect.stringContaining('titular'),
+    });
+  });
+
+  it('sin ningún dato pide los dos', () => {
+    const result = parseRefundAccount(undefined, '');
+    expect(result).toEqual({
+      ok: false,
+      reason: expect.stringContaining('alias'),
+    });
+  });
+});
+
+describe('buildRefundAccountBlock', () => {
+  const refund = (
+    overrides: Partial<PendingRefundPreview> = {},
+  ): PendingRefundPreview => ({
+    reservationId: 'res-1',
+    checkIn: '2026-11-05',
+    checkOut: '2026-11-06',
+    amount: 15000,
+    accountAlias: null,
+    accountHolder: null,
+    ...overrides,
+  });
+
+  it('sin devoluciones pendientes no agrega nada', () => {
+    expect(buildRefundAccountBlock([])).toBeNull();
+  });
+
+  it('marca las devoluciones a las que les falta la cuenta', () => {
+    const block = buildRefundAccountBlock([refund()]);
+
+    expect(block).toContain('DEVOLUCIONES PENDIENTES DEL CLIENTE');
+    expect(block).toContain(
+      '- id=res-1 | reserva del 05-11-2026 al 06-11-2026 | a devolver $15000 | FALTA LA CUENTA',
+    );
+  });
+
+  it('muestra la cuenta ya informada para poder corregirla', () => {
+    const block = buildRefundAccountBlock([
+      refund({ accountAlias: 'ana.perez.mp', accountHolder: 'Ana Pérez' }),
+    ]);
+
+    expect(block).toContain(
+      'cuenta informada: alias ana.perez.mp, titular Ana Pérez',
+    );
+    expect(block).not.toContain('FALTA');
+  });
+});
+
+describe('buildRefundAccountReply', () => {
+  it('confirma el monto y los datos, escapando el HTML', () => {
+    const reply = buildRefundAccountReply(
+      { alias: 'ana.perez.mp', holder: 'Ana <Pérez>' },
+      { amount: 15000 },
+    );
+
+    expect(reply).toContain('<b>$15000</b>');
+    expect(reply).toContain('Alias: <b>ana.perez.mp</b>');
+    expect(reply).toContain('Titular: <b>Ana &lt;Pérez&gt;</b>');
+  });
+});
+
+describe('buildRefundCompletedMessage', () => {
+  const refund = {
+    guestFullName: 'Ana María Pérez',
+    checkIn: '2026-11-05',
+    checkOut: '2026-11-06',
+    amount: 15000,
+    accountAlias: 'ana.perez.mp' as string | null,
+  };
+
+  it('confirma la cancelación, el monto y la cuenta, y le pide que la revise', () => {
+    const message = buildRefundCompletedMessage(refund);
+
+    expect(message).toContain('¡Hola, Ana!');
+    expect(message).toContain('del 05-11-2026 al 06-11-2026');
+    expect(message).toContain('<b>$15000</b>');
+    expect(message).toContain('alias <b>ana.perez.mp</b>');
+    expect(message).toContain('Revisá tu cuenta');
+  });
+
+  it('sin alias cargado no menciona ninguna cuenta', () => {
+    const message = buildRefundCompletedMessage({
+      ...refund,
+      accountAlias: null,
+    });
+
+    expect(message).not.toContain('alias');
+    expect(message).toContain('Revisá tu cuenta');
   });
 });

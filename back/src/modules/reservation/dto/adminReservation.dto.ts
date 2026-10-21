@@ -26,6 +26,8 @@ export class AdminReservationDto {
   refundPercentage!: number | null;
   refundAmount!: number | null;
   refundStatus!: RefundStatus | null;
+  refundAccountAlias!: string | null;
+  refundAccountHolder!: string | null;
 
   static fromEntity(reservation: Reservation): AdminReservationDto {
     const dto = new AdminReservationDto();
@@ -55,6 +57,8 @@ export class AdminReservationDto {
         ? Number(reservation.refundAmount)
         : null;
     dto.refundStatus = reservation.refundStatus ?? null;
+    dto.refundAccountAlias = reservation.refundAccountAlias ?? null;
+    dto.refundAccountHolder = reservation.refundAccountHolder ?? null;
     return dto;
   }
 }

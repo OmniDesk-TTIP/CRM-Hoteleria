@@ -93,4 +93,12 @@ export class Reservation extends CustomBaseEntity {
 
   @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
   refundedAt?: Date;
+
+  /** Alias de la cuenta a la que se transfiere la devolución (lo pasa el huésped por Telegram). */
+  @Property({ type: 'varchar', length: 20, nullable: true })
+  refundAccountAlias?: string;
+
+  /** Nombre del titular de esa cuenta. */
+  @Property({ type: 'varchar', length: 150, nullable: true })
+  refundAccountHolder?: string;
 }
