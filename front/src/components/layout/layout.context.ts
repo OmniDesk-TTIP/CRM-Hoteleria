@@ -6,7 +6,6 @@ export interface LayoutContext {
   pendingSpaReservations: number;
   /** Vuelve a pedir el contador; se llama después de resolver un turno. */
   refreshPendingSpaReservations: () => void;
-  /** Pedidos de mesa del restó esperando que recepción los confirme o rechace. */
   pendingRestaurantReservations: number;
   refreshPendingRestaurantReservations: () => void;
 }

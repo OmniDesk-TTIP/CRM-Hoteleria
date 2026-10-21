@@ -24,10 +24,6 @@ export type RestaurantSettingsChanges = Partial<
   Omit<RestaurantSettingsProps, 'id'>
 >;
 
-/**
- * Regla de negocio de la información general del restó. Pura (sin DB ni ORM): el repository la
- * convierte desde y hacia la entidad.
- */
 export class RestaurantSettingsModel {
   readonly id: string;
   status: RestaurantStatus;
@@ -45,10 +41,6 @@ export class RestaurantSettingsModel {
     this.maxPartySize = props.maxPartySize;
   }
 
-  /**
-   * Lo que se usa mientras el admin todavía no cargó nada: deshabilitado, así Chamber no ofrece
-   * un restó sin horarios. Los horarios son una sugerencia para completar el formulario.
-   */
   static createDefault(): RestaurantSettingsModel {
     return new RestaurantSettingsModel({
       id: v4(),
@@ -67,10 +59,6 @@ export class RestaurantSettingsModel {
     return this.status === RestaurantStatus.ACTIVE;
   }
 
-  /**
-   * ¿Se puede pedir mesa ese día de la semana a esa hora? La hora tiene que caer dentro de una
-   * franja; el cierre no cuenta (a la hora de cierre ya no se sienta a nadie).
-   */
   isOpenAt(weekday: number, time: string): boolean {
     if (!this.isActive()) return false;
     if (!this.availableWeekdays.includes(weekday)) return false;
@@ -83,7 +71,6 @@ export class RestaurantSettingsModel {
     );
   }
 
-  /** Aplica cambios parciales. No valida: llamar a `getScheduleError()` después. */
   applyChanges(changes: RestaurantSettingsChanges): void {
     if (changes.status !== undefined) this.status = changes.status;
     if (changes.description !== undefined)
@@ -96,7 +83,6 @@ export class RestaurantSettingsModel {
       this.maxPartySize = changes.maxPartySize;
   }
 
-  /** Devuelve el motivo si la configuración horaria es inconsistente, o null si está bien. */
   getScheduleError(): string | null {
     if (this.maxPartySize < 1) {
       return 'La cantidad máxima de personas por mesa tiene que ser al menos 1';
@@ -140,7 +126,6 @@ export function sortShifts(shifts: RestaurantShift[]): RestaurantShift[] {
   );
 }
 
-/** "lunes, martes de 12:00 a 15:00 y de 20:00 a 23:30" */
 export function describeSchedule(
   settings: Pick<RestaurantSettingsModel, 'availableWeekdays' | 'shifts'>,
 ): string {
@@ -192,7 +177,6 @@ export class MenuItemModel {
     });
   }
 
-  /** Un ítem deshabilitado no se ofrece en el bot ni se ve en la landing (CA7). */
   isActive(): boolean {
     return this.status === MenuItemStatus.ACTIVE;
   }
@@ -212,11 +196,6 @@ export interface MenuSection {
   items: MenuItemModel[];
 }
 
-/**
- * Agrupa la carta por sección, respetando el orden en que llegan los ítems (el repository los
- * ordena por sección y nombre). Las secciones se comparan sin distinguir mayúsculas, para que
- * "Postres" y "postres" no aparezcan dos veces.
- */
 export function groupMenu(items: MenuItemModel[]): MenuSection[] {
   const sections = new Map<string, MenuSection>();
   for (const item of items) {
@@ -230,7 +209,6 @@ export function groupMenu(items: MenuItemModel[]): MenuSection[] {
 
 // ───────── Bloque del restó para Chamber (CA2/CA3/CA6/CA7) ─────────
 
-/** Tope de ítems y de largo de descripción para no inflar el prompt de cada mensaje. */
 export const MAX_MENU_ITEMS_IN_BLOCK = 60;
 export const MAX_MENU_DESCRIPTION_LENGTH = 160;
 
@@ -239,22 +217,12 @@ function truncate(text: string, max: number): string {
 }
 
 export interface RestaurantBlockInput {
-  /** Configuración guardada, o null si el admin nunca la cargó (restó deshabilitado). */
   settings: RestaurantSettingsModel | null;
-  /** Solo ítems activos. */
   menu: MenuItemModel[];
   isGuest: boolean;
-  /** Link a la galería de la landing; null si no hay fotos o no está configurada. */
   galleryUrl: string | null;
 }
 
-/**
- * Sección `[RESTAURANTE]` del contexto de Chamber. Se arma en cada mensaje desde la DB (no desde
- * el RAG), así lo que el admin deshabilita deja de ofrecerse en la próxima consulta (CA7).
- *
- * El restó es solo para huéspedes con reserva confirmada o alojados (CA2): a los demás no se les
- * pasa la carta, solo que el servicio es exclusivo de huéspedes.
- */
 export function buildRestaurantBlock({
   settings,
   menu,

@@ -67,5 +67,4 @@ export const deleteRestaurantPhoto = async (id: string): Promise<void> => {
   await apiClient.delete(`/restaurant/photos/${id}`);
 };
 
-/** La imagen se sirve en una ruta pública del back: un `<img>` la carga sin token. */
 export const photoSrc = (photo: RestaurantPhoto): string => `${API_BASE_URL}${photo.url}`;

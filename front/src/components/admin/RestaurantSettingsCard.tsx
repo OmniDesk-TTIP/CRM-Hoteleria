@@ -27,7 +27,6 @@ const toFormData = (settings: RestaurantSettings): RestaurantSettingsFormData =>
   maxPartySize: settings.maxPartySize,
 });
 
-/** Información general del restó (CA1): estado, descripción, días, franjas y tamaño de mesa. */
 export default function RestaurantSettingsCard({ settings, isAdmin, onSaved }: RestaurantSettingsCardProps) {
   const [formData, setFormData] = useState<RestaurantSettingsFormData>(() => toFormData(settings));
   const [isSubmitting, setIsSubmitting] = useState(false);

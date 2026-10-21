@@ -5,7 +5,6 @@ interface ConfirmDeleteModalProps {
   onConfirm: () => void;
 }
 
-/** Confirmación de un borrado definitivo (plato de la carta, foto de la galería). */
 export default function ConfirmDeleteModal({ title, children, onClose, onConfirm }: ConfirmDeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

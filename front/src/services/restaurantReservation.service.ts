@@ -5,7 +5,6 @@ import type {
   RestaurantReservationListFilters,
 } from '@/config/types';
 
-/** El back usa `forbidNonWhitelisted`: los filtros vacíos o 'ALL' no se mandan. */
 const buildListParams = ({ status, page, pageSize }: RestaurantReservationListFilters) => ({
   page,
   pageSize,

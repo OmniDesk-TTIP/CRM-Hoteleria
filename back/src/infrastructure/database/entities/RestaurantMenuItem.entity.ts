@@ -13,7 +13,6 @@ export enum MenuItemStatus {
   INACTIVE = 'INACTIVE',
 }
 
-/** Plato o bebida de la carta del restó (US-17). */
 @Entity({ tableName: 'restaurant_menu_items' })
 export class RestaurantMenuItem extends CustomBaseEntity {
   @PrimaryKey({ type: 'uuid' })
@@ -25,7 +24,6 @@ export class RestaurantMenuItem extends CustomBaseEntity {
   @Property({ type: 'text', nullable: true })
   description?: string | null;
 
-  /** Sección de la carta (Entradas, Principales, Postres…): texto libre que elige el admin. */
   @Property({ type: 'varchar', length: 60 })
   category!: string;
 

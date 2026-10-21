@@ -9,9 +9,7 @@ export interface RestaurantReservationProps {
   telegramUserId: string;
   roomReservationId: string;
   guestFullName: string;
-  /** YYYY-MM-DD */
   requestedDate: string;
-  /** HH:mm */
   requestedTime: string;
   partySize: number;
   notes: string | null;
@@ -35,10 +33,6 @@ const ALLOWED_TRANSITIONS: Record<
   [RestaurantReservationStatus.REJECTED]: [],
 };
 
-/**
- * Regla de negocio de un pedido de mesa. Pura: sin DB ni ORM.
- * El repository la convierte desde y hacia la entidad.
- */
 export class RestaurantReservationModel {
   readonly id: string;
   status: RestaurantReservationStatus;
@@ -64,7 +58,6 @@ export class RestaurantReservationModel {
     this.createdAt = props.createdAt;
   }
 
-  /** Todo pedido arranca PENDING: nada queda confirmado hasta que recepción lo resuelve. */
   static create(
     props: NewRestaurantReservationProps,
   ): RestaurantReservationModel {
@@ -75,12 +68,6 @@ export class RestaurantReservationModel {
     });
   }
 
-  /**
-   * ¿La fecha y la hora pedidas son válidas? Devuelve el motivo (apto para mostrarle al
-   * huésped) o null si está bien. Las fechas van en YYYY-MM-DD, así que comparar strings
-   * equivale a comparar días. `today` y `nowMinutes` son de la zona horaria del hotel.
-   * Solo se pide mesa durante la estadía (incluidos el día de entrada y el de salida).
-   */
   static getDateError(input: {
     requestedDate: string;
     requestedTime: string;
@@ -100,7 +87,6 @@ export class RestaurantReservationModel {
     return null;
   }
 
-  /** Resolución desde el panel. Devuelve el motivo si no se pudo, o null si se aplicó. */
   changeStatus(next: RestaurantReservationStatus): string | null {
     if (!ALLOWED_TRANSITIONS[this.status].includes(next)) {
       return `No se puede pasar una solicitud de ${this.status} a ${next}`;
@@ -109,7 +95,6 @@ export class RestaurantReservationModel {
     return null;
   }
 
-  /** Aviso para el huésped cuando su pedido queda resuelto; null en los demás estados. */
   getStatusNotice(): string | null {
     const [year, month, day] = this.requestedDate.split('-');
     const people =

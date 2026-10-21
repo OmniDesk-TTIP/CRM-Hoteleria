@@ -175,7 +175,6 @@ export interface CancellationContext {
 
 export interface RestaurantContext {
   block: string;
-  /** Solo un huésped (CA2) con el restó habilitado puede pedir mesa. */
   canBook: boolean;
 }
 

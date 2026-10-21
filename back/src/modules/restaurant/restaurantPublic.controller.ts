@@ -20,11 +20,6 @@ export class RestaurantPublicController {
     return this.restaurantService.getPublicInfo();
   }
 
-  /**
-   * La imagen en sí, para usar directo en un `<img>`. Cada foto tiene un id propio y nunca
-   * cambia de contenido (reemplazarla es borrar y subir otra), así que se puede cachear sin
-   * vencimiento.
-   */
   @Get('photos/:id')
   async photo(
     @Param('id', ParseUUIDPipe) id: string,

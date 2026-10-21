@@ -179,7 +179,6 @@ export function SpaReservationStatusBadge({ status }: { status: SpaReservationSt
   );
 }
 
-/** Los pedidos de mesa solo los resuelve recepción: no hay estados de pago. */
 export function RestaurantReservationStatusBadge({ status }: { status: RestaurantReservationStatus }) {
   return <SpaReservationStatusBadge status={status} />;
 }

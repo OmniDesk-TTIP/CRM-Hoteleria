@@ -44,7 +44,6 @@ export class RestaurantReservationRepository {
     return { items: entities.map((entity) => this.toModel(entity)), total };
   }
 
-  /** ¿El huésped ya tiene un pedido pendiente para ese día y hora? Evita duplicados por reintentos. */
   async existsPendingSlot(
     telegramUserId: string,
     requestedDate: string,

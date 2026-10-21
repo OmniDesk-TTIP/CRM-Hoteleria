@@ -10,14 +10,12 @@ import {
   RestaurantSettingsModel,
 } from './model/restaurant.model';
 
-/** Único lugar que conoce a la vez las entidades del ORM y los modelos del restó. */
 @Injectable()
 export class RestaurantRepository {
   constructor(private readonly em: EntityManager) {}
 
   // ───────── Información ─────────
 
-  /** La configuración del restó, o null si el admin todavía no la cargó. */
   async findSettings(): Promise<RestaurantSettingsModel | null> {
     const [entity] = await this.em.find(
       RestaurantSettings,
@@ -27,7 +25,6 @@ export class RestaurantRepository {
     return entity ? this.toSettingsModel(entity) : null;
   }
 
-  /** Hay una sola fila: la crea la primera vez y después la actualiza. */
   async saveSettings(model: RestaurantSettingsModel): Promise<void> {
     const [entity] = await this.em.find(
       RestaurantSettings,

@@ -26,12 +26,10 @@ export class RestaurantShiftDto {
   closesAt!: string;
 }
 
-/** `PUT /restaurant`: reemplaza la información del restó (la crea si todavía no existe). */
 export class UpdateRestaurantSettingsDto {
   @IsIn(Object.values(RestaurantStatus), { message: 'Estado inválido' })
   status!: RestaurantStatus;
 
-  /** Vacío borra la descripción. */
   @IsOptional()
   @Transform(toTrimmedString)
   @IsString({ message: 'La descripción debe ser una cadena de texto' })

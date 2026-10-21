@@ -600,21 +600,15 @@ export interface PaginatedSpaReservations {
 
 export type RestaurantStatus = 'ACTIVE' | 'INACTIVE';
 
-/** Franja de atención (almuerzo, cena…), en hora del hotel. */
 export interface RestaurantShift {
-  /** HH:mm */
   opensAt: string;
-  /** HH:mm */
   closesAt: string;
 }
 
-/** Información del restó tal como la devuelve `GET /restaurant`. */
 export interface RestaurantSettings {
-  /** false mientras el admin no la guardó nunca: los valores son una sugerencia. */
   configured: boolean;
   status: RestaurantStatus;
   description: string | null;
-  /** 0 = domingo … 6 = sábado, igual que Date.getDay(). */
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
@@ -634,7 +628,6 @@ export interface MenuItem {
   id: string;
   name: string;
   description: string | null;
-  /** Sección de la carta (Entradas, Principales, Postres…). */
   category: string;
   price: number;
   status: MenuItemStatus;
@@ -650,7 +643,6 @@ export interface MenuItemFormData {
 
 export interface RestaurantPhoto {
   id: string;
-  /** Ruta pública relativa a la URL del back. */
   url: string;
   mimeType: string;
   sizeBytes: number;
@@ -659,14 +651,11 @@ export interface RestaurantPhoto {
 
 export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 
-/** Pedido de mesa hecho por el chat; lo confirma o rechaza recepción. */
 export interface RestaurantReservation {
   id: string;
   status: RestaurantReservationStatus;
   guestFullName: string;
-  /** YYYY-MM-DD */
   requestedDate: string;
-  /** HH:mm */
   requestedTime: string;
   partySize: number;
   notes: string | null;

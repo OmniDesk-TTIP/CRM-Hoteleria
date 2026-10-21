@@ -12,7 +12,6 @@ export interface PhotoContent {
 export class RestaurantPhotoRepository {
   constructor(private readonly em: EntityManager) {}
 
-  /** La galería en orden, sin los bytes de las imágenes (`data` es lazy). */
   async findAll(): Promise<RestaurantPhotoModel[]> {
     const entities = await this.em.find(
       RestaurantPhoto,
@@ -35,7 +34,6 @@ export class RestaurantPhotoRepository {
     return entity ? { data: entity.data, mimeType: entity.mimeType } : null;
   }
 
-  /** Agrega la foto al final de la galería. */
   async insert(data: Buffer, mimeType: string): Promise<RestaurantPhotoModel> {
     // find con limit y no findOne: MikroORM no acepta findOne con el filtro vacío.
     const [last] = await this.em.find(
@@ -54,7 +52,6 @@ export class RestaurantPhotoRepository {
     return this.toModel(entity);
   }
 
-  /** Guarda el orden: la foto de `ids[0]` pasa a ser la primera. */
   async updatePositions(ids: string[]): Promise<void> {
     await this.em.transactional(async (em) => {
       for (const [position, id] of ids.entries()) {
@@ -63,7 +60,6 @@ export class RestaurantPhotoRepository {
     });
   }
 
-  /** Devuelve false si la foto no existía. */
   async delete(id: string): Promise<boolean> {
     const affected = await this.em.nativeDelete(RestaurantPhoto, { id });
     return affected > 0;

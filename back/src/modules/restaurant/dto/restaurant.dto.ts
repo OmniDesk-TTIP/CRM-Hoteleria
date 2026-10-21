@@ -14,7 +14,6 @@ import {
   RestaurantPhotoModel,
 } from '../model/restaurantPhoto.model';
 
-/** Respuesta del panel (`GET /restaurant`). `configured` es false mientras no se guardó nunca. */
 export class RestaurantSettingsDto {
   configured: boolean;
   status: RestaurantStatus;
@@ -40,7 +39,6 @@ export class RestaurantSettingsDto {
 
 export class RestaurantPhotoDto {
   id: string;
-  /** Ruta pública de la imagen, relativa a la URL del back. */
   url: string;
   mimeType: string;
   sizeBytes: number;
@@ -57,7 +55,6 @@ export class RestaurantPhotoDto {
   }
 }
 
-/** `PUT /restaurant/photos/order`: todos los ids de la galería, en el orden nuevo. */
 export class ReorderRestaurantPhotosDto {
   @IsArray({ message: 'El orden debe ser un arreglo de ids' })
   @ArrayMaxSize(MAX_PHOTOS, {
@@ -81,10 +78,6 @@ export interface PublicMenuSectionDto {
   items: PublicMenuItemDto[];
 }
 
-/**
- * Lo que la web pública del hotel muestra del restó (CA1/CA6). Solo trae lo habilitado (CA7):
- * con el restó deshabilitado `available` es false y no se publica nada más.
- */
 export interface PublicRestaurantDto {
   available: boolean;
   description: string | null;

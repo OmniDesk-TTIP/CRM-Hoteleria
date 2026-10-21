@@ -23,10 +23,6 @@ import {
   RestaurantReservationDto,
 } from './dto/restaurantReservation.dto';
 
-/**
- * Resultado de pedir mesa desde el chat. Los rechazos no son excepciones: son respuestas
- * esperables y `reason` ya está redactado para mostrárselo al huésped.
- */
 export type RequestTableResult =
   | { ok: true; request: RestaurantReservationModel; reply: string }
   | { ok: false; reason: string };
@@ -43,11 +39,6 @@ export class RestaurantReservationService {
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
-  /**
-   * CA5: pedir una mesa con fecha, hora y cantidad de personas. Solo huéspedes con reserva
-   * confirmada o alojados (CA2), y solo dentro de su estadía. El pedido queda PENDING hasta que
-   * recepción lo resuelve desde el panel.
-   */
   async requestTable(
     telegramUserId: string,
     dto: RequestTableBookingDto,
@@ -163,11 +154,6 @@ export class RestaurantReservationService {
     return RestaurantReservationDto.fromModel(request);
   }
 
-  /**
-   * Avisa al huésped por Telegram que su pedido quedó resuelto y deja el aviso en el chat (igual
-   * que los turnos de spa). Un problema de mensajería no impide resolver el pedido: el estado ya
-   * quedó guardado.
-   */
   private async notifyGuest(
     request: RestaurantReservationModel,
   ): Promise<void> {

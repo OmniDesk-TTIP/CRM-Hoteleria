@@ -48,7 +48,6 @@ export class UpdateMenuItemDto {
   @MaxLength(120, { message: 'El nombre es demasiado largo' })
   name?: string;
 
-  /** Vacío borra la descripción. */
   @IsOptional()
   @Transform(toTrimmedString)
   @IsString({ message: 'La descripción debe ser una cadena de texto' })
@@ -72,7 +71,6 @@ export class UpdateMenuItemDto {
   status?: MenuItemStatus;
 }
 
-/** Respuesta del panel (`/restaurant/menu-items`): incluye el estado, también de los inactivos. */
 export class MenuItemDto {
   id: string;
   name: string;

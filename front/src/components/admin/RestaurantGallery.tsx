@@ -22,10 +22,6 @@ const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ?
 const moveButtonClasses =
   'rounded-full border border-goldLight/25 bg-card/90 px-2.5 py-1 text-xs font-medium text-text transition hover:bg-goldLight/10 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none';
 
-/**
- * Galería del restó (CA6). El orden de acá es el de la web del hotel; la primera foto es la
- * portada. Se ordena con botones y no arrastrando, para que también ande con teclado y en el celular.
- */
 export default function RestaurantGallery({ isAdmin }: RestaurantGalleryProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<RestaurantPhoto[]>([]);

@@ -1,7 +1,6 @@
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 export const MAX_PHOTOS = 20;
 
-/** Prefijo de la ruta pública de las imágenes (ver RestaurantPublicController). */
 export const PUBLIC_PHOTO_PATH = '/public/restaurant/photos';
 
 export interface RestaurantPhotoProps {
@@ -11,7 +10,6 @@ export interface RestaurantPhotoProps {
   position: number;
 }
 
-/** Foto de la galería, sin los bytes: para listar y ordenar no hace falta cargarlos. */
 export class RestaurantPhotoModel {
   readonly id: string;
   readonly mimeType: string;
@@ -30,11 +28,6 @@ export class RestaurantPhotoModel {
   }
 }
 
-/**
- * Tipo real de la imagen según sus primeros bytes. No se confía en el mimetype que manda el
- * navegador: la imagen se sirve en una ruta pública y no puede ser otra cosa (un HTML, un SVG con
- * scripts). Devuelve null si no es JPEG, PNG ni WebP.
- */
 export function detectImageType(buffer: Buffer): string | null {
   if (
     buffer.length >= 3 &&
@@ -62,10 +55,6 @@ export function detectImageType(buffer: Buffer): string | null {
   return null;
 }
 
-/**
- * ¿`ids` es exactamente la galería actual, reordenada? Un pedido de orden con fotos de menos, de
- * más o repetidas se rechaza en vez de aplicarse a medias.
- */
 export function isSamePhotoSet(currentIds: string[], ids: string[]): boolean {
   if (ids.length !== currentIds.length) return false;
   const requested = new Set(ids);

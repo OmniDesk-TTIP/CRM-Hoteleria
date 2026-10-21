@@ -4,7 +4,6 @@ import { createMenuItem, updateMenuItem } from '@/services/restaurant.service';
 
 interface MenuItemFormModalProps {
   item: MenuItem | null;
-  /** Secciones que ya existen en la carta, para sugerirlas y no escribirlas distinto cada vez. */
   categories: string[];
   onClose: () => void;
   onSuccess: () => void;

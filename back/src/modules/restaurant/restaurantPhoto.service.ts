@@ -15,7 +15,6 @@ import {
   RestaurantPhotoModel,
 } from './model/restaurantPhoto.model';
 
-/** Galería del restó (CA6): el admin sube, ordena y elimina; la landing la muestra. */
 @Injectable()
 export class RestaurantPhotoService {
   constructor(private readonly photoRepository: RestaurantPhotoRepository) {}

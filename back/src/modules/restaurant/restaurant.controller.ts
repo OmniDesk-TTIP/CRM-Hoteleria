@@ -41,7 +41,6 @@ import { RolesGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/auth.decorators';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
 
-/** Multer corta con un 413 en inglés ("File too large"); acá se responde en español. */
 @Catch(PayloadTooLargeException)
 export class PhotoTooLargeFilter implements ExceptionFilter {
   catch(_exception: PayloadTooLargeException, host: ArgumentsHost): void {

@@ -17,16 +17,13 @@ import { UpdateRestaurantSettingsDto } from './dto/updateRestaurantSettings.dto'
 import { CreateMenuItemDto, UpdateMenuItemDto } from './dto/menuItem.dto';
 import { PublicRestaurantDto, toPublicRestaurant } from './dto/restaurant.dto';
 
-/** Lo que Chamber necesita del restó en cada mensaje: el bloque de contexto y si puede reservar. */
 export interface RestaurantChatContext {
   block: string;
   canBook: boolean;
 }
 
-/** Ruta de la sección del restó en la landing, si no se configura RESTAURANT_GALLERY_URL. */
 const DEFAULT_LANDING_RESTAURANT_PATH = '/restaurante';
 
-/** Vacío o solo espacios cuenta como "sin descripción". */
 const toNullableText = (
   value: string | undefined,
 ): string | null | undefined =>
@@ -43,7 +40,6 @@ export class RestaurantService {
 
   // ───────── Información (CA1) ─────────
 
-  /** La configuración guardada o, si nunca se cargó, la de por defecto (deshabilitada). */
   async getSettings(): Promise<{
     settings: RestaurantSettingsModel;
     configured: boolean;
@@ -117,7 +113,6 @@ export class RestaurantService {
     return model;
   }
 
-  /** Los pedidos de mesa no referencian ítems de la carta, así que se pueden borrar sin más. */
   async removeMenuItem(id: string): Promise<void> {
     await this.getMenuItemOrFail(id);
     await this.restaurantRepository.deleteMenuItem(id);
@@ -125,11 +120,6 @@ export class RestaurantService {
 
   // ───────── Chamber (CA2/CA3/CA6/CA7) ─────────
 
-  /**
-   * Bloque `[RESTAURANTE]` para el contexto de Chamber. Siempre lee de la DB: lo que el admin
-   * deshabilita deja de ofrecerse en la próxima consulta (CA7). Solo los huéspedes con reserva
-   * confirmada o alojados ven la carta y pueden pedir mesa (CA2).
-   */
   async getChatContext(telegramUserId: string): Promise<RestaurantChatContext> {
     const settings = await this.restaurantRepository.findSettings();
     const isActive = settings?.isActive() ?? false;
@@ -155,7 +145,6 @@ export class RestaurantService {
     };
   }
 
-  /** Link de la sección del restó en la landing, o null si no hay landing configurada. */
   getGalleryUrl(): string | null {
     const explicit = this.configService.get<string>('RESTAURANT_GALLERY_URL');
     if (explicit) return explicit;

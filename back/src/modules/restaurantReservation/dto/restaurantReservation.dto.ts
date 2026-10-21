@@ -29,7 +29,6 @@ class IsDateFormatConstraint implements ValidatorConstraintInterface {
   }
 }
 
-/** Argumentos que arma el modelo al llamar a la tool `request_table_booking`: no son de fiar. */
 export class RequestTableBookingDto {
   @Validate(IsDateFormatConstraint)
   date!: string;
@@ -95,7 +94,6 @@ export class UpdateRestaurantReservationStatusDto {
     | RestaurantReservationStatus.REJECTED;
 }
 
-/** Respuesta del panel (`/restaurant-reservations`). */
 export class RestaurantReservationDto {
   id: string;
   status: RestaurantReservationStatus;

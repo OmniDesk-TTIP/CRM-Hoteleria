@@ -6,7 +6,6 @@ interface RestaurantReservationsTableProps {
   requests: RestaurantReservation[];
   isLoading: boolean;
   error: string | null;
-  /** Id del pedido que se está resolviendo, para deshabilitar sus botones. */
   busyId: string | null;
   onResolve: (request: RestaurantReservation, status: 'CONFIRMED' | 'REJECTED') => void;
 }
