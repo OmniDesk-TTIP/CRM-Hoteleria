@@ -15,7 +15,6 @@ export interface DeliveryResult {
 }
 
 export interface CampaignContent {
-  /** Ya armado y escapado: va con parse_mode HTML. */
   text: string;
   image?: CampaignImage;
 }
@@ -32,15 +31,6 @@ type TelegramClient = Pick<Telegram, 'sendMessage' | 'sendPhoto'>;
 const defaultSleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * Manda una campaña respetando los límites de Telegram: lotes de `batchSize` en paralelo y,
- * entre lote y lote, lo que falte para completar `batchIntervalMs`. Un 429 espera lo que pide
- * Telegram y reintenta; un 403 (bloqueó al bot) o cualquier otro error cuenta como fallido y
- * el envío sigue con el resto.
- *
- * La imagen se sube una sola vez: con el primer envío que sale bien Telegram devuelve un
- * file_id y los demás lo reutilizan, así no se sube el archivo N veces.
- */
 export class CampaignDispatcher {
   private readonly batchSize: number;
   private readonly batchIntervalMs: number;
@@ -65,8 +55,6 @@ export class CampaignDispatcher {
   ): Promise<void> {
     let pending = recipients;
 
-    // Hasta tener el file_id, los envíos con imagen van de a uno: subir el mismo archivo en
-    // paralelo a 20 personas es justo lo que se quiere evitar.
     while (content.image && !this.photoFileId && pending.length > 0) {
       const startedAt = this.now();
       const [first, ...rest] = pending;
@@ -126,7 +114,6 @@ export class CampaignDispatcher {
       caption: content.text,
       parse_mode: 'HTML',
     });
-    // Telegram devuelve la foto en varios tamaños; el último es el original.
     this.photoFileId ??= sent.photo.at(-1)?.file_id ?? null;
   }
 

@@ -28,7 +28,7 @@ const CONFIRMED_RESERVATION = `EXISTS (
   WHERE r.telegram_user_id = cs.telegram_user_id AND r.status = ?
 )`;
 
-/** Los contactos son las conversaciones con Chamber: una por usuario de Telegram. */
+
 function audienceClause(audience: CampaignAudience): {
   where: string;
   params: unknown[];
@@ -112,7 +112,6 @@ export class CampaignRepository {
     return { items, total };
   }
 
-  /** Suma en la base y no en memoria: el panel lee el progreso mientras el envío sigue. */
   async addProgress(id: string, progress: CampaignProgress): Promise<void> {
     await this.em.getConnection().execute(
       `UPDATE campaigns
@@ -135,7 +134,6 @@ export class CampaignRepository {
     );
   }
 
-  /** Las que quedaron "enviando" de una corrida anterior del servidor ya no van a terminar. */
   async interruptUnfinished(finishedAt: Date): Promise<number> {
     return this.em.nativeUpdate(
       Campaign,

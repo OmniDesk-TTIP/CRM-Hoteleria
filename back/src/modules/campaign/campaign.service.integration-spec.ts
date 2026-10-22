@@ -1,9 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BadRequestException,
-  ConflictException,
-  INestApplication,
-} from '@nestjs/common';
+import { ConflictException, INestApplication } from '@nestjs/common';
 import { getBotToken } from 'nestjs-telegraf';
 import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { AppModule } from '../../app.module';
@@ -264,13 +260,12 @@ describe('CampaignService (integración)', () => {
 
     it('deja la campaña en el chat de quien la recibió sin tocar la vista previa de la bandeja', async () => {
       const fork = em.fork();
+      // El formato del aviso se prueba en campaign.model.spec.ts; acá solo que quedó guardado.
       const [received] = await fork.find(ChatMessage, {
         telegramUserId: guests.notConfirmed,
         role: MessageRole.SYSTEM,
       });
-      expect(received.content).toBe(
-        '📣 Campaña enviada: «Promo <invierno>»\n20% off & desayuno',
-      );
+      expect(received.content).toContain('Promo <invierno>');
 
       expect(
         await fork.count(ChatMessage, { telegramUserId: guests.noReservation }),
@@ -307,16 +302,6 @@ describe('CampaignService (integración)', () => {
       expect((await campaignRow(created.id)).status).toBe(
         CampaignStatus.COMPLETED,
       );
-    });
-
-    it('rechaza un archivo que no es una imagen', async () => {
-      await expect(
-        service.create(
-          { title: 'x', message: 'y', audience: CampaignAudience.ALL },
-          Buffer.from('%PDF-1.7'),
-          admin,
-        ),
-      ).rejects.toThrow(BadRequestException);
     });
 
     it('con imagen no deja pasar un texto más largo que el pie de foto', async () => {

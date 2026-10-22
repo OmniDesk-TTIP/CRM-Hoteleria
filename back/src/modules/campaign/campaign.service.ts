@@ -37,7 +37,6 @@ import {
 @Injectable()
 export class CampaignService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CampaignService.name);
-  /** El envío en curso, si hay uno. Corre fuera del request: el panel no lo espera. */
   private inFlight: Promise<void> | null = null;
 
   constructor(
@@ -47,7 +46,6 @@ export class CampaignService implements OnApplicationBootstrap {
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
-  /** Si el servidor se reinició a mitad de un envío, esa campaña no va a terminar nunca. */
   async onApplicationBootstrap(): Promise<void> {
     const interrupted = await RequestContext.create(this.orm.em, () =>
       this.campaignRepository.interruptUnfinished(new Date()),
@@ -82,10 +80,6 @@ export class CampaignService implements OnApplicationBootstrap {
     };
   }
 
-  /**
-   * CA4: registra la campaña y devuelve enseguida; el envío sigue en segundo plano y va
-   * actualizando los contadores. Una sola campaña a la vez, para no duplicar el ritmo de envío.
-   */
   async create(
     dto: CreateCampaignDto,
     imageBuffer: Buffer | undefined,
@@ -135,12 +129,11 @@ export class CampaignService implements OnApplicationBootstrap {
     return CampaignDto.fromEntity(campaign);
   }
 
-  /** Resuelve cuando termina el envío en curso. Lo usan los tests para leer el resultado final. */
+
   async whenIdle(): Promise<void> {
     await this.inFlight;
   }
 
-  /** Nunca rechaza: corre sin nadie que la espere. */
   private async dispatch(
     campaignId: string,
     recipients: string[],
@@ -149,7 +142,6 @@ export class CampaignService implements OnApplicationBootstrap {
   ): Promise<void> {
     let status = CampaignStatus.COMPLETED;
     try {
-      // Cada lote en su propio contexto de MikroORM: el del request que creó la campaña ya terminó.
       await new CampaignDispatcher(this.bot.telegram).run(
         recipients,
         content,
@@ -195,10 +187,6 @@ export class CampaignService implements OnApplicationBootstrap {
       await this.recordInChat(telegramUserId, notice);
   }
 
-  /**
-   * Queda en el chat del panel y en el historial que lee Chamber, por si el huésped responde
-   * "me interesa la promo". Sin tocar la vista previa: si no, la campaña reordenaría toda la bandeja.
-   */
   private async recordInChat(
     telegramUserId: string,
     notice: string,

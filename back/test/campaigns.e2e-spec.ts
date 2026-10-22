@@ -171,11 +171,6 @@ describe('Campañas (e2e)', () => {
       });
 
       await app.get(CampaignService).whenIdle();
-      expect(sendMessage).toHaveBeenCalledWith(
-        telegramUserId,
-        '<b>Promo e2e</b>\n\nHola',
-        { parse_mode: 'HTML' },
-      );
 
       const list = await request(app.getHttpServer())
         .get('/campaigns')

@@ -1,7 +1,6 @@
 import {
   buildCampaignText,
   buildChatNotice,
-  classifySendError,
   detectImageType,
   MAX_CAPTION_LENGTH,
   MAX_TEXT_LENGTH,
@@ -70,36 +69,6 @@ describe('campaign.model', () => {
       expect(detectImageType(Buffer.from('%PDF-1.7'))).toBeUndefined();
       expect(detectImageType(Buffer.from('GIF89a'))).toBeUndefined();
       expect(detectImageType(Buffer.alloc(0))).toBeUndefined();
-    });
-  });
-
-  describe('classifySendError', () => {
-    it('un 429 pide reintentar después de lo que indica Telegram', () => {
-      expect(
-        classifySendError({
-          code: 429,
-          response: { parameters: { retry_after: 7 } },
-        }),
-      ).toEqual({ kind: 'RETRY', afterMs: 7000 });
-    });
-
-    it('un 429 sin retry_after espera un segundo', () => {
-      expect(classifySendError({ code: 429 })).toEqual({
-        kind: 'RETRY',
-        afterMs: 1000,
-      });
-    });
-
-    it('un 403 es un huésped que bloqueó al bot', () => {
-      expect(classifySendError({ code: 403 })).toEqual({ kind: 'BLOCKED' });
-    });
-
-    it('cualquier otro error es un envío fallido', () => {
-      expect(classifySendError({ code: 400 })).toEqual({ kind: 'FAILED' });
-      expect(classifySendError(new Error('ETIMEDOUT'))).toEqual({
-        kind: 'FAILED',
-      });
-      expect(classifySendError(null)).toEqual({ kind: 'FAILED' });
     });
   });
 

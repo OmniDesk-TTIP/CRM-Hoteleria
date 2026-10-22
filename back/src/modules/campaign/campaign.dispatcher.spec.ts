@@ -27,7 +27,6 @@ describe('CampaignDispatcher', () => {
       batchSize: 3,
       batchIntervalMs: 1000,
       sleep,
-      // El reloj no avanza: cada lote "tarda" 0 ms y hay que esperar el segundo completo.
       now: () => 0,
       ...options,
     });
@@ -69,24 +68,31 @@ describe('CampaignDispatcher', () => {
     expect(sleep).toHaveBeenCalledWith(700);
   });
 
-  it('un huésped que bloqueó al bot cuenta como bloqueado y el envío sigue', async () => {
-    telegram.sendMessage.mockImplementation((chatId: string) =>
-      chatId === 'tg-2'
-        ? Promise.reject(
-            Object.assign(new Error('Forbidden: bot was blocked by the user'), {
-              code: 403,
-            }),
-          )
-        : Promise.resolve({}),
-    );
+  it('un bloqueo (403) u otro error cuentan como fallidos sin reintentar y el envío sigue', async () => {
+    telegram.sendMessage.mockImplementation((chatId: string) => {
+      if (chatId === 'tg-2')
+        return Promise.reject(
+          Object.assign(new Error('Forbidden: bot was blocked by the user'), {
+            code: 403,
+          }),
+        );
+      if (chatId === 'tg-3')
+        return Promise.reject(
+          Object.assign(new Error('Bad Request: chat not found'), {
+            code: 400,
+          }),
+        );
+      return Promise.resolve({});
+    });
 
     await dispatcher().run(recipients(3), { text: 'x' }, onBatch);
 
     expect(batches.flat()).toEqual([
       { telegramUserId: 'tg-1', outcome: 'SENT' },
       { telegramUserId: 'tg-2', outcome: 'BLOCKED' },
-      { telegramUserId: 'tg-3', outcome: 'SENT' },
+      { telegramUserId: 'tg-3', outcome: 'FAILED' },
     ]);
+    expect(telegram.sendMessage).toHaveBeenCalledTimes(3);
   });
 
   it('ante un 429 espera lo que pide Telegram y reintenta', async () => {
@@ -111,6 +117,8 @@ describe('CampaignDispatcher', () => {
 
     await dispatcher().run(['tg-1'], { text: 'x' }, onBatch);
 
+    // Sin retry_after, espera un segundo entre intentos.
+    expect(sleep).toHaveBeenCalledWith(1000);
     expect(telegram.sendMessage).toHaveBeenCalledTimes(3);
     expect(batches.flat()).toEqual([
       { telegramUserId: 'tg-1', outcome: 'FAILED' },

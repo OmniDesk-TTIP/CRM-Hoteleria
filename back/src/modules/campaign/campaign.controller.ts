@@ -33,7 +33,6 @@ import {
   RecipientsCountQueryDto,
 } from './dto/campaign.dto';
 
-/** Multer corta con un 413 en inglés ("File too large"); acá se responde en español. */
 @Catch(PayloadTooLargeException)
 export class ImageTooLargeFilter implements ExceptionFilter {
   catch(_exception: PayloadTooLargeException, host: ArgumentsHost): void {
@@ -49,7 +48,6 @@ export class ImageTooLargeFilter implements ExceptionFilter {
   }
 }
 
-/** Campañas masivas por Telegram (US-13). Solo para Administradores (CA6). */
 @Controller('campaigns')
 @Roles(UserRole.ADMIN)
 @UseGuards(RolesGuard)
@@ -63,7 +61,6 @@ export class CampaignController {
     return this.campaignService.list(query);
   }
 
-  /** CA3: cuántos contactos recibirían la campaña, para la vista previa. */
   @Get('recipients-count')
   countRecipients(
     @Query() query: RecipientsCountQueryDto,
@@ -71,7 +68,6 @@ export class CampaignController {
     return this.campaignService.countRecipients(query.audience);
   }
 
-  /** 202: la campaña queda registrada y el envío sigue en segundo plano (CA4). */
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
   @UseFilters(ImageTooLargeFilter)
