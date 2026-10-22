@@ -16,6 +16,9 @@ import { SpaService } from '../spa/spa.service';
 import { CancellationService } from '../cancellation/cancellation.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
+import { RestaurantService } from '../restaurant/restaurant.service';
+import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
+import { RequestTableBookingDto } from '../restaurantReservation/dto/restaurantReservation.dto';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -59,6 +62,8 @@ export class TelegramUpdate {
     private readonly chatService: ChatService,
     private readonly spaService: SpaService,
     private readonly spaReservationService: SpaReservationService,
+    private readonly restaurantService: RestaurantService,
+    private readonly restaurantReservationService: RestaurantReservationService,
     private readonly cancellationService: CancellationService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
@@ -137,6 +142,8 @@ export class TelegramUpdate {
       const history = previousMessages.reverse();
       const servicesBlock =
         await this.spaService.getSpaContextBlock(telegramUserId);
+      const restaurant =
+        await this.restaurantService.getChatContext(telegramUserId);
       const cancellation =
         await this.cancellationService.getGuestContextBlock(telegramUserId);
       const hasPendingPayment =
@@ -149,6 +156,7 @@ export class TelegramUpdate {
         servicesBlock,
         cancellation,
         hasPendingPayment,
+        restaurant,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -264,6 +272,8 @@ export class TelegramUpdate {
         );
       case ChatAction.REQUEST_SPA_BOOKING:
         return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
+      case ChatAction.REQUEST_TABLE_BOOKING:
+        return this.resolveTableBooking(aiResponse.datos, telegramUserId);
       case ChatAction.CANCEL_RESERVATION:
         return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
       case ChatAction.REGISTER_REFUND_ACCOUNT:
@@ -336,6 +346,26 @@ export class TelegramUpdate {
     }
 
     const result = await this.spaReservationService.requestSpa(
+      telegramUserId,
+      bookingDto,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  private async resolveTableBooking(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const bookingDto = plainToInstance(RequestTableBookingDto, datos);
+    const validationErrors = await validate(bookingDto);
+    if (validationErrors.length > 0) {
+      this.logger.warn(
+        `Pedido de mesa incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
+      );
+      return '¿Me confirmás para qué día (DD-MM-YYYY), a qué hora y para cuántas personas querés la mesa?';
+    }
+
+    const result = await this.restaurantReservationService.requestTable(
       telegramUserId,
       bookingDto,
     );

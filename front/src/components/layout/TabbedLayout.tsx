@@ -7,7 +7,7 @@ export interface TabItem {
   /** `end` para que la pestaña principal no quede activa también en las hijas. */
   end?: boolean;
   /** Muestra un contador al lado del nombre cuando es mayor a 0. */
-  badge?: 'pendingSpaReservations';
+  badge?: 'pendingSpaReservations' | 'pendingRestaurantReservations';
 }
 
 interface TabbedLayoutProps {

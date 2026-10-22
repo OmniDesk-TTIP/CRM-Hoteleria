@@ -12,6 +12,8 @@ import SupportHoursPage from '@/pages/admin/SupportHoursPage';
 import RoomsPage from '@/pages/admin/RoomsPage';
 import SpaPage from '@/pages/admin/SpaPage';
 import SpaReservationsPage from '@/pages/admin/SpaReservationsPage';
+import RestaurantPage from '@/pages/admin/RestaurantPage';
+import RestaurantReservationsPage from '@/pages/admin/RestaurantReservationsPage';
 import HomePage from '@/pages/admin/HomePage';
 import AppLayout from '@/components/layout/AppLayout';
 import TabbedLayout, { type TabItem } from '@/components/layout/TabbedLayout';
@@ -24,12 +26,14 @@ import ReviewsPage from '@/pages/admin/ReviewsPage';
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
   { to: '/admin/reservations/spa', label: 'Spa', badge: 'pendingSpaReservations' },
+  { to: '/admin/reservations/restaurant', label: 'Restó', badge: 'pendingRestaurantReservations' },
   { to: '/admin/reservations/refunds', label: 'Devoluciones' },
 ];
 
 const SERVICE_TABS: TabItem[] = [
   { to: '/admin/services', label: 'Habitaciones', end: true },
   { to: '/admin/services/spa', label: 'Spa' },
+  { to: '/admin/services/restaurant', label: 'Restó' },
 ];
 
 const SETTINGS_TABS: TabItem[] = [
@@ -69,6 +73,7 @@ function App() {
                   >
                     <Route index element={<ReservationsPage />} />
                     <Route path="spa" element={<SpaReservationsPage />} />
+                    <Route path="restaurant" element={<RestaurantReservationsPage />} />
                     <Route path="refunds" element={<RefundsPage />} />
                   </Route>
                   <Route
@@ -77,6 +82,7 @@ function App() {
                   >
                     <Route index element={<RoomsPage />} />
                     <Route path="spa" element={<SpaPage />} />
+                    <Route path="restaurant" element={<RestaurantPage />} />
                   </Route>
 
                   {/* rutas anteriores: se redirigen para no romper favoritos */}
