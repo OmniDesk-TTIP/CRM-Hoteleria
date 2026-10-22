@@ -612,4 +612,36 @@ export interface KnowledgeDocument {
   errorMessage?: string;
   /** ISO 8601. */
   createdAt: string;
-}
+}
+/* ───────── Campañas (US-13) ───────── */
+
+/** A quiénes va la campaña. CONFIRMED y NO_RESERVATION se reparten a todos los contactos. */
+export type CampaignAudience = 'ALL' | 'CONFIRMED' | 'NO_RESERVATION';
+
+export type CampaignStatus = 'SENDING' | 'COMPLETED' | 'INTERRUPTED';
+
+/** Una campaña del historial, con el progreso del envío (CA5). */
+export interface Campaign {
+  id: string;
+  title: string;
+  message: string;
+  audience: CampaignAudience;
+  hasImage: boolean;
+  status: CampaignStatus;
+  totalRecipients: number;
+  sentCount: number;
+  /** Todos los que no la recibieron, bloqueados incluidos. */
+  failedCount: number;
+  /** Subconjunto de `failedCount`: bloquearon al bot o borraron la cuenta. */
+  blockedCount: number;
+  createdByName: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface CampaignFormData {
+  title: string;
+  message: string;
+  audience: CampaignAudience;
+  image: File | null;
+}

@@ -148,6 +148,13 @@ export const SparklesIcon = (props: IconProps) => (
   </svg>
 );
 
+export const MegaphoneIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M3 10v4a1 1 0 0 0 1 1h3l8 4V5L7 9H4a1 1 0 0 0-1 1Z" />
+    <path d="M7 15v4a1 1 0 0 0 1 1h1.5M18.5 9.5a3.5 3.5 0 0 1 0 5" />
+  </svg>
+);
+
 export const BellIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <path d="M4 17h16" />
