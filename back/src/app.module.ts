@@ -13,6 +13,7 @@ import { SupportHoursModule } from './modules/supportHours/supportHours.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { SpaModule } from './modules/spa/spa.module';
+import { RestaurantModule } from './modules/restaurant/restaurant.module';
 import { CancellationModule } from './modules/cancellation/cancellation.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -36,6 +37,7 @@ import { CampaignModule } from './modules/campaign/campaign.module';
     DashboardModule,
     StatisticsModule,
     SpaModule,
+    RestaurantModule,
     CancellationModule,
     DocumentsModule,
     SatisfactionSurveyModule,

@@ -263,6 +263,102 @@ describe('RagService', () => {
       });
     });
 
+    describe('restaurante (US-17)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const ask = (
+        text: string,
+        restaurant: { block: string; canBook: boolean } | null,
+      ) =>
+        service.askQuestion(
+          text,
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          restaurant,
+        );
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('agrega el bloque del restó al contexto y su regla (CA3)', async () => {
+        await ask('¿Qué hay de cenar?', {
+          block: '[RESTAURANTE]\nCARTA:\n- Milanesa | $9000',
+          canBook: true,
+        });
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- Milanesa | $9000');
+        expect(systemInstruction).toContain('REGLA PARA EL RESTAURANTE');
+        expect(systemInstruction).toContain('FOTOS DEL ESPACIO');
+        expect(systemInstruction).not.toContain(
+          'No tenés información del restaurante',
+        );
+      });
+
+      it('declara request_table_booking solo si el cliente puede pedir mesa (CA2)', async () => {
+        await ask('Hola', { block: '[RESTAURANTE]', canBook: true });
+        expect(toolNames()).toContain('request_table_booking');
+
+        getGenerativeModelMock.mockClear();
+        await ask('Hola', { block: '[RESTAURANTE]', canBook: false });
+        expect(toolNames()).not.toContain('request_table_booking');
+      });
+
+      it('devuelve REQUEST_TABLE_BOOKING con los datos de la function call (CA5)', async () => {
+        const datos = { date: '08-10-2026', time: '21:00', partySize: 2 };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([{ name: 'request_table_booking', args: datos }]),
+        );
+
+        const result = await ask('Mesa para 2', {
+          block: '[RESTAURANTE]',
+          canBook: true,
+        });
+
+        expect(result).toEqual({
+          action: ChatAction.REQUEST_TABLE_BOOKING,
+          datos,
+        });
+      });
+
+      it('ignora la tool si el cliente no puede pedir mesa (defensa en profundidad)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'request_table_booking', args: {} }],
+            'texto',
+          ),
+        );
+
+        const result = await ask('Mesa para 2', {
+          block: '[RESTAURANTE]',
+          canBook: false,
+        });
+
+        expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+      });
+
+      it('sin contexto del restó no deja que invente la carta', async () => {
+        await ask('¿Tienen restaurante?', null);
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información del restaurante',
+        );
+      });
+    });
+
     it('incluye el estado de la reserva activa en el prompt cuando hay una en curso', async () => {
       chatModelMock.generateContent.mockResolvedValue(
         mockChatResponse([], 'ok'),

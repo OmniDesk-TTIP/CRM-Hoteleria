@@ -3,6 +3,7 @@ import type {
   ChatSessionStatus,
   ReservationOrigin,
   ReservationStatus,
+  RestaurantReservationStatus,
   RoomStatus,
   SpaReservationStatus,
   SpaServiceStatus,
@@ -176,6 +177,10 @@ export function SpaReservationStatusBadge({ status }: { status: SpaReservationSt
       {REQUEST_STATUS_LABEL[status]}
     </span>
   );
+}
+
+export function RestaurantReservationStatusBadge({ status }: { status: RestaurantReservationStatus }) {
+  return <SpaReservationStatusBadge status={status} />;
 }
 type ReviewPublicationState = 'PUBLISHED' | 'CAN_PUBLISH' | 'NO_CONSENT';
 

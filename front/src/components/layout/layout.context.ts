@@ -6,6 +6,8 @@ export interface LayoutContext {
   pendingSpaReservations: number;
   /** Vuelve a pedir el contador; se llama después de resolver un turno. */
   refreshPendingSpaReservations: () => void;
+  pendingRestaurantReservations: number;
+  refreshPendingRestaurantReservations: () => void;
 }
 
 export const useLayoutContext = () => useOutletContext<LayoutContext>();

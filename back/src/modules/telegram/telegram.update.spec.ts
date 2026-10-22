@@ -9,6 +9,8 @@ import { ChatService, HANDOVER_REPLY } from '../chat/chat.service';
 import { SpaService } from '../spa/spa.service';
 import { SpaReservationService } from '../spaReservation/spaReservation.service';
 import { CancellationService } from '../cancellation/cancellation.service';
+import { RestaurantService } from '../restaurant/restaurant.service';
+import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import {
   ChatSessionStatus,
   HandoverReason,
@@ -23,6 +25,8 @@ describe('TelegramUpdate', () => {
   let chatService: any;
   let spaService: { getSpaContextBlock: jest.Mock };
   let spaReservationService: { requestSpa: jest.Mock };
+  let restaurantService: { getChatContext: jest.Mock };
+  let restaurantReservationService: { requestTable: jest.Mock };
   let cancellationService: {
     getGuestContextBlock: jest.Mock;
     cancelForGuest: jest.Mock;
@@ -83,6 +87,14 @@ describe('TelegramUpdate', () => {
           useValue: { requestSpa: jest.fn() },
         },
         {
+          provide: RestaurantService,
+          useValue: { getChatContext: jest.fn() },
+        },
+        {
+          provide: RestaurantReservationService,
+          useValue: { requestTable: jest.fn() },
+        },
+        {
           provide: CancellationService,
           useValue: {
             getGuestContextBlock: jest.fn(),
@@ -119,6 +131,12 @@ describe('TelegramUpdate', () => {
     spaService = module.get(SpaService);
     spaReservationService = module.get(SpaReservationService);
     spaService.getSpaContextBlock.mockResolvedValue('[SERVICIOS DEL HOTEL]');
+    restaurantService = module.get(RestaurantService);
+    restaurantReservationService = module.get(RestaurantReservationService);
+    restaurantService.getChatContext.mockResolvedValue({
+      block: '[RESTAURANTE]',
+      canBook: true,
+    });
     cancellationService = module.get(CancellationService);
     cancellationService.getGuestContextBlock.mockResolvedValue({
       block: '[POLÍTICA DE CANCELACIÓN]',
@@ -198,7 +216,80 @@ describe('TelegramUpdate', () => {
       '[SERVICIOS DEL HOTEL]',
       { block: '[POLÍTICA DE CANCELACIÓN]', canCancel: false },
       false,
+      { block: '[RESTAURANTE]', canBook: true },
     );
+  });
+
+  it('le pasa a Chamber el contexto del restaurante del cliente (CA2/CA3)', async () => {
+    jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+      texto: 'Tenemos restó',
+      action: ChatAction.REPLY,
+    });
+
+    await update.onMessage('¿Qué hay para cenar?', mockCtx);
+
+    expect(restaurantService.getChatContext).toHaveBeenCalledWith(
+      mockTelegramUserId,
+    );
+  });
+
+  describe('pedido de mesa en el restó (REQUEST_TABLE_BOOKING)', () => {
+    const datos = { date: '08-10-2026', time: '21:00', partySize: 2 };
+
+    it('registra el pedido y responde con el texto fijo del backend (CA5)', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_TABLE_BOOKING,
+        datos,
+      });
+      restaurantReservationService.requestTable.mockResolvedValue({
+        ok: true,
+        reply: 'Listo, registré tu pedido de mesa',
+      });
+
+      await update.onMessage('Mesa para 2 el jueves a las 21', mockCtx);
+
+      expect(restaurantReservationService.requestTable).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        expect.objectContaining(datos),
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'Listo, registré tu pedido de mesa',
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('le explica el motivo si el backend rechaza el pedido', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_TABLE_BOOKING,
+        datos,
+      });
+      restaurantReservationService.requestTable.mockResolvedValue({
+        ok: false,
+        reason: 'Solo puedo pedir mesa para los días de tu estadía.',
+      });
+
+      await update.onMessage('Mesa para 2', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'Solo puedo pedir mesa para los días de tu estadía.',
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('pide los datos que faltan si los argumentos son inválidos', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REQUEST_TABLE_BOOKING,
+        datos: { date: '2026-10-08', time: '9pm' },
+      });
+
+      await update.onMessage('Quiero una mesa', mockCtx);
+
+      expect(restaurantReservationService.requestTable).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('para cuántas personas'),
+        { parse_mode: 'HTML' },
+      );
+    });
   });
 
   describe('cancelación pedida por el huésped (CANCEL_RESERVATION)', () => {
@@ -336,6 +427,7 @@ describe('TelegramUpdate', () => {
         '[SERVICIOS DEL HOTEL]',
         expect.anything(),
         true,
+        expect.anything(),
       );
     });
 

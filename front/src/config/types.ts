@@ -596,6 +596,85 @@ export interface PaginatedSpaReservations {
   pageSize: number;
 }
 
+/* ───────── Restaurante y pedidos de mesa (US-17) ───────── */
+
+export type RestaurantStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface RestaurantShift {
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface RestaurantSettings {
+  configured: boolean;
+  status: RestaurantStatus;
+  description: string | null;
+  availableWeekdays: number[];
+  shifts: RestaurantShift[];
+  maxPartySize: number;
+}
+
+export interface RestaurantSettingsFormData {
+  status: RestaurantStatus;
+  description: string;
+  availableWeekdays: number[];
+  shifts: RestaurantShift[];
+  maxPartySize: number;
+}
+
+export type MenuItemStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  price: number;
+  status: MenuItemStatus;
+}
+
+export interface MenuItemFormData {
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  status: MenuItemStatus;
+}
+
+export interface RestaurantPhoto {
+  id: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  position: number;
+}
+
+export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+
+export interface RestaurantReservation {
+  id: string;
+  status: RestaurantReservationStatus;
+  guestFullName: string;
+  requestedDate: string;
+  requestedTime: string;
+  partySize: number;
+  notes: string | null;
+  createdAt: string | null;
+}
+
+export interface RestaurantReservationListFilters {
+  status: RestaurantReservationStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedRestaurantReservations {
+  items: RestaurantReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 /* ───────── US: Administración de reglas base (base de conocimiento) ───────── */
 
 export type KnowledgeDocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'ERROR';
