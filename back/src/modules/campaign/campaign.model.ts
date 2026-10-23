@@ -28,7 +28,6 @@ export function maxMessageLength(title: string, hasImage: boolean): number {
   return limit - title.length - TITLE_SEPARATOR.length;
 }
 
-
 export function validateCampaignLength(
   title: string,
   message: string,
@@ -70,7 +69,6 @@ export function buildChatNotice(
 
 export type SendErrorKind =
   { kind: 'RETRY'; afterMs: number } | { kind: 'BLOCKED' } | { kind: 'FAILED' };
-
 
 export function classifySendError(error: unknown): SendErrorKind {
   const telegramError = error as {

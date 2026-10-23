@@ -28,7 +28,6 @@ const CONFIRMED_RESERVATION = `EXISTS (
   WHERE r.telegram_user_id = cs.telegram_user_id AND r.status = ?
 )`;
 
-
 function audienceClause(audience: CampaignAudience): {
   where: string;
   params: unknown[];

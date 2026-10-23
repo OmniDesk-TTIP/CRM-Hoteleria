@@ -129,7 +129,6 @@ export class CampaignService implements OnApplicationBootstrap {
     return CampaignDto.fromEntity(campaign);
   }
 
-
   async whenIdle(): Promise<void> {
     await this.inFlight;
   }
