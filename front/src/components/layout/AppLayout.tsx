@@ -18,6 +18,7 @@ import {
   ClockIcon,
   HomeIcon,
   LogoutIcon,
+  MegaphoneIcon,
   SettingsIcon,
   StarIcon,
 } from '@/components/layout/icons';
@@ -48,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
   { to: '/admin/reviews', label: 'Reseñas', icon: StarIcon, roles: ['ADMIN'] },
+  { to: '/admin/campaigns', label: 'Campañas', icon: MegaphoneIcon, roles: ['ADMIN'] },
   {
     to: '/admin/settings',
     label: 'Configuración',
