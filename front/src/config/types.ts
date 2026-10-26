@@ -73,6 +73,73 @@ export interface AdminReservation {
     categoryName: string;
   };
   createdAt: string;
+  /** US-14: lo que quedó registrado al cancelar. Todo null si la reserva no se canceló. */
+  cancelledAt: string | null;
+  cancellationPolicyName: string | null;
+  refundPercentage: number | null;
+  /** Null si no había nada pagado; 0 si la política no devolvía nada. */
+  refundAmount: number | null;
+  refundStatus: RefundStatus | null;
+  /** Cuenta para la devolución que informó el huésped por Telegram. */
+  refundAccountAlias: string | null;
+  refundAccountHolder: string | null;
+}
+
+/* ───────── Cancelaciones y devoluciones (US-14) ───────── */
+
+export type RefundStatus = 'PENDING' | 'COMPLETED';
+
+/** Con al menos `minDaysBeforeCheckIn` días de anticipación se devuelve ese % de la seña. */
+export interface CancellationTier {
+  minDaysBeforeCheckIn: number;
+  refundPercentage: number;
+}
+
+export interface CancellationPolicy {
+  id: string;
+  name: string;
+  /** Ordenados de más a menos anticipación. */
+  tiers: CancellationTier[];
+  /** Solo una política está vigente: es la que se aplica al cancelar. */
+  active: boolean;
+}
+
+export interface CancellationPolicyFormData {
+  name: string;
+  tiers: CancellationTier[];
+}
+
+/** Fila del listado de devoluciones; `reservationId` identifica la devolución (una por reserva). */
+export interface Refund {
+  reservationId: string;
+  guestFullName: string;
+  guestDni: string;
+  roomNumber: string;
+  checkIn: string;
+  checkOut: string;
+  amount: number;
+  percentage: number;
+  policyName: string | null;
+  status: RefundStatus;
+  cancelledAt: string | null;
+  refundedAt: string | null;
+  /** Cuenta que informó el huésped por Telegram para la transferencia. */
+  accountAlias: string | null;
+  accountHolder: string | null;
+  /** La reserva vino del bot: al marcarla como realizada se le avisa por Telegram. */
+  notifiableByTelegram: boolean;
+}
+
+/** Respuesta de marcar una devolución como realizada. */
+export interface CompletedRefund extends Refund {
+  /** Si el aviso por Telegram le llegó al huésped. */
+  guestNotified: boolean;
+}
+
+export interface RefundListFilters {
+  page: number;
+  pageSize: number;
+  status: RefundStatus | 'ALL';
 }
 
 /** Respuesta paginada genérica de la API. */
@@ -390,6 +457,270 @@ export interface BotStatistics {
   from: string | null;
   sales: { total: number; bot: number; manual: number; botPct: number; manualPct: number };
   /** `botDeposits` es la seña cobrada por Mercado Pago; `botTotalValue`, el valor total de esas reservas. */
-  revenue: { botDeposits: number; botTotalValue: number };
+  revenue: {
+    botDeposits: number;
+    botTotalValue: number;
+    /** US-14: seña retenida de reservas pagadas que se cancelaron (seña menos lo devuelto). */
+    cancellationRetained: number;
+    /** US-14: devoluciones generadas que todavía no se hicieron. */
+    refundsPending: number;
+    /** US-14: devoluciones ya realizadas. */
+    refundsCompleted: number;
+  };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
+}
+
+/* ───────── Encuesta de satisfacción (US-18) ───────── */
+
+/** Período de `/surveys` y `/surveys/summary`: días del calendario del hotel, ambos incluidos. */
+export interface SurveyPeriod {
+  /** YYYY-MM-DD */
+  from?: string;
+  /** YYYY-MM-DD */
+  to?: string;
+}
+
+/** Respuesta de un huésped tal como la devuelve `GET /surveys`. Calificaciones de 1 a 5. */
+export interface SurveyResponse {
+  id: string;
+  reservationId: string;
+  guestFullName: string;
+  roomNumber: string | null;
+  /** YYYY-MM-DD */
+  checkIn: string | null;
+  /** YYYY-MM-DD */
+  checkOut: string | null;
+  answeredAt: string;
+  overallRating: number;
+  cleanlinessRating: number;
+  attentionRating: number;
+  servicesRating: number;
+  comment: string | null;
+  /** El huésped autorizó mostrar su reseña en la web del hotel. */
+  publishConsent: boolean;
+  published: boolean;
+  publishedAt: string | null;
+}
+
+export interface PaginatedSurveyResponses {
+  items: SurveyResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Respuesta de `GET /surveys/summary`. Los promedios son null si no hubo respuestas. */
+export interface SurveySummary {
+  from: string | null;
+  to: string | null;
+  responses: number;
+  averages: {
+    overall: number | null;
+    cleanliness: number | null;
+    attention: number | null;
+    services: number | null;
+  };
+  /** Encuestas enviadas en el período y cuántas de esas ya se respondieron. */
+  invitations: { sent: number; answered: number; responseRatePct: number };
+}
+
+/* ───────── Spa y turnos de spa (US-17) ───────── */
+
+export type SpaServiceStatus = 'ACTIVE' | 'INACTIVE';
+
+/** Servicio del spa tal como lo devuelve `GET /spa-services`. */
+export interface SpaService {
+  id: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  /** Precio para clientes externos; los huéspedes no pagan. */
+  price: number;
+  /** Turnos que pueden estar en curso a la vez. */
+  capacity: number;
+  status: SpaServiceStatus;
+  /** 0 = domingo … 6 = sábado, igual que Date.getDay(). */
+  availableWeekdays: number[];
+  /** HH:mm */
+  opensAt: string;
+  /** HH:mm */
+  closesAt: string;
+}
+
+export interface SpaServiceFormData {
+  name: string;
+  description: string;
+  durationMinutes: number;
+  price: number;
+  capacity: number;
+  status: SpaServiceStatus;
+  availableWeekdays: number[];
+  opensAt: string;
+  closesAt: string;
+}
+
+/**
+ * PENDING espera a recepción (huésped); PENDING_PAYMENT espera el pago (cliente externo).
+ * CANCELLED no es una cancelación manual: es el turno de un externo que venció sin pagarse.
+ */
+export type SpaReservationStatus = 'PENDING' | 'PENDING_PAYMENT' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED';
+
+export type SpaReservationClientType = 'GUEST' | 'EXTERNAL';
+
+/** Turno de spa pedido por el chat: el huésped lo confirma recepción, el externo se confirma al pagar. */
+export interface SpaReservation {
+  id: string;
+  status: SpaReservationStatus;
+  clientType: SpaReservationClientType;
+  serviceName: string;
+  guestFullName: string;
+  /** YYYY-MM-DD */
+  requestedDate: string;
+  /** HH:mm */
+  requestedTime: string;
+  /** Lo que se cobra: 0 para huéspedes. */
+  amount: number;
+  createdAt: string | null;
+}
+
+export interface SpaReservationListFilters {
+  status: SpaReservationStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedSpaReservations {
+  items: SpaReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/* ───────── Restaurante y pedidos de mesa (US-17) ───────── */
+
+export type RestaurantStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface RestaurantShift {
+  opensAt: string;
+  closesAt: string;
+}
+
+export interface RestaurantSettings {
+  configured: boolean;
+  status: RestaurantStatus;
+  description: string | null;
+  availableWeekdays: number[];
+  shifts: RestaurantShift[];
+  maxPartySize: number;
+}
+
+export interface RestaurantSettingsFormData {
+  status: RestaurantStatus;
+  description: string;
+  availableWeekdays: number[];
+  shifts: RestaurantShift[];
+  maxPartySize: number;
+}
+
+export type MenuItemStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  price: number;
+  status: MenuItemStatus;
+}
+
+export interface MenuItemFormData {
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  status: MenuItemStatus;
+}
+
+export interface RestaurantPhoto {
+  id: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  position: number;
+}
+
+export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
+
+export interface RestaurantReservation {
+  id: string;
+  status: RestaurantReservationStatus;
+  guestFullName: string;
+  requestedDate: string;
+  requestedTime: string;
+  partySize: number;
+  notes: string | null;
+  createdAt: string | null;
+}
+
+export interface RestaurantReservationListFilters {
+  status: RestaurantReservationStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedRestaurantReservations {
+  items: RestaurantReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/* ───────── US: Administración de reglas base (base de conocimiento) ───────── */
+
+export type KnowledgeDocumentStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'ERROR';
+export type KnowledgeDocumentType = 'PDF' | 'TXT';
+
+export interface KnowledgeDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  type: KnowledgeDocumentType;
+  sizeBytes: number;
+  status: KnowledgeDocumentStatus;
+  chunksCount: number;
+  errorMessage?: string;
+  /** ISO 8601. */
+  createdAt: string;
+}
+/* ───────── Campañas (US-13) ───────── */
+
+/** A quiénes va la campaña. CONFIRMED y NO_RESERVATION se reparten a todos los contactos. */
+export type CampaignAudience = 'ALL' | 'CONFIRMED' | 'NO_RESERVATION';
+
+export type CampaignStatus = 'SENDING' | 'COMPLETED' | 'INTERRUPTED';
+
+/** Una campaña del historial, con el progreso del envío (CA5). */
+export interface Campaign {
+  id: string;
+  title: string;
+  message: string;
+  audience: CampaignAudience;
+  hasImage: boolean;
+  status: CampaignStatus;
+  totalRecipients: number;
+  sentCount: number;
+  /** Todos los que no la recibieron, bloqueados incluidos. */
+  failedCount: number;
+  /** Subconjunto de `failedCount`: bloquearon al bot o borraron la cuenta. */
+  blockedCount: number;
+  createdByName: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface CampaignFormData {
+  title: string;
+  message: string;
+  audience: CampaignAudience;
+  image: File | null;
 }

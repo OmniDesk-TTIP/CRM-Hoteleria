@@ -1,7 +1,13 @@
-import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
+import {
+  Entity,
+  PrimaryKey,
+  Property,
+  ManyToOne,
+} from '@mikro-orm/decorators/legacy';
 import { CustomBaseEntity } from './CustomBase.entity';
+import { KnowledgeDocument } from './KnowledgeDocument.entity';
 
-@Entity()
+@Entity({ tableName: 'document' })
 export class Document extends CustomBaseEntity {
   @PrimaryKey({ type: 'integer', autoincrement: true })
   id!: number;
@@ -11,4 +17,22 @@ export class Document extends CustomBaseEntity {
 
   @Property({ type: 'vector', columnType: 'vector(3072)' })
   embedding!: number[];
+
+  @ManyToOne(() => KnowledgeDocument, {
+    nullable: true,
+    fieldName: 'source_document_id',
+    deleteRule: 'cascade',
+  })
+  sourceDocument?: KnowledgeDocument;
+
+  @Property({ type: 'varchar', length: 255, nullable: true })
+  filename?: string;
+
+  @Property({
+    type: 'varchar',
+    length: 120,
+    nullable: true,
+    fieldName: 'mime_type',
+  })
+  mimeType?: string;
 }

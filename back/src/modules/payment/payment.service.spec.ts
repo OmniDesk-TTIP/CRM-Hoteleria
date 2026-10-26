@@ -153,6 +153,52 @@ describe('PaymentService', () => {
     });
   });
 
+  describe('createSpaPreference', () => {
+    it('cobra el monto del turno con el webhook y el redirect propios del spa', async () => {
+      createMock.mockResolvedValue({
+        id: 'pref-spa',
+        init_point: 'https://mp.example/pref-spa',
+      });
+
+      const module = await buildModule();
+      service = module.get<PaymentService>(PaymentService);
+
+      const result = await service.createSpaPreference({
+        id: 'spa-res-1',
+        serviceName: 'Masaje relajante',
+        amount: 35000,
+        fullName: 'Ana Pérez',
+        dni: '30111222',
+      });
+
+      expect(result).toEqual({
+        preferenceId: 'pref-spa',
+        initPoint: 'https://mp.example/pref-spa',
+      });
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            items: [
+              expect.objectContaining({
+                id: 'spa-res-1',
+                title: 'Turno de spa: Masaje relajante',
+                unit_price: 35000,
+                currency_id: 'ARS',
+              }),
+            ],
+            payer: expect.objectContaining({
+              name: 'Ana Pérez',
+              identification: { type: 'DNI', number: '30111222' },
+            }),
+            external_reference: 'spa-res-1',
+            notification_url: 'https://example.com/spa-payments/webhook',
+            back_urls: { success: 'https://example.com/spa-payments/success' },
+          }),
+        }),
+      );
+    });
+  });
+
   describe('getPayment', () => {
     it('delega en el cliente Payment del SDK', async () => {
       getPaymentMock.mockResolvedValue({ id: 123, status: 'approved' });

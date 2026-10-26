@@ -5,8 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ReservationRepository } from './reservation.repository';
+import {
+  CancellationOutcome,
+  CancellationService,
+} from '../cancellation/cancellation.service';
 import { RoomRepository } from '../room/room.repository';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
+import { ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
 import { ListReservationsQueryDto } from './dto/listReservations.dto';
 import { SaveReservationDto } from './dto/saveReservation.dto';
 import {
@@ -19,6 +24,7 @@ export class ReservationAdminService {
   constructor(
     private readonly reservationRepository: ReservationRepository,
     private readonly roomRepository: RoomRepository,
+    private readonly cancellationService: CancellationService,
   ) {}
 
   async list(
@@ -75,31 +81,36 @@ export class ReservationAdminService {
       id,
     );
 
+    const isCancelling =
+      payload.status === ReservationStatus.CANCELLED &&
+      reservation.status !== ReservationStatus.CANCELLED;
+
     await this.reservationRepository.applyUpdate(reservation, {
       room,
       guestFullName: payload.guestFullName,
       guestDni: payload.guestDni,
       checkIn,
       checkOut,
-      status: payload.status,
+      status: isCancelling ? reservation.status : payload.status,
       totalAmount: payload.totalAmount,
       depositAmount: payload.depositAmount,
     });
 
+    if (isCancelling) {
+      await this.cancellationService.cancelReservation(id);
+      const cancelled = await this.reservationRepository.findById(id, {
+        refresh: true,
+      });
+      return AdminReservationDto.fromEntity(cancelled ?? reservation);
+    }
+
     return AdminReservationDto.fromEntity(reservation);
   }
 
-  /** CA5: cancelación segura. Es idempotente a propósito (una doble confirmación no debe fallar). */
-  async cancel(id: string): Promise<void> {
-    const cancelled = await this.reservationRepository.cancel(id);
-    if (cancelled) return;
-
-    const exists = await this.reservationRepository.findById(id);
-    if (!exists) throw new NotFoundException('Reserva no encontrada');
-    // Si existe pero no se pudo cancelar es porque ya estaba cancelada: no hay nada más que hacer.
+  async cancel(id: string): Promise<CancellationOutcome> {
+    return this.cancellationService.cancelReservation(id);
   }
 
-  /** CA3: valida fechas y que la habitación elegida esté libre en ese rango antes de guardar. */
   private async validateAndResolveRoom(
     payload: SaveReservationDto,
     excludeReservationId?: string,

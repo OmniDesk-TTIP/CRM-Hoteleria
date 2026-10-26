@@ -63,72 +63,74 @@ export default function SupportHoursPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4 md:space-y-6 md:p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-text">Horarios de atención</h1>
-        <p className="mt-1 text-sm text-textMuted">
-          Fuera de este horario, a quien pida hablar con una persona el bot le avisa que le responden
-          al abrir la recepción.
-          {timeZone && ` Zona horaria: ${timeZone}.`}
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl p-4 md:p-6">
+      <div className="max-w-3xl space-y-4 md:space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Horarios de atención</h1>
+          <p className="mt-1 text-sm text-textMuted">
+            Fuera de este horario, a quien pida hablar con una persona el bot le avisa que le responden
+            al abrir la recepción.
+            {timeZone && ` Zona horaria: ${timeZone}.`}
+          </p>
+        </div>
 
-      {isLoading && <p className="text-sm text-textMuted">Cargando horarios…</p>}
-      {error && <p className="text-sm text-dangerText">⚠ {error}</p>}
+        {isLoading && <p className="text-sm text-textMuted">Cargando horarios…</p>}
+        {error && <p className="text-sm text-dangerText">⚠ {error}</p>}
 
-      {!isLoading && days.length > 0 && (
-        <>
-          <div className="divide-y divide-goldLight/10 overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
-            {days.map((day) => (
-              <div key={day.weekday} className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
-                <span className="w-full text-sm font-medium text-text sm:w-28">{WEEKDAY_LABEL[day.weekday]}</span>
+        {!isLoading && days.length > 0 && (
+          <>
+            <div className="divide-y divide-goldLight/10 overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
+              {days.map((day) => (
+                <div key={day.weekday} className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
+                  <span className="w-full text-sm font-medium text-text sm:w-28">{WEEKDAY_LABEL[day.weekday]}</span>
 
-                <label className="flex items-center gap-2 text-sm text-textMuted">
-                  <input
-                    type="checkbox"
-                    checked={!day.isClosed}
-                    onChange={(event) => patchDay(day.weekday, { isClosed: !event.target.checked })}
-                    className="accent-gold"
-                  />
-                  Abierto
-                </label>
+                  <label className="flex items-center gap-2 text-sm text-textMuted">
+                    <input
+                      type="checkbox"
+                      checked={!day.isClosed}
+                      onChange={(event) => patchDay(day.weekday, { isClosed: !event.target.checked })}
+                      className="accent-gold"
+                    />
+                    Abierto
+                  </label>
 
-                <div className="flex min-w-0 items-center gap-2">
-                  <input
-                    type="time"
-                    value={day.opensAt}
-                    disabled={day.isClosed}
-                    onChange={(event) => patchDay(day.weekday, { opensAt: event.target.value })}
-                    className={inputClasses}
-                    aria-label={`Hora de apertura del ${WEEKDAY_LABEL[day.weekday]}`}
-                  />
-                  <span className="text-textMuted">→</span>
-                  <input
-                    type="time"
-                    value={day.closesAt}
-                    disabled={day.isClosed}
-                    onChange={(event) => patchDay(day.weekday, { closesAt: event.target.value })}
-                    className={inputClasses}
-                    aria-label={`Hora de cierre del ${WEEKDAY_LABEL[day.weekday]}`}
-                  />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <input
+                      type="time"
+                      value={day.opensAt}
+                      disabled={day.isClosed}
+                      onChange={(event) => patchDay(day.weekday, { opensAt: event.target.value })}
+                      className={inputClasses}
+                      aria-label={`Hora de apertura del ${WEEKDAY_LABEL[day.weekday]}`}
+                    />
+                    <span className="text-textMuted">→</span>
+                    <input
+                      type="time"
+                      value={day.closesAt}
+                      disabled={day.isClosed}
+                      onChange={(event) => patchDay(day.weekday, { closesAt: event.target.value })}
+                      className={inputClasses}
+                      aria-label={`Hora de cierre del ${WEEKDAY_LABEL[day.weekday]}`}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {savedAt && <p className="text-sm text-successText">Guardado a las {savedAt}.</p>}
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={isSaving}
-              className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
-            >
-              {isSaving ? 'Guardando…' : 'Guardar horarios'}
-            </button>
-          </div>
-        </>
-      )}
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {savedAt && <p className="text-sm text-successText">Guardado a las {savedAt}.</p>}
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                className="rounded-xl bg-gold px-4 py-2 font-medium text-shell transition hover:bg-goldLight disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none"
+              >
+                {isSaving ? 'Guardando…' : 'Guardar horarios'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -5,7 +5,10 @@ import { useAuth } from '@/context/auth.context';
 import { useSocket } from '@/context/socket.context';
 import { useChatActivityRefresh } from '@/hooks/useChatActivityRefresh';
 import { getDashboardStatus } from '@/services/dashboard.service';
+import { listSpaReservations } from '@/services/spaReservation.service';
+import { listRestaurantReservations } from '@/services/restaurantReservation.service';
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import type { LayoutContext } from '@/components/layout/layout.context';
 import type { DashboardStatus, UserRole } from '@/config/types';
 import {
   BedIcon,
@@ -15,33 +18,52 @@ import {
   ClockIcon,
   HomeIcon,
   LogoutIcon,
+  MegaphoneIcon,
+  SettingsIcon,
+  StarIcon,
 } from '@/components/layout/icons';
 
 interface NavItem {
   to: string;
   label: string;
+  /** Rótulo corto para la barra inferior del celular, donde `label` no entra. */
+  shortLabel?: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   /** Sin `roles` lo ve cualquier usuario logueado. */
   roles?: UserRole[];
   /** `end` para que Home no quede activo en todas las rutas /admin/*. */
   end?: boolean;
-  showChatBadge?: boolean;
+  /** Contador sobre el ícono: chats esperando operador o turnos de spa y mesas pendientes. */
+  badge?: 'chat' | 'serviceRequests';
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/admin', label: 'Home', icon: HomeIcon, end: true },
-  { to: '/admin/chats', label: 'Chats', icon: ChatIcon, showChatBadge: true },
-  { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon },
-  { to: '/admin/rooms', label: 'Habitaciones', icon: BedIcon },
+  { to: '/admin/chats', label: 'Chats', icon: ChatIcon, badge: 'chat' },
+  { to: '/admin/reservations', label: 'Reservas', icon: CalendarIcon, badge: 'serviceRequests' },
+  {
+    to: '/admin/services',
+    label: 'Habitaciones y servicios',
+    shortLabel: 'Servicios',
+    icon: BedIcon,
+  },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
-  { to: '/admin/support-hours', label: 'Horarios', icon: ClockIcon, roles: ['ADMIN'] },
+  { to: '/admin/reviews', label: 'Reseñas', icon: StarIcon, roles: ['ADMIN'] },
+  { to: '/admin/campaigns', label: 'Campañas', icon: MegaphoneIcon, roles: ['ADMIN'] },
+  {
+    to: '/admin/settings',
+    label: 'Configuración',
+    shortLabel: 'Config.',
+    icon: SettingsIcon,
+    roles: ['ADMIN'],
+  },
 ];
 
-function ChatBadge({ count }: { count: number }) {
+function NavBadge({ count, label }: { count: number; label: string }) {
   return (
     <span
       className="absolute -right-2.5 -top-2 min-w-[1.1rem] rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-[1.1rem] text-white ring-2 ring-shell"
-      aria-label={`${count} chats esperando un operador`}
+      aria-label={`${count} ${label}`}
     >
       {count > 99 ? '99+' : count}
     </span>
@@ -63,6 +85,8 @@ export default function AppLayout() {
   const { isConnected } = useSocket();
   const now = useClock();
   const [status, setStatus] = useState<DashboardStatus | null>(null);
+  const [pendingSpaReservations, setPendingSpaReservations] = useState(0);
+  const [pendingRestaurantReservations, setPendingRestaurantReservations] = useState(0);
 
   const fetchStatus = useCallback(() => {
     getDashboardStatus()
@@ -79,8 +103,45 @@ export default function AppLayout() {
 
   useChatActivityRefresh(fetchStatus);
 
+  const fetchPendingSpaReservations = useCallback(() => {
+    listSpaReservations({ status: 'PENDING', page: 1, pageSize: 1 })
+      .then((result) => setPendingSpaReservations(result.total))
+      .catch(() => undefined);
+  }, []);
+
+  const fetchPendingRestaurantReservations = useCallback(() => {
+    listRestaurantReservations({ status: 'PENDING', page: 1, pageSize: 1 })
+      .then((result) => setPendingRestaurantReservations(result.total))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const fetchPending = () => {
+      fetchPendingSpaReservations();
+      fetchPendingRestaurantReservations();
+    };
+    fetchPending();
+    // Los turnos y las mesas los crea el bot sin avisar por socket: se relee seguido, la consulta es mínima.
+    const id = setInterval(fetchPending, 60_000);
+    return () => clearInterval(id);
+  }, [fetchPendingSpaReservations, fetchPendingRestaurantReservations]);
+
   const items = NAV_ITEMS.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
   const waitingHuman = status?.waitingHuman ?? 0;
+  const layoutContext: LayoutContext = {
+    pendingSpaReservations,
+    refreshPendingSpaReservations: fetchPendingSpaReservations,
+    pendingRestaurantReservations,
+    refreshPendingRestaurantReservations: fetchPendingRestaurantReservations,
+  };
+  const badgeFor = (badge: NavItem['badge']) =>
+    badge === 'chat'
+      ? waitingHuman
+      : badge === 'serviceRequests'
+        ? pendingSpaReservations + pendingRestaurantReservations
+        : 0;
+  const badgeLabel = (badge: NavItem['badge']) =>
+    badge === 'chat' ? 'chats esperando un operador' : 'turnos de spa y mesas pendientes';
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-shell md:flex-row">
@@ -88,7 +149,7 @@ export default function AppLayout() {
         <img src={logoOmnidesk} alt="OmniDesk" width={480} height={584} className="h-12 w-auto" />
 
         <nav className="mt-8 flex w-full flex-1 flex-col gap-1" aria-label="Secciones del panel">
-          {items.map(({ to, label, icon: Icon, end, showChatBadge }) => (
+          {items.map(({ to, label, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -105,9 +166,11 @@ export default function AppLayout() {
                   {isActive && <span className="absolute inset-y-0 left-0 w-1 rounded-r bg-gold" aria-hidden />}
                   <span className="relative">
                     <Icon className="h-6 w-6" />
-                    {showChatBadge && waitingHuman > 0 && <ChatBadge count={waitingHuman} />}
+                    {badge && badgeFor(badge) > 0 && (
+                      <NavBadge count={badgeFor(badge)} label={badgeLabel(badge)} />
+                    )}
                   </span>
-                  <span className="hidden md:block">{label}</span>
+                  <span className="hidden text-center leading-tight md:block">{label}</span>
                 </>
               )}
             </NavLink>
@@ -163,7 +226,7 @@ export default function AppLayout() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <Outlet />
+          <Outlet context={layoutContext} />
         </main>
 
         <footer className="hidden h-10 shrink-0 items-center gap-4 border-t border-goldLight/10 bg-shell/80 px-4 text-xs text-textMuted md:flex md:px-6">
@@ -195,7 +258,7 @@ export default function AppLayout() {
         </footer>
 
         <nav className="flex shrink-0 border-t border-goldLight/10 bg-shell md:hidden" aria-label="Secciones del panel">
-          {items.map(({ to, label, icon: Icon, end, showChatBadge }) => (
+          {items.map(({ to, label, shortLabel, icon: Icon, end, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -211,9 +274,11 @@ export default function AppLayout() {
                   {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-gold" aria-hidden />}
                   <span className="relative">
                     <Icon className="h-6 w-6" />
-                    {showChatBadge && waitingHuman > 0 && <ChatBadge count={waitingHuman} />}
+                    {badge && badgeFor(badge) > 0 && (
+                      <NavBadge count={badgeFor(badge)} label={badgeLabel(badge)} />
+                    )}
                   </span>
-                  <span className="max-w-full truncate">{label}</span>
+                  <span className="max-w-full truncate">{shortLabel ?? label}</span>
                 </>
               )}
             </NavLink>

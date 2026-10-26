@@ -117,6 +117,14 @@ export const ChartIcon = (props: IconProps) => (
   </svg>
 );
 
+export const SettingsIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+    <circle cx="16" cy="7" r="2" />
+    <circle cx="8" cy="17" r="2" />
+  </svg>
+);
+
 export const BotIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <rect x="4" y="8" width="16" height="12" rx="3" />
@@ -126,3 +134,40 @@ export const BotIcon = (props: IconProps) => (
     <path d="M2 13v2M22 13v2" />
   </svg>
 );
+
+export const StarIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />
+  </svg>
+);
+
+export const SparklesIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M10 4c.6 3.4 2.6 5.4 6 6-3.4.6-5.4 2.6-6 6-.6-3.4-2.6-5.4-6-6 3.4-.6 5.4-2.6 6-6Z" />
+    <path d="M18 14c.3 1.6 1.2 2.5 2.8 2.8-1.6.3-2.5 1.2-2.8 2.8-.3-1.6-1.2-2.5-2.8-2.8 1.6-.3 2.5-1.2 2.8-2.8Z" />
+  </svg>
+);
+
+export const MegaphoneIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M3 10v4a1 1 0 0 0 1 1h3l8 4V5L7 9H4a1 1 0 0 0-1 1Z" />
+    <path d="M7 15v4a1 1 0 0 0 1 1h1.5M18.5 9.5a3.5 3.5 0 0 1 0 5" />
+  </svg>
+);
+
+export const BellIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M4 17h16" />
+    <path d="M5.5 17a6.5 6.5 0 0 1 13 0" />
+    <path d="M12 8.5V7M10.5 7h3M3 20h18" />
+  </svg>
+);
+
+export function BookIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5Z" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    </svg>
+  );
+}

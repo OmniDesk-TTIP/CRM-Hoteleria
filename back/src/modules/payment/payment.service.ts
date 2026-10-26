@@ -68,29 +68,71 @@ export class PaymentService {
     reservation: Reservation,
     guestData: ConfirmReservationDto,
   ): Promise<{ preferenceId: string; initPoint: string }> {
+    return this.createCheckout({
+      itemId: reservation.id,
+      title: `Seña de reserva de hotel (${reservation.room.category?.name ?? 'habitación'})`,
+      amount: Number(reservation.depositAmount),
+      payer: guestData,
+      externalReference: reservation.id,
+      notificationPath: '/payment/webhook',
+      successPath: `/payment/success?reservationId=${reservation.id}`,
+    });
+  }
+
+  /**
+   * Cobro de un turno de spa de un cliente externo. Tiene su propio webhook y su propio redirect
+   * (módulo spaReservation), así el circuito de las reservas de habitación no se mezcla con este.
+   */
+  async createSpaPreference(spaReservation: {
+    id: string;
+    serviceName: string;
+    amount: number;
+    fullName: string;
+    dni: string;
+  }): Promise<{ preferenceId: string; initPoint: string }> {
+    return this.createCheckout({
+      itemId: spaReservation.id,
+      title: `Turno de spa: ${spaReservation.serviceName}`,
+      amount: spaReservation.amount,
+      payer: { fullName: spaReservation.fullName, dni: spaReservation.dni },
+      externalReference: spaReservation.id,
+      notificationPath: '/spa-payments/webhook',
+      successPath: '/spa-payments/success',
+    });
+  }
+
+  private async createCheckout(checkout: {
+    itemId: string;
+    title: string;
+    amount: number;
+    payer: { fullName: string; dni: string };
+    externalReference: string;
+    notificationPath: string;
+    successPath: string;
+  }): Promise<{ preferenceId: string; initPoint: string }> {
     const baseUrl = this.configService.get<string>('APP_BASE_URL');
 
     const preference = await new Preference(this.client).create({
       body: {
         items: [
           {
-            id: reservation.id,
-            title: `Seña de reserva de hotel (${reservation.room.category?.name ?? 'habitación'})`,
+            id: checkout.itemId,
+            title: checkout.title,
             quantity: 1,
-            unit_price: Number(reservation.depositAmount),
+            unit_price: checkout.amount,
             currency_id: 'ARS',
           },
         ],
         payer: {
-          name: guestData.fullName,
-          identification: { type: 'DNI', number: guestData.dni },
+          name: checkout.payer.fullName,
+          identification: { type: 'DNI', number: checkout.payer.dni },
         },
-        external_reference: reservation.id,
-        notification_url: baseUrl ? `${baseUrl}/payment/webhook` : undefined,
+        external_reference: checkout.externalReference,
+        notification_url: baseUrl
+          ? `${baseUrl}${checkout.notificationPath}`
+          : undefined,
         back_urls: {
-          success: baseUrl
-            ? `${baseUrl}/payment/success?reservationId=${reservation.id}`
-            : undefined,
+          success: baseUrl ? `${baseUrl}${checkout.successPath}` : undefined,
         },
         auto_return: 'approved',
       },

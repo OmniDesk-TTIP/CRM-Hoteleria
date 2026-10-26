@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { RagService, ChatAction } from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
+import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
 
 jest.mock('@google/generative-ai', () => {
   const actual = jest.requireActual('@google/generative-ai');
@@ -35,6 +36,10 @@ describe('RagService', () => {
           useValue: {
             findSimilar: jest.fn().mockResolvedValue([]),
             saveDocumentChunk: jest.fn().mockResolvedValue(undefined),
+            findSourceDocument: jest.fn(),
+            deleteChunksBySourceDocument: jest
+              .fn()
+              .mockResolvedValue(undefined),
             countDocuments: jest.fn(),
           },
         },
@@ -154,6 +159,206 @@ describe('RagService', () => {
       jest.useRealTimers();
     });
 
+    describe('spa (CA3)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+
+      it('agrega el bloque de servicios al contexto y habilita la regla de oferta', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          '¿Tienen spa?',
+          null,
+          [],
+          null,
+          ['[SERVICIOS DEL HOTEL]', 'SPA:', '- id=spa-1 | Masaje'].join('\n'),
+        );
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('id=spa-1 | Masaje');
+        expect(systemInstruction).toContain('REGLA PARA EL SPA');
+        // la regla cubre a los dos tipos de cliente y manda pedir nombre y DNI al externo
+        expect(systemInstruction).toContain('HUÉSPED');
+        expect(systemInstruction).toContain('EXTERNO');
+        expect(systemInstruction).toContain('nombre completo y su DNI');
+        expect(systemInstruction).not.toContain('No tenés información del spa');
+      });
+
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+
+      it('declara la tool request_spa_booking solo si hay bloque del spa', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          'Hola',
+          null,
+          [],
+          null,
+          '[SERVICIOS DEL HOTEL]',
+        );
+        expect(toolNames()).toContain('request_spa_booking');
+
+        getGenerativeModelMock.mockClear();
+        await service.askQuestion('Hola');
+        expect(toolNames()).not.toContain('request_spa_booking');
+      });
+
+      it('devuelve REQUEST_SPA_BOOKING con los datos de la function call', async () => {
+        const datos = {
+          serviceId: 'spa-1',
+          date: '08-10-2026',
+          time: '15:00',
+        };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([{ name: 'request_spa_booking', args: datos }]),
+        );
+
+        const result = await service.askQuestion(
+          'Quiero un masaje',
+          null,
+          [],
+          null,
+          '[SERVICIOS DEL HOTEL]',
+        );
+
+        expect(result).toEqual({
+          action: ChatAction.REQUEST_SPA_BOOKING,
+          datos,
+          texto: '',
+        });
+      });
+
+      it('ignora la tool si no hay información del spa (defensa en profundidad)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'request_spa_booking', args: {} }],
+            'texto',
+          ),
+        );
+
+        const result = await service.askQuestion('Quiero un masaje');
+
+        expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+      });
+
+      it('sin bloque del spa no deja que invente servicios ni precios', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion('¿Tienen spa?');
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('No tenés información del spa');
+        expect(systemInstruction).not.toContain('id=spa-1');
+      });
+    });
+
+    describe('restaurante (US-17)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const ask = (
+        text: string,
+        restaurant: { block: string; canBook: boolean } | null,
+      ) =>
+        service.askQuestion(
+          text,
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          restaurant,
+        );
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('agrega el bloque del restó al contexto y su regla (CA3)', async () => {
+        await ask('¿Qué hay de cenar?', {
+          block: '[RESTAURANTE]\nCARTA:\n- Milanesa | $9000',
+          canBook: true,
+        });
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- Milanesa | $9000');
+        expect(systemInstruction).toContain('REGLA PARA EL RESTAURANTE');
+        expect(systemInstruction).toContain('FOTOS DEL ESPACIO');
+        expect(systemInstruction).not.toContain(
+          'No tenés información del restaurante',
+        );
+      });
+
+      it('declara request_table_booking solo si el cliente puede pedir mesa (CA2)', async () => {
+        await ask('Hola', { block: '[RESTAURANTE]', canBook: true });
+        expect(toolNames()).toContain('request_table_booking');
+
+        getGenerativeModelMock.mockClear();
+        await ask('Hola', { block: '[RESTAURANTE]', canBook: false });
+        expect(toolNames()).not.toContain('request_table_booking');
+      });
+
+      it('devuelve REQUEST_TABLE_BOOKING con los datos de la function call (CA5)', async () => {
+        const datos = { date: '08-10-2026', time: '21:00', partySize: 2 };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([{ name: 'request_table_booking', args: datos }]),
+        );
+
+        const result = await ask('Mesa para 2', {
+          block: '[RESTAURANTE]',
+          canBook: true,
+        });
+
+        expect(result).toEqual({
+          action: ChatAction.REQUEST_TABLE_BOOKING,
+          datos,
+        });
+      });
+
+      it('ignora la tool si el cliente no puede pedir mesa (defensa en profundidad)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'request_table_booking', args: {} }],
+            'texto',
+          ),
+        );
+
+        const result = await ask('Mesa para 2', {
+          block: '[RESTAURANTE]',
+          canBook: false,
+        });
+
+        expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+      });
+
+      it('sin contexto del restó no deja que invente la carta', async () => {
+        await ask('¿Tienen restaurante?', null);
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información del restaurante',
+        );
+      });
+    });
+
     it('incluye el estado de la reserva activa en el prompt cuando hay una en curso', async () => {
       chatModelMock.generateContent.mockResolvedValue(
         mockChatResponse([], 'ok'),
@@ -164,7 +369,10 @@ describe('RagService', () => {
         checkOut: null,
         capacity: 2,
       };
-      await service.askQuestion('Quiero agregar el checkout', reservaActiva);
+      await service.askQuestion(
+        'Quiero agregar el checkout',
+        reservaActiva as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain('ESTADO ACTUAL: Faltan datos');
@@ -183,7 +391,10 @@ describe('RagService', () => {
         checkOut: '15-10-2026',
         capacity: 2,
       };
-      await service.askQuestion('dale', reservaActiva);
+      await service.askQuestion(
+        'dale',
+        reservaActiva as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain(
@@ -203,7 +414,12 @@ describe('RagService', () => {
         checkIn: '01-01-2026',
         checkOut: '05-01-2026',
       };
-      await service.askQuestion('Hola de nuevo', null, [], ultimaCompletada);
+      await service.askQuestion(
+        'Hola de nuevo',
+        null,
+        [],
+        ultimaCompletada as unknown as BookingProcess,
+      );
 
       const prompt = chatModelMock.generateContent.mock.calls[0][0];
       expect(prompt).toContain('a la espera del pago');
@@ -285,6 +501,7 @@ describe('RagService', () => {
       expect(ragRepository.saveDocumentChunk).toHaveBeenCalledWith(
         'Un texto corto para ingestar.',
         [0.1, 0.2],
+        undefined,
       );
     });
 
@@ -295,6 +512,108 @@ describe('RagService', () => {
 
       expect(embeddingModelMock.embedContent).toHaveBeenCalledTimes(2);
       expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(2);
+    });
+
+    it('devuelve la cantidad de chunks generados', async () => {
+      await expect(service.ingestDocument('Texto corto.')).resolves.toBe(1);
+      await expect(service.ingestDocument('a'.repeat(1500))).resolves.toBe(2);
+    });
+
+    it('sin documento de origen no consulta el repositorio de documentos', async () => {
+      await service.ingestDocument('Texto corto.');
+
+      expect(ragRepository.findSourceDocument).not.toHaveBeenCalled();
+    });
+
+    it('con documento de origen guarda cada chunk vinculado a él (CA4)', async () => {
+      (ragRepository.findSourceDocument as jest.Mock).mockResolvedValue({
+        id: 'doc-1',
+        filename: 'reglas.pdf',
+        mimeType: 'application/pdf',
+      });
+
+      const chunks = await service.ingestDocument('a'.repeat(1500), 'doc-1');
+
+      expect(ragRepository.findSourceDocument).toHaveBeenCalledWith('doc-1');
+      expect(chunks).toBe(2);
+      expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(2);
+      expect(ragRepository.saveDocumentChunk).toHaveBeenNthCalledWith(
+        1,
+        expect.any(String),
+        [0.1, 0.2],
+        { id: 'doc-1', filename: 'reglas.pdf', mimeType: 'application/pdf' },
+      );
+      expect(ragRepository.saveDocumentChunk).toHaveBeenNthCalledWith(
+        2,
+        expect.any(String),
+        [0.1, 0.2],
+        { id: 'doc-1', filename: 'reglas.pdf', mimeType: 'application/pdf' },
+      );
+    });
+
+    it('propaga el error de Gemini y no sigue guardando chunks', async () => {
+      embeddingModelMock.embedContent
+        .mockResolvedValueOnce({ embedding: { values: [0.1, 0.2] } })
+        .mockRejectedValueOnce(new Error('429 Too Many Requests'));
+
+      await expect(service.ingestDocument('a'.repeat(3000))).rejects.toThrow(
+        '429 Too Many Requests',
+      );
+      expect(ragRepository.saveDocumentChunk).toHaveBeenCalledTimes(1);
+    });
+
+    it('rechaza y no guarda chunks huérfanos si el documento de origen ya no existe', async () => {
+      (ragRepository.findSourceDocument as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.ingestDocument('Texto corto.', 'doc-borrado'),
+      ).rejects.toThrow();
+      expect(ragRepository.saveDocumentChunk).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeDocumentChunks', () => {
+    it('borra los chunks del documento de origen', async () => {
+      await service.removeDocumentChunks('doc-1');
+
+      expect(ragRepository.deleteChunksBySourceDocument).toHaveBeenCalledWith(
+        'doc-1',
+      );
+    });
+  });
+
+  describe('reflejo en el bot (CA5)', () => {
+    const chatInstructions = () =>
+      getGenerativeModelMock.mock.calls
+        .map(
+          ([config]) => config as { model: string; systemInstruction?: string },
+        )
+        .filter((config) => config.model !== 'gemini-embedding-2')
+        .map((config) => config.systemInstruction ?? '');
+
+    beforeEach(() => {
+      chatModelMock.generateContent.mockResolvedValue({
+        response: { functionCalls: () => [], text: () => 'ok' },
+      });
+    });
+
+    it('arma el contexto con lo que devuelve la búsqueda en cada consulta, sin cachear entre consultas', async () => {
+      (ragRepository.findSimilar as jest.Mock)
+        .mockResolvedValueOnce([{ content: 'El spa abre de 9 a 21 hs.' }])
+        .mockResolvedValueOnce([]);
+
+      await service.askQuestion('¿A qué hora abre el spa?');
+      await service.askQuestion('¿A qué hora abre el spa?');
+
+      const [primera, segunda] = chatInstructions();
+      expect(primera).toContain('El spa abre de 9 a 21 hs.');
+      expect(segunda).not.toContain('El spa abre de 9 a 21 hs.');
+    });
+
+    it('busca solo con los 3 chunks más cercanos a la pregunta', async () => {
+      await service.askQuestion('¿Aceptan mascotas?');
+
+      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 3);
     });
   });
 });

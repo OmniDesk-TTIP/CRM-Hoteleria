@@ -56,6 +56,15 @@ export class ReservationRepository {
     );
   }
 
+  async findConfirmedByTelegramUserId(
+    telegramUserId: string,
+  ): Promise<Reservation[]> {
+    return this.em.find(Reservation, {
+      telegramUserId,
+      status: ReservationStatus.CONFIRMED,
+    });
+  }
+
   create(data: CreateReservationData): Reservation {
     return this.em.create(Reservation, {
       ...data,
@@ -65,6 +74,28 @@ export class ReservationRepository {
 
   persist(reservation: Reservation): void {
     this.em.persist(reservation);
+  }
+
+  /** Saca del unit of work una reserva creada que todavía no se guardó, para que ningún flush la inserte. */
+  discard(reservation: Reservation): void {
+    this.em.remove(reservation);
+  }
+
+  /** Reservas del bot que esperan la seña y ya tienen el link de Mercado Pago generado. */
+  async findAwaitingPaymentByTelegramUserId(
+    telegramUserId: string,
+    createdAfter: Date,
+  ): Promise<Reservation[]> {
+    return this.em.find(
+      Reservation,
+      {
+        telegramUserId,
+        status: ReservationStatus.PENDING_PAYMENT,
+        mpInitPoint: { $ne: null },
+        createdAt: { $gt: createdAfter },
+      },
+      { orderBy: { createdAt: 'desc' }, refresh: true },
+    );
   }
 
   async findManyPaginated(
@@ -87,11 +118,14 @@ export class ReservationRepository {
     return { items, total };
   }
 
-  async findById(id: string): Promise<Reservation | null> {
+  async findById(
+    id: string,
+    options: { refresh?: boolean } = {},
+  ): Promise<Reservation | null> {
     return this.em.findOne(
       Reservation,
       { id },
-      { populate: ['room', 'room.category'] },
+      { populate: ['room', 'room.category'], refresh: options.refresh },
     );
   }
 

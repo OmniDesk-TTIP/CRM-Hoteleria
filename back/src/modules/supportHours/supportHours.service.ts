@@ -106,7 +106,6 @@ export class SupportHoursService {
     };
   }
 
-  /** Alta inicial de la semana por defecto; la usa el seeder. */
   async seedDefaultSchedule(): Promise<void> {
     for (let weekday = 0; weekday < 7; weekday++) {
       this.supportHoursRepository.create({

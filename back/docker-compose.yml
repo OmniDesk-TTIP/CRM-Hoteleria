@@ -7,3 +7,9 @@ services:
       POSTGRES_DB: rag_db
     ports:
       - "5433:5432"
+    # Volumen con nombre: si el contenedor se borra o se recrea, los datos quedan.
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:

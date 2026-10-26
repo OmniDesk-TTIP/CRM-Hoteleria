@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../infrastructure/database/entities/BookingProcess.entity';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
+import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { RoomRepository } from '../room/room.repository';
+import { CancellationService } from '../cancellation/cancellation.service';
 import { ReservationRepository } from './reservation.repository';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
 import {
@@ -13,25 +18,39 @@ import {
 } from '../payment/payment.service';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { ConfirmReservationDto } from './dto/confirmReservation.dto';
+import { toCalendarDayString } from '../spa/model/spa.model';
+import {
+  DayRange,
+  findGapFreeVariants,
+  fromDayNumber,
+  pickRoomAvoidingGap,
+  RoomSchedule,
+  StayVariant,
+  toDayNumber,
+} from './reservation.model';
 
 const DEPOSIT_PERCENTAGE = 0.3;
 
-/** Días hacia atrás y hacia adelante de la fecha pedida en los que buscamos alternativas. */
 export const ALTERNATIVE_DATES_WINDOW_DAYS = 7;
-/** Tope de alternativas que se le ofrecen al huésped, para no abrumarlo ni inflar el prompt. */
 const MAX_ALTERNATIVE_DATES = 3;
-/** Cuántas estadías más cortas se muestran antes que las completas. */
 const MAX_SHORTER_ALTERNATIVES = 1;
-/** Piso absoluto de noches para ofrecer una estadía más corta (además de la mitad de lo pedido). */
 const MIN_SHORTER_STAY_NIGHTS = 2;
 
+const MAX_GAP_VARIANTS = 2;
+
+const GAP_LOOKUP_MARGIN_DAYS = 3;
+const GAP_EDGE_MARGIN_DAYS = 2;
+
 const MS_PER_DAY = 1000 * 3600 * 24;
+
+/** Fecha de una columna `date` como DD-MM-YYYY, sin que el huso horario corra el día. */
+const toChatDay = (value: Date | string): string =>
+  toCalendarDayString(value).split('-').reverse().join('-');
 
 export interface AlternativeDates {
   checkIn: string;
   checkOut: string;
   nights: number;
-  /** true si la alternativa tiene menos noches que las pedidas. */
   isShorterStay: boolean;
   roomCategory: string;
   totalAmount: number;
@@ -41,16 +60,28 @@ export type AvailabilityResult =
   | { available: true; reply: string }
   | { available: false; alternatives: AlternativeDates[] };
 
-/** Bloque candidato expresado en índices de noche dentro de la ventana de búsqueda. */
 interface CandidateBlock {
   start: number;
   nights: number;
   room: Room;
+  leavesGap: boolean;
 }
 
 interface RoomFreeNights {
   room: Room;
   free: boolean[];
+  schedule: RoomSchedule;
+}
+
+interface VariantOption {
+  variant: StayVariant;
+  room: Room;
+}
+
+interface RoomChoice {
+  room: Room;
+  leavesGap: boolean;
+  reservations: Reservation[];
 }
 
 @Injectable()
@@ -61,6 +92,7 @@ export class ReservationService {
     private readonly reservationRepository: ReservationRepository,
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
+    private readonly cancellationService: CancellationService,
   ) {}
 
   async searchAvailability(
@@ -68,30 +100,44 @@ export class ReservationService {
     activeBooking: BookingProcess | null,
     bookingData: SearchAvailabilityDto,
   ): Promise<AvailabilityResult> {
+    const isInsistingOnSameDates =
+      !!activeBooking &&
+      activeBooking.step === BookingProcessStep.IN_PROGRESS &&
+      activeBooking.checkIn === bookingData.checkIn &&
+      activeBooking.checkOut === bookingData.checkOut &&
+      activeBooking.capacity === bookingData.capacity;
+
     const booking = this.bookingProcessService.startSearch(
       telegramUserId,
       activeBooking,
       bookingData,
     );
 
-    const roomFound = await this.findAvailableRoom(
+    const choice = await this.findAvailableRoom(
       bookingData.checkIn,
       bookingData.checkOut,
       bookingData.capacity,
     );
 
-    if (roomFound) {
-      this.bookingProcessService.markPendingConfirmation(booking);
-
+    if (choice) {
       const nights = this.calculateNights(
         bookingData.checkIn,
         bookingData.checkOut,
       );
-      const totalAmount = roomFound.category.basePrice * nights;
-      const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
+      const variants =
+        choice.leavesGap && !isInsistingOnSameDates
+          ? await this.findGapFreeVariants(bookingData, choice.reservations)
+          : [];
+      if (variants.length > 0) {
+        this.bookingProcessService.markInProgress(booking);
+      } else {
+        this.bookingProcessService.markPendingConfirmation(booking);
+      }
 
-      const reply = `Tenemos disponibilidad en nuestra ${escapeHtml(roomFound.category.name)} del ${bookingData.checkIn} al ${bookingData.checkOut} por $${roomFound.category.basePrice} la noche.\n\nEl total de tu estadía (${nights} noches) sería de $${totalAmount}, con una seña del 30% de $${depositAmount} para reservarla.\n\n¿Querés que te la reserve?`;
-      return { available: true, reply };
+      return {
+        available: true,
+        reply: this.buildOfferReply(choice.room, bookingData, nights, variants),
+      };
     }
 
     this.bookingProcessService.markInProgress(booking);
@@ -112,11 +158,9 @@ export class ReservationService {
     const savedCheckOut = activeBooking.checkOut as string;
     const capacity = activeBooking.capacity as number;
 
-    const roomToBook = await this.findAvailableRoom(
-      savedCheckIn,
-      savedCheckOut,
-      capacity,
-    );
+    const roomToBook = (
+      await this.findAvailableRoom(savedCheckIn, savedCheckOut, capacity)
+    )?.room;
 
     let botReply: string;
     if (roomToBook) {
@@ -137,20 +181,28 @@ export class ReservationService {
         guestDni: guestData.dni,
       });
 
+      // Primero el link de pago: si Mercado Pago falla, la reserva no se guarda (ni la arrastra el
+      // flush que hace después el manejo de errores) y la búsqueda sigue esperando confirmación,
+      // así el huésped puede volver a intentar.
+      let preference: { preferenceId: string; initPoint: string };
+      try {
+        preference = await this.paymentService.createPreference(
+          newReservation,
+          guestData,
+        );
+      } catch (error) {
+        this.reservationRepository.discard(newReservation);
+        throw error;
+      }
+      newReservation.mpPreferenceId = preference.preferenceId;
+      newReservation.mpInitPoint = preference.initPoint;
+
       this.reservationRepository.persist(newReservation);
       this.bookingProcessService.markCompleted(activeBooking);
 
-      const { preferenceId, initPoint } =
-        await this.paymentService.createPreference(newReservation, guestData);
-      newReservation.mpPreferenceId = preferenceId;
-      newReservation.mpInitPoint = initPoint;
+      const paymentFormUrl = this.paymentFormUrl(newReservation.id);
 
-      // Link al formulario de prepago del front, que muestra el resumen y de ahí manda al
-      // checkout de Mercado Pago. En dev, con FRONTEND_BASE_URL apuntando a localhost, Telegram
-      // descarta el href y la URL queda como texto para copiar; con un dominio real es clickeable.
-      const frontendBaseUrl =
-        this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
-      const paymentFormUrl = `${frontendBaseUrl}/payment/form/${newReservation.id}`;
+      const policySummary = await this.cancellationService.getPolicySummary();
 
       botReply = [
         `Te estoy guardando la ${escapeHtml(roomToBook.category.name)} del ${savedCheckIn} al ${savedCheckOut}, a nombre de ${escapeHtml(guestData.fullName)}.`,
@@ -158,12 +210,13 @@ export class ReservationService {
         `Total de la estadía: $${totalAmount}`,
         `Seña para reservarla: $${depositAmount}`,
         '',
-        `⏳ <b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
+        `<b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
         '',
-        '👉 Aboná la seña acá:',
+        'Aboná la seña acá:',
         htmlLink(paymentFormUrl, paymentFormUrl),
         '',
         'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
+        ...(policySummary ? ['', policySummary] : []),
       ].join('\n');
     } else {
       botReply = `Uy, parece que alguien acaba de reservar la última habitación disponible para esas fechas mientras hablábamos. ¿Te gustaría buscar otra fecha?`;
@@ -171,6 +224,63 @@ export class ReservationService {
     }
 
     return botReply;
+  }
+
+  async hasPendingPayment(
+    telegramUserId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    const reservations = await this.findAwaitingPayment(telegramUserId, now);
+    return reservations.length > 0;
+  }
+
+  /** Respuesta fija con el link de pago de las reservas que todavía esperan la seña. */
+  async buildPendingPaymentReply(
+    telegramUserId: string,
+    now: Date = new Date(),
+  ): Promise<string | null> {
+    const reservations = await this.findAwaitingPayment(telegramUserId, now);
+    if (reservations.length === 0) return null;
+
+    const lines = reservations.map((reservation) => {
+      const link = this.paymentFormUrl(reservation.id);
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil(
+          (reservation.createdAt.getTime() +
+            RESERVATION_HOLD_MINUTES * 60 * 1000 -
+            now.getTime()) /
+            60000,
+        ),
+      );
+      return [
+        `Reserva del ${toChatDay(reservation.checkIn)} al ${toChatDay(reservation.checkOut)}: seña de <b>$${Number(reservation.depositAmount)}</b>.`,
+        `Aboná acá: ${htmlLink(link, link)}`,
+        `Te la guardo ${minutesLeft} ${minutesLeft === 1 ? 'minuto' : 'minutos'} más; si no entra el pago, se libera.`,
+      ].join('\n');
+    });
+
+    return [
+      ...lines,
+      '',
+      'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
+    ].join('\n');
+  }
+
+  private findAwaitingPayment(
+    telegramUserId: string,
+    now: Date,
+  ): Promise<Reservation[]> {
+    return this.reservationRepository.findAwaitingPaymentByTelegramUserId(
+      telegramUserId,
+      new Date(now.getTime() - RESERVATION_HOLD_MINUTES * 60 * 1000),
+    );
+  }
+
+  private paymentFormUrl(reservationId: string): string {
+    const frontendBaseUrl =
+      this.configService.getOrThrow<string>('FRONTEND_BASE_URL');
+    return `${frontendBaseUrl.replace(/\/+$/, '')}/payment/form/${reservationId}`;
   }
 
   private calculateNights(checkIn: string, checkOut: string): number {
@@ -181,7 +291,7 @@ export class ReservationService {
     checkIn: string,
     checkOut: string,
     capacity: number,
-  ): Promise<Room | null> {
+  ): Promise<RoomChoice | null> {
     const overlappingReservations =
       await this.reservationRepository.findOverlapping(
         parseDate(checkIn),
@@ -193,16 +303,71 @@ export class ReservationService {
       capacity,
       reservedRoomIds,
     );
+    if (availableRooms.length === 0) return null;
 
-    return availableRooms.length > 0 ? availableRooms[0] : null;
+    const reservations = await this.reservationRepository.findOverlapping(
+      addDays(parseDate(checkIn), -GAP_LOOKUP_MARGIN_DAYS),
+      addDays(parseDate(checkOut), GAP_LOOKUP_MARGIN_DAYS),
+    );
+    const picked = pickRoomAvoidingGap(
+      buildSchedules(availableRooms, reservations),
+      toStay(checkIn, checkOut),
+    );
+    if (!picked) return null;
+
+    const room = availableRooms.find((r) => r.id === picked.schedule.roomId)!;
+    return { room, leavesGap: picked.leavesGap, reservations };
   }
 
-  /**
-   * Busca fechas cercanas libres cuando las pedidas están ocupadas. Prioriza la cercanía por sobre
-   * la cantidad exacta de noches: primero una estadía más corta que se superponga con lo pedido y
-   * después bloques con las mismas noches corridos hasta ±7 días. Hace solo dos consultas (las
-   * reservas de toda la ventana y las habitaciones candidatas) y resuelve el resto en memoria.
-   */
+  private async findGapFreeVariants(
+    { checkIn, checkOut, capacity }: SearchAvailabilityDto,
+    reservations: Reservation[],
+  ): Promise<VariantOption[]> {
+    const rooms = await this.roomRepository.findByCapacityExcluding(
+      capacity,
+      [],
+    );
+    const variants = findGapFreeVariants(
+      toStay(checkIn, checkOut),
+      buildSchedules(rooms, reservations),
+      toDayNumber(startOfToday()),
+      MAX_GAP_VARIANTS,
+    );
+
+    return variants.map((variant) => ({
+      variant,
+      room: rooms.find((room) => room.id === variant.roomId)!,
+    }));
+  }
+
+  private describeVariant({ variant, room }: VariantOption): string {
+    const checkIn = formatDate(fromDayNumber(variant.stay.checkIn));
+    const checkOut = formatDate(fromDayNumber(variant.stay.checkOut));
+    const nights = variant.stay.checkOut - variant.stay.checkIn;
+    const total = room.category.basePrice * nights;
+    return `${escapeHtml(room.category.name)}: del ${checkIn} al ${checkOut} (${nights} noches), total $${total}`;
+  }
+
+  private buildOfferReply(
+    room: Room,
+    { checkIn, checkOut }: SearchAvailabilityDto,
+    nights: number,
+    variants: VariantOption[],
+  ): string {
+    if (variants.length > 0) {
+      return [
+        'Tenemos disponibilidad en estas opciones:',
+        ...variants.map((option) => `• ${this.describeVariant(option)}`),
+        '',
+        '¿Cuál te viene mejor?',
+      ].join('\n');
+    }
+
+    const totalAmount = room.category.basePrice * nights;
+    const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
+    return `Tenemos disponibilidad en nuestra ${escapeHtml(room.category.name)} del ${checkIn} al ${checkOut} por $${Number(room.category.basePrice)} la noche.\n\nEl total de tu estadía (${nights} noches) sería de $${totalAmount}, con una seña del 30% de $${depositAmount} para reservarla.\n\n¿Querés que te la reserve?`;
+  }
+
   private async findAlternativeDates(
     checkIn: string,
     checkOut: string,
@@ -211,7 +376,6 @@ export class ReservationService {
     const requestedStart = parseDate(checkIn);
     const requestedNights = daysBetween(requestedStart, parseDate(checkOut));
 
-    // Los índices de noche arrancan en windowStart, así que la fecha pedida cae siempre en el índice WINDOW_DAYS.
     const windowStart = addDays(requestedStart, -ALTERNATIVE_DATES_WINDOW_DAYS);
     const windowEnd = addDays(
       parseDate(checkOut),
@@ -222,14 +386,17 @@ export class ReservationService {
 
     const [rooms, reservations] = await Promise.all([
       this.roomRepository.findByCapacityExcluding(capacity, []),
-      this.reservationRepository.findOverlapping(windowStart, windowEnd),
+      this.reservationRepository.findOverlapping(
+        addDays(windowStart, -GAP_EDGE_MARGIN_DAYS),
+        addDays(windowEnd, GAP_EDGE_MARGIN_DAYS),
+      ),
     ]);
     if (rooms.length === 0) return [];
 
-    // Las noches anteriores a hoy no se pueden ofrecer: cuentan como ocupadas en todas las habitaciones.
     const firstBookableNight = daysBetween(windowStart, startOfToday());
 
-    const freeNightsByRoom: RoomFreeNights[] = rooms.map((room) => {
+    const schedules = buildSchedules(rooms, reservations);
+    const freeNightsByRoom: RoomFreeNights[] = rooms.map((room, index) => {
       const free = Array.from(
         { length: windowNights },
         (_, night) => night >= firstBookableNight,
@@ -246,18 +413,21 @@ export class ReservationService {
         );
         for (let night = from; night < to; night++) free[night] = false;
       }
-      return { room, free };
+      return { room, free, schedule: schedules[index] };
     });
 
+    const windowStartDay = toDayNumber(windowStart);
     const fullStays = this.findFullStays(
       freeNightsByRoom,
       requestedIndex,
       requestedNights,
+      windowStartDay,
     );
     const shorterStays = this.findShorterStays(
       freeNightsByRoom,
       requestedIndex,
       requestedNights,
+      windowStartDay,
     );
 
     const ordered = [
@@ -265,10 +435,14 @@ export class ReservationService {
       ...fullStays,
       ...shorterStays.slice(MAX_SHORTER_ALTERNATIVES),
     ];
+    const prioritized = [
+      ...ordered.filter((block) => !block.leavesGap),
+      ...ordered.filter((block) => block.leavesGap),
+    ];
 
     const seen = new Set<string>();
     const alternatives: AlternativeDates[] = [];
-    for (const block of ordered) {
+    for (const block of prioritized) {
       const key = `${block.start}:${block.nights}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -287,11 +461,11 @@ export class ReservationService {
     return alternatives;
   }
 
-  /** Bloques con las mismas noches pedidas, corridos de a un día (+1, −1, +2, −2, …) hasta el borde de la ventana. */
   private findFullStays(
     freeNightsByRoom: RoomFreeNights[],
     requestedIndex: number,
     requestedNights: number,
+    windowStartDay: number,
   ): CandidateBlock[] {
     const blocks: CandidateBlock[] = [];
     for (
@@ -303,25 +477,34 @@ export class ReservationService {
         requestedIndex + distance,
         requestedIndex - distance,
       ]) {
-        const match = freeNightsByRoom.find(({ free }) =>
+        const freeRooms = freeNightsByRoom.filter(({ free }) =>
           isRangeFree(free, start, requestedNights),
         );
-        if (match)
-          blocks.push({ start, nights: requestedNights, room: match.room });
+        const picked = pickRoomAvoidingGap(
+          freeRooms.map(({ schedule }) => schedule),
+          blockToStay(windowStartDay, start, requestedNights),
+        );
+        if (picked) {
+          const { room } = freeRooms.find(
+            ({ schedule }) => schedule === picked.schedule,
+          )!;
+          blocks.push({
+            start,
+            nights: requestedNights,
+            room,
+            leavesGap: picked.leavesGap,
+          });
+        }
       }
     }
     return blocks;
   }
 
-  /**
-   * Tramos libres más cortos que lo pedido que se superponen con las fechas originales, así el
-   * huésped conserva al menos parte de su viaje. Se ordenan por noches en común con lo pedido,
-   * después por largo y después por cercanía del check-in.
-   */
   private findShorterStays(
     freeNightsByRoom: RoomFreeNights[],
     requestedIndex: number,
     requestedNights: number,
+    windowStartDay: number,
   ): CandidateBlock[] {
     const maxNights = requestedNights - 1;
     const minNights = Math.max(
@@ -336,7 +519,7 @@ export class ReservationService {
       Math.max(block.start, requestedIndex);
 
     const candidates: CandidateBlock[] = [];
-    for (const { room, free } of freeNightsByRoom) {
+    for (const { room, free, schedule } of freeNightsByRoom) {
       let runStart = 0;
       while (runStart < free.length) {
         if (!free[runStart]) {
@@ -351,7 +534,14 @@ export class ReservationService {
           Math.max(requestedIndex, runStart),
           runEnd - nights,
         );
-        const block = { start, nights, room };
+        const block = {
+          start,
+          nights,
+          room,
+          leavesGap: schedule.leavesSingleNightGap(
+            blockToStay(windowStartDay, start, nights),
+          ),
+        };
         if (nights >= minNights && overlapWithRequest(block) > 0)
           candidates.push(block);
 
@@ -390,10 +580,41 @@ function startOfToday(): Date {
 }
 
 function toCalendarDay(value: Date | string): Date {
-  if (typeof value === 'string') {
-    const [year, month, day] = value.slice(0, 10).split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-  const midday = new Date(value.getTime() + MS_PER_DAY / 2);
-  return new Date(midday.getFullYear(), midday.getMonth(), midday.getDate());
+  return fromDayNumber(toDayNumber(value));
+}
+
+function toStay(checkIn: string, checkOut: string): DayRange {
+  return {
+    checkIn: toDayNumber(parseDate(checkIn)),
+    checkOut: toDayNumber(parseDate(checkOut)),
+  };
+}
+
+function blockToStay(
+  windowStartDay: number,
+  start: number,
+  nights: number,
+): DayRange {
+  return {
+    checkIn: windowStartDay + start,
+    checkOut: windowStartDay + start + nights,
+  };
+}
+
+function buildSchedules(
+  rooms: Room[],
+  reservations: Reservation[],
+): RoomSchedule[] {
+  return rooms.map(
+    (room) =>
+      new RoomSchedule(
+        room.id,
+        reservations
+          .filter((reservation) => reservation.room.id === room.id)
+          .map((reservation) => ({
+            checkIn: toDayNumber(reservation.checkIn),
+            checkOut: toDayNumber(reservation.checkOut),
+          })),
+      ),
+  );
 }

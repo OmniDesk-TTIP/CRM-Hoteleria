@@ -12,9 +12,15 @@ import { ChatModule } from './modules/chat/chat.module';
 import { SupportHoursModule } from './modules/supportHours/supportHours.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
+import { SpaModule } from './modules/spa/spa.module';
+import { RestaurantModule } from './modules/restaurant/restaurant.module';
+import { CancellationModule } from './modules/cancellation/cancellation.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { SatisfactionSurveyModule } from './modules/satisfactionSurvey/satisfactionSurvey.module';
+import { CampaignModule } from './modules/campaign/campaign.module';
 
 @Module({
   imports: [
@@ -30,6 +36,12 @@ import { ScheduleModule } from '@nestjs/schedule';
     SupportHoursModule,
     DashboardModule,
     StatisticsModule,
+    SpaModule,
+    RestaurantModule,
+    CancellationModule,
+    DocumentsModule,
+    SatisfactionSurveyModule,
+    CampaignModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

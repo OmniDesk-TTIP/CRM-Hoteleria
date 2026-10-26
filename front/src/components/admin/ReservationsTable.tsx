@@ -1,5 +1,5 @@
 import type { AdminReservation, ReservationListFilters, ReservationSortBy } from '@/config/types';
-import { OriginBadge, StatusBadge } from './Badges';
+import { CancellationNote, OriginBadge, StatusBadge } from './Badges';
 
 interface ReservationsTableProps {
   reservations: AdminReservation[];
@@ -90,6 +90,7 @@ export default function ReservationsTable({
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <StatusBadge status={reservation.status} />
+                  <CancellationNote reservation={reservation} />
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <OriginBadge origin={reservation.origin} />
@@ -131,7 +132,10 @@ export default function ReservationsTable({
                     <p className="truncate font-medium text-text">{reservation.guestFullName}</p>
                     <p className="text-xs text-textMuted">DNI {reservation.guestDni}</p>
                   </div>
-                  <StatusBadge status={reservation.status} />
+                  <div className="shrink-0 text-right">
+                    <StatusBadge status={reservation.status} />
+                    <CancellationNote reservation={reservation} />
+                  </div>
                 </div>
 
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">

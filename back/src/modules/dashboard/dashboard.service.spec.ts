@@ -11,7 +11,7 @@ import {
 } from '../../infrastructure/database/entities/Room.entity';
 import { AuthUser } from '../auth/auth.types';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
-import { addMonths, zonedDateKey } from './dashboard.util';
+import { addMonths, zonedDateKey } from '../../common/date.util';
 
 const TIMEZONE = 'America/Argentina/Buenos_Aires';
 

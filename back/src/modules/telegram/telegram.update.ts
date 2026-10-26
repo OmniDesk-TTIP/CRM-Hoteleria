@@ -3,7 +3,7 @@ import { Context } from 'telegraf';
 import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
-import { validate } from 'class-validator';
+import { isUUID, validate } from 'class-validator';
 import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
 import {
   ReservationService,
@@ -12,6 +12,13 @@ import {
 } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
+import { SpaService } from '../spa/spa.service';
+import { CancellationService } from '../cancellation/cancellation.service';
+import { SpaReservationService } from '../spaReservation/spaReservation.service';
+import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
+import { RestaurantService } from '../restaurant/restaurant.service';
+import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
+import { RequestTableBookingDto } from '../restaurantReservation/dto/restaurantReservation.dto';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -30,7 +37,6 @@ import {
 import { TelegramProfile } from '../chat/chat.repository';
 import { escapeHtml } from './telegram.format';
 
-/** Cuántos mensajes previos se le pasan a Gemini como contexto conversacional. */
 const HISTORY_SIZE = 6;
 
 const GENERIC_FALLBACK =
@@ -43,11 +49,22 @@ export class TelegramUpdate {
   private static readonly ASK_GUEST_DATA =
     'Genial, te la reservo. Para tomarla necesito el nombre completo y el DNI del huésped que se aloja.';
 
+  private static readonly NO_PENDING_PAYMENT =
+    'No tenés ninguna reserva esperando el pago de la seña. Si querés, buscamos disponibilidad: decime las fechas de entrada y salida y para cuántas personas.';
+
+  private static readonly ASK_WHICH_OPTION =
+    'Antes de tomar la reserva necesito que me confirmes cuál de las opciones que te pasé preferís (fechas de entrada y salida).';
+
   constructor(
     private readonly ragService: RagService,
     private readonly reservationService: ReservationService,
     private readonly bookingProcessService: BookingProcessService,
     private readonly chatService: ChatService,
+    private readonly spaService: SpaService,
+    private readonly spaReservationService: SpaReservationService,
+    private readonly restaurantService: RestaurantService,
+    private readonly restaurantReservationService: RestaurantReservationService,
+    private readonly cancellationService: CancellationService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -123,11 +140,23 @@ export class TelegramUpdate {
       );
 
       const history = previousMessages.reverse();
+      const servicesBlock =
+        await this.spaService.getSpaContextBlock(telegramUserId);
+      const restaurant =
+        await this.restaurantService.getChatContext(telegramUserId);
+      const cancellation =
+        await this.cancellationService.getGuestContextBlock(telegramUserId);
+      const hasPendingPayment =
+        await this.reservationService.hasPendingPayment(telegramUserId);
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
         history,
         lastCompletedBooking,
+        servicesBlock,
+        cancellation,
+        hasPendingPayment,
+        restaurant,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -200,10 +229,6 @@ export class TelegramUpdate {
     }
   }
 
-  /**
-   * El middleware de request de @mikro-orm/nestjs solo corre en HTTP; los updates de Telegraf
-   * quedaban fuera y compartían el EntityManager global entre conversaciones.
-   */
   private withRequestContext<T>(work: () => Promise<T>): Promise<T> {
     return RequestContext.create(this.orm.em, work);
   }
@@ -238,7 +263,23 @@ export class TelegramUpdate {
           aiResponse.datos,
           telegramUserId,
           activeBooking,
-          escapeHtml(aiResponse.texto || ''),
+        );
+      case ChatAction.SEND_PAYMENT_LINK:
+        return (
+          (await this.reservationService.buildPendingPaymentReply(
+            telegramUserId,
+          )) ?? TelegramUpdate.NO_PENDING_PAYMENT
+        );
+      case ChatAction.REQUEST_SPA_BOOKING:
+        return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
+      case ChatAction.REQUEST_TABLE_BOOKING:
+        return this.resolveTableBooking(aiResponse.datos, telegramUserId);
+      case ChatAction.CANCEL_RESERVATION:
+        return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
+      case ChatAction.REGISTER_REFUND_ACCOUNT:
+        return this.resolveRegisterRefundAccount(
+          aiResponse.datos,
+          telegramUserId,
         );
       default:
         return (
@@ -246,6 +287,89 @@ export class TelegramUpdate {
           'Disculpá, no entendí bien eso. ¿Podés reformularlo?'
         );
     }
+  }
+
+  private async resolveCancelReservation(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const reservationId = (datos as { reservationId?: unknown } | null)
+      ?.reservationId;
+    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
+      return '¿Me confirmás cuál de tus reservas querés cancelar (fechas de entrada y salida)?';
+    }
+
+    const result = await this.cancellationService.cancelForGuest(
+      telegramUserId,
+      reservationId,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  private async resolveRegisterRefundAccount(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const { reservationId, alias, holderName } = (datos ?? {}) as {
+      reservationId?: unknown;
+      alias?: unknown;
+      holderName?: unknown;
+    };
+    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
+      return '¿Me confirmás de qué reserva es la devolución (fechas de entrada y salida)?';
+    }
+
+    const result = await this.cancellationService.registerRefundAccountForGuest(
+      telegramUserId,
+      reservationId,
+      alias,
+      holderName,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  private async resolveSpaBooking(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const bookingDto = plainToInstance(RequestSpaBookingDto, datos);
+    const validationErrors = await validate(bookingDto);
+    if (validationErrors.length > 0) {
+      const invalidFields = validationErrors.map((error) => error.property);
+      this.logger.warn(
+        `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${invalidFields.join(', ')}`,
+      );
+      if (invalidFields.includes('fullName') || invalidFields.includes('dni')) {
+        return '¿Me pasás tu nombre completo y tu DNI (solo los números, sin puntos)?';
+      }
+      return '¿Me confirmás qué servicio querés, qué día (DD-MM-YYYY) y a qué hora?';
+    }
+
+    const result = await this.spaReservationService.requestSpa(
+      telegramUserId,
+      bookingDto,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  private async resolveTableBooking(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<string> {
+    const bookingDto = plainToInstance(RequestTableBookingDto, datos);
+    const validationErrors = await validate(bookingDto);
+    if (validationErrors.length > 0) {
+      this.logger.warn(
+        `Pedido de mesa incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
+      );
+      return '¿Me confirmás para qué día (DD-MM-YYYY), a qué hora y para cuántas personas querés la mesa?';
+    }
+
+    const result = await this.restaurantReservationService.requestTable(
+      telegramUserId,
+      bookingDto,
+    );
+    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   private async resolveSearchAvailability(
@@ -265,8 +389,6 @@ export class TelegramUpdate {
       );
     }
 
-    // Si ya le ofrecimos esa misma habitación y estamos esperando su respuesta, un "sí" no es un
-    // pedido de búsqueda nueva: es la aceptación. Repetir la oferta deja la charla en bucle.
     if (this.isOfferAlreadyPending(activeBooking, searchDto)) {
       this.logger.log(
         `Se ignora una búsqueda repetida de ${telegramUserId}: ya hay una oferta esperando confirmación`,
@@ -297,7 +419,6 @@ export class TelegramUpdate {
     );
   }
 
-  /** Por si Gemini no devuelve texto: listamos las alternativas tal cual las calculó el backend. */
   private formatAlternativesFallback(alternatives: AlternativeDates[]): string {
     const options = alternatives.map(
       ({
@@ -318,7 +439,6 @@ export class TelegramUpdate {
     ].join('\n');
   }
 
-  /** La búsqueda repite, dato por dato, la oferta que el huésped todavía no respondió. */
   private isOfferAlreadyPending(
     activeBooking: BookingProcess | null,
     searchDto: SearchAvailabilityDto,
@@ -336,23 +456,31 @@ export class TelegramUpdate {
     datos: unknown,
     telegramUserId: string,
     activeBooking: BookingProcess | null,
-    fallbackReply: string,
   ): Promise<string> {
+    // Nunca se responde con el texto del modelo: si no hay nada que confirmar, Gemini suele
+    // contestar como si hubiera reservado ("ya registré tus datos") sin que exista la reserva.
+    if (activeBooking?.step === BookingProcessStep.IN_PROGRESS) {
+      return activeBooking.checkIn &&
+        activeBooking.checkOut &&
+        activeBooking.capacity
+        ? TelegramUpdate.ASK_WHICH_OPTION
+        : '¿Para qué fechas de entrada y salida, y para cuántas personas, buscamos la habitación?';
+    }
     if (
       !activeBooking ||
       activeBooking.step !== BookingProcessStep.PENDING_CONFIRMATION
     ) {
       return (
-        fallbackReply ||
-        'Ya procesamos esa reserva. Si necesitás algo más, decime.'
+        (await this.reservationService.buildPendingPaymentReply(
+          telegramUserId,
+        )) ??
+        'Para tomar una reserva primero necesito las fechas de entrada y salida y para cuántas personas es.'
       );
     }
 
     const confirmDto = plainToInstance(ConfirmReservationDto, datos);
     const validationErrors = await validate(confirmDto);
     if (validationErrors.length > 0) {
-      // Apenas el huésped acepta, el modelo a veces llama a confirm_reservation sin tener todavía
-      // el nombre o el DNI. Cortar con un error técnico ahí es peor que seguir pidiendo los datos.
       const invalidFields = validationErrors.map((error) => error.property);
       this.logger.warn(
         `Confirmación incompleta de ${telegramUserId}; faltan o son inválidos: ${invalidFields.join(', ')}`,
