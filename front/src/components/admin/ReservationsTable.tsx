@@ -1,5 +1,5 @@
 import type { AdminReservation, ReservationListFilters, ReservationSortBy } from '@/config/types';
-import { CancellationNote, OriginBadge, StatusBadge } from './Badges';
+import { CancellationNote, ExpirationNote, OriginBadge, StatusBadge } from './Badges';
 
 interface ReservationsTableProps {
   reservations: AdminReservation[];
@@ -25,8 +25,12 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(Number(value));
 
+const isExpired = (reservation: AdminReservation) => reservation.status === 'EXPIRED';
+const isCancellable = (reservation: AdminReservation) =>
+  reservation.status !== 'CANCELLED' && !isExpired(reservation);
+
 const editButtonClasses =
-  'rounded-full border border-goldLight/25 px-3 py-1.5 text-xs font-medium text-goldLight transition hover:bg-goldLight/10 motion-reduce:transition-none';
+  'rounded-full border border-goldLight/25 px-3 py-1.5 text-xs font-medium text-goldLight transition hover:bg-goldLight/10 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none';
 
 const cancelButtonClasses =
   'rounded-full border border-danger/40 px-3 py-1.5 text-xs font-medium text-dangerText transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none';
@@ -91,6 +95,7 @@ export default function ReservationsTable({
                 <td className="px-4 py-3 sm:px-5">
                   <StatusBadge status={reservation.status} />
                   <CancellationNote reservation={reservation} />
+                  <ExpirationNote reservation={reservation} />
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <OriginBadge origin={reservation.origin} />
@@ -101,13 +106,18 @@ export default function ReservationsTable({
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <div className="flex justify-end gap-2">
-                    <button type="button" onClick={() => onEdit(reservation)} className={editButtonClasses}>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(reservation)}
+                      disabled={isExpired(reservation)}
+                      className={editButtonClasses}
+                    >
                       Editar
                     </button>
                     <button
                       type="button"
                       onClick={() => onCancel(reservation)}
-                      disabled={reservation.status === 'CANCELLED'}
+                      disabled={!isCancellable(reservation)}
                       className={cancelButtonClasses}
                     >
                       Cancelar
@@ -135,6 +145,7 @@ export default function ReservationsTable({
                   <div className="shrink-0 text-right">
                     <StatusBadge status={reservation.status} />
                     <CancellationNote reservation={reservation} />
+                  <ExpirationNote reservation={reservation} />
                   </div>
                 </div>
 
@@ -167,13 +178,18 @@ export default function ReservationsTable({
                 </dl>
 
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => onEdit(reservation)} className={`${editButtonClasses} flex-1 py-2`}>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(reservation)}
+                    disabled={isExpired(reservation)}
+                    className={`${editButtonClasses} flex-1 py-2`}
+                  >
                     Editar
                   </button>
                   <button
                     type="button"
                     onClick={() => onCancel(reservation)}
-                    disabled={reservation.status === 'CANCELLED'}
+                    disabled={!isCancellable(reservation)}
                     className={`${cancelButtonClasses} flex-1 py-2`}
                   >
                     Cancelar

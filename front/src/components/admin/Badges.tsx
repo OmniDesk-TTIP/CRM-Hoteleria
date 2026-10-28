@@ -13,12 +13,14 @@ const STATUS_LABEL: Record<ReservationStatus, string> = {
   PENDING_PAYMENT: 'Pendiente',
   CONFIRMED: 'Confirmada',
   CANCELLED: 'Cancelada',
+  EXPIRED: 'Vencida',
 };
 
 const STATUS_CLASSES: Record<ReservationStatus, string> = {
   PENDING_PAYMENT: 'bg-gold/15 text-goldLight',
   CONFIRMED: 'bg-success/20 text-successText',
   CANCELLED: 'bg-danger/15 text-dangerText',
+  EXPIRED: 'bg-surface text-textMuted',
 };
 
 export function StatusBadge({ status }: { status: ReservationStatus }) {
@@ -28,6 +30,30 @@ export function StatusBadge({ status }: { status: ReservationStatus }) {
     >
       {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+const expirationFormat = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+export function ExpirationNote({ reservation }: { reservation: AdminReservation }) {
+  if (!reservation.expiresAt) return null;
+  const when = expirationFormat.format(new Date(reservation.expiresAt));
+
+  if (reservation.status === 'PENDING_PAYMENT') {
+    return <p className="mt-1 text-xs text-textMuted">Vence {when}</p>;
+  }
+  if (reservation.status !== 'EXPIRED') return null;
+
+  return (
+    <p className="mt-1 text-xs text-textMuted">
+      {reservation.closureReason}
+      <span className="block">Venció {when} · Sin devolución</span>
+    </p>
   );
 }
 

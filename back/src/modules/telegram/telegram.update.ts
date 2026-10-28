@@ -1,4 +1,4 @@
-import { Update, Ctx, Start, On, Message } from 'nestjs-telegraf';
+import { Update, Ctx, Start, On, Message, Action } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
@@ -35,7 +35,12 @@ import {
   BookingProcessStep,
 } from '../../infrastructure/database/entities/BookingProcess.entity';
 import { TelegramProfile } from '../chat/chat.repository';
-import { escapeHtml } from './telegram.format';
+import {
+  escapeHtml,
+  EXPIRED_DECLINE_LABEL,
+  EXPIRED_RECOVERY_CALLBACK,
+  EXPIRED_RESUME_LABEL,
+} from './telegram.format';
 
 const HISTORY_SIZE = 6;
 
@@ -93,6 +98,95 @@ export class TelegramUpdate {
 
     await this.withRequestContext(() =>
       this.handleGuestMessage(text, ctx, ctx.from!.id.toString()),
+    );
+  }
+
+  @Action(EXPIRED_RECOVERY_CALLBACK)
+  async onExpiredRecovery(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    const data =
+      ctx.callbackQuery && 'data' in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : '';
+    const match = EXPIRED_RECOVERY_CALLBACK.exec(data);
+    if (!ctx.from || !match) return;
+
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+
+    const [, answer, reservationId] = match;
+    await this.withRequestContext(() =>
+      this.handleExpiredRecovery(
+        ctx,
+        ctx.from!.id.toString(),
+        reservationId,
+        answer === 'resume',
+      ),
+    );
+  }
+
+  private async handleExpiredRecovery(
+    ctx: Context,
+    telegramUserId: string,
+    reservationId: string,
+    wantsToResume: boolean,
+  ): Promise<void> {
+    let session: ChatSession | undefined;
+    try {
+      session = await this.chatService.getOrCreateSession(
+        telegramUserId,
+        this.readProfile(ctx),
+      );
+      await this.chatService.recordIncomingMessage(
+        session,
+        wantsToResume ? EXPIRED_RESUME_LABEL : EXPIRED_DECLINE_LABEL,
+      );
+      await ctx.sendChatAction('typing');
+
+      const botReply = wantsToResume
+        ? await this.resolveResumeExpired(telegramUserId, reservationId)
+        : await this.reservationService.declineExpiredRecovery(
+            telegramUserId,
+            reservationId,
+          );
+
+      await this.chatService.recordBotMessage(session, botReply);
+      await ctx.reply(botReply, { parse_mode: 'HTML' });
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error retomando la reserva vencida ${reservationId}: ${String(error)}`,
+      );
+      if (session) await this.registerFailureSafely(session);
+      await ctx.reply(
+        'Hubo un error técnico al retomar tu reserva. Escribime las fechas y para cuántas personas y la buscamos de nuevo.',
+      );
+    }
+  }
+
+  private async resolveResumeExpired(
+    telegramUserId: string,
+    reservationId: string,
+  ): Promise<string> {
+    const result = await this.reservationService.resumeExpiredReservation(
+      telegramUserId,
+      reservationId,
+    );
+    if (result.kind === 'reply') return result.reply;
+
+    const activeBooking =
+      await this.bookingProcessService.getActive(telegramUserId);
+    const search = await this.reservationService.searchAvailability(
+      telegramUserId,
+      activeBooking,
+      result.search,
+    );
+    const intro = 'La habitación que tenías ya no está libre para esas fechas.';
+    if (search.available) return `${intro}\n\n${search.reply}`;
+    if (search.alternatives.length === 0) {
+      return `${intro} Tampoco nos quedan lugares en esas fechas ni en los ${ALTERNATIVE_DATES_WINDOW_DAYS} días cercanos. ¿Probamos con otras fechas?`;
+    }
+    return this.formatAlternativesFallback(
+      search.alternatives,
+      `${intro} Te paso estas opciones cercanas:`,
     );
   }
 
@@ -419,7 +513,10 @@ export class TelegramUpdate {
     );
   }
 
-  private formatAlternativesFallback(alternatives: AlternativeDates[]): string {
+  private formatAlternativesFallback(
+    alternatives: AlternativeDates[],
+    intro = 'Lamentablemente no tenemos lugar en esas fechas, pero encontré estas opciones cercanas:',
+  ): string {
     const options = alternatives.map(
       ({
         checkIn,
@@ -431,12 +528,7 @@ export class TelegramUpdate {
       }) =>
         `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}`,
     );
-    return [
-      'Lamentablemente no tenemos lugar en esas fechas, pero encontré estas opciones cercanas:',
-      ...options,
-      '',
-      '¿Te sirve alguna?',
-    ].join('\n');
+    return [intro, ...options, '', '¿Te sirve alguna?'].join('\n');
   }
 
   private isOfferAlreadyPending(

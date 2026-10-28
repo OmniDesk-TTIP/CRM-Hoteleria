@@ -1,5 +1,5 @@
 /** Estados de la reserva, espejo de `ReservationStatus` del back. */
-export type ReservationStatus = 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED';
+export type ReservationStatus = 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ReservationSummary {
   id: string;
@@ -73,6 +73,8 @@ export interface AdminReservation {
     categoryName: string;
   };
   createdAt: string;
+  expiresAt: string | null;
+  closureReason: string | null;
   /** US-14: lo que quedó registrado al cancelar. Todo null si la reserva no se canceló. */
   cancelledAt: string | null;
   cancellationPolicyName: string | null;

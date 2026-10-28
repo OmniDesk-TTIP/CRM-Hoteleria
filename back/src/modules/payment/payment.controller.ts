@@ -19,6 +19,7 @@ import { Response } from 'express';
 import { Query, Res } from '@nestjs/common';
 import { Public } from '../auth/auth.decorators';
 import { readWebhook, WebhookBody, WebhookQuery } from './webhook.util';
+import { ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
 
 // Todo este controller queda fuera de la autenticación: el webhook lo llama Mercado Pago,
 // /success es el redirect de vuelta del checkout, y el resumen y el comprobante los abre el huesped desde el link de Telegram, sin cuenta.
@@ -68,6 +69,12 @@ export class PaymentController {
       String(payment.id),
     );
     if (!confirmed) {
+      if (reservation.status === ReservationStatus.EXPIRED) {
+        this.logger.warn(
+          `[${source}] Pago ${payment.id} aprobado para la reserva ${reservation.id}, que ya había vencido por falta de pago; hay que revisarlo a mano`,
+        );
+        return;
+      }
       this.logger.log(
         `[${source}] Reserva ${reservation.id} ya estaba confirmada; no se vuelve a notificar`,
       );

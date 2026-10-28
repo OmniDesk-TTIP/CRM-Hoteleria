@@ -10,7 +10,6 @@ import { InjectBot } from 'nestjs-telegraf';
 import { Telegraf, Context } from 'telegraf';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import { ConfirmReservationDto } from '../reservation/dto/confirmReservation.dto';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { PaymentRepository } from './payment.repository';
 import { ChatService } from '../chat/chat.service';
 import { Logger } from '@nestjs/common';
@@ -45,25 +44,6 @@ export class PaymentService {
     this.client = new MercadoPagoConfig({ accessToken });
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async releaseExpiredReservations(): Promise<void> {
-    const cutoffDate = new Date(
-      Date.now() - RESERVATION_HOLD_MINUTES * 60 * 1000,
-    );
-
-    const expired =
-      await this.paymentRepository.findExpiredPendingReservations(cutoffDate);
-
-    if (expired.length === 0) {
-      return;
-    }
-
-    await this.paymentRepository.cancelExpiredReservations(expired);
-    this.logger.log(
-      `Canceladas ${expired.length} reserva(s) vencidas por falta de pago`,
-    );
-  }
-
   async createPreference(
     reservation: Reservation,
     guestData: ConfirmReservationDto,
@@ -76,6 +56,7 @@ export class PaymentService {
       externalReference: reservation.id,
       notificationPath: '/payment/webhook',
       successPath: `/payment/success?reservationId=${reservation.id}`,
+      expiresAt: reservation.expiresAt,
     });
   }
 
@@ -109,6 +90,8 @@ export class PaymentService {
     externalReference: string;
     notificationPath: string;
     successPath: string;
+    /** Desde ese momento Mercado Pago deja de aceptar pagos con el link. */
+    expiresAt?: Date;
   }): Promise<{ preferenceId: string; initPoint: string }> {
     const baseUrl = this.configService.get<string>('APP_BASE_URL');
 
@@ -135,6 +118,12 @@ export class PaymentService {
           success: baseUrl ? `${baseUrl}${checkout.successPath}` : undefined,
         },
         auto_return: 'approved',
+        ...(checkout.expiresAt
+          ? {
+              expires: true,
+              expiration_date_to: checkout.expiresAt.toISOString(),
+            }
+          : {}),
       },
     });
 

@@ -16,6 +16,7 @@ interface CreateReservationData {
   depositAmount: number;
   guestFullName: string;
   guestDni: string;
+  expiresAt: Date;
 }
 
 interface AdminReservationFilters {
@@ -37,6 +38,7 @@ interface ManualReservationData {
   status: ReservationStatus;
   totalAmount: number;
   depositAmount: number;
+  expiresAt?: Date;
 }
 
 @Injectable()
@@ -81,10 +83,10 @@ export class ReservationRepository {
     this.em.remove(reservation);
   }
 
-  /** Reservas del bot que esperan la seña y ya tienen el link de Mercado Pago generado. */
+  /** Reservas del bot que esperan la seña, todavía no vencieron y ya tienen el link de Mercado Pago. */
   async findAwaitingPaymentByTelegramUserId(
     telegramUserId: string,
-    createdAfter: Date,
+    now: Date,
   ): Promise<Reservation[]> {
     return this.em.find(
       Reservation,
@@ -92,10 +94,82 @@ export class ReservationRepository {
         telegramUserId,
         status: ReservationStatus.PENDING_PAYMENT,
         mpInitPoint: { $ne: null },
-        createdAt: { $gt: createdAfter },
+        expiresAt: { $gt: now },
       },
       { orderBy: { createdAt: 'desc' }, refresh: true },
     );
+  }
+
+  /** Pendientes del bot que vencen antes de `remindUntil` y todavía no recibieron el recordatorio. */
+  async findDueForReminder(
+    now: Date,
+    remindUntil: Date,
+  ): Promise<Reservation[]> {
+    return this.em.find(
+      Reservation,
+      {
+        status: ReservationStatus.PENDING_PAYMENT,
+        telegramUserId: { $ne: null },
+        reminderSentAt: null,
+        $and: [
+          { expiresAt: { $gt: now } },
+          { expiresAt: { $lte: remindUntil } },
+        ],
+      },
+      { orderBy: { expiresAt: 'asc' }, refresh: true },
+    );
+  }
+
+  /* Marca el recordatorio como enviado solo si la reserva sigue pendiente y no se mandó antes, si dos corridas se pisan, una sola recibe true */
+  async markReminderSent(id: string, sentAt: Date): Promise<boolean> {
+    const affected = await this.em.nativeUpdate(
+      Reservation,
+      {
+        id,
+        status: ReservationStatus.PENDING_PAYMENT,
+        reminderSentAt: null,
+      },
+      { reminderSentAt: sentAt },
+    );
+    return affected === 1;
+  }
+
+  async findDueForExpiration(now: Date): Promise<Reservation[]> {
+    return this.em.find(
+      Reservation,
+      {
+        status: ReservationStatus.PENDING_PAYMENT,
+        expiresAt: { $lte: now },
+      },
+      { orderBy: { expiresAt: 'asc' }, refresh: true },
+    );
+  }
+
+  async expireIfPending(id: string): Promise<boolean> {
+    const affected = await this.em.nativeUpdate(
+      Reservation,
+      { id, status: ReservationStatus.PENDING_PAYMENT },
+      { status: ReservationStatus.EXPIRED },
+    );
+    return affected === 1;
+  }
+
+  async markRecoveryAnswered(
+    id: string,
+    telegramUserId: string,
+    answeredAt: Date,
+  ): Promise<boolean> {
+    const affected = await this.em.nativeUpdate(
+      Reservation,
+      {
+        id,
+        telegramUserId,
+        status: ReservationStatus.EXPIRED,
+        recoveryAnsweredAt: null,
+      },
+      { recoveryAnsweredAt: answeredAt },
+    );
+    return affected === 1;
   }
 
   async findManyPaginated(
@@ -171,6 +245,10 @@ export class ReservationRepository {
     reservation.status = data.status;
     reservation.totalAmount = data.totalAmount;
     reservation.depositAmount = data.depositAmount;
+    if (data.expiresAt) {
+      reservation.expiresAt = data.expiresAt;
+      reservation.reminderSentAt = undefined;
+    }
     await this.em.flush();
   }
 

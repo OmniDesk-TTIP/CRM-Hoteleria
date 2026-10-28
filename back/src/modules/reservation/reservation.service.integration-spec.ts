@@ -10,6 +10,7 @@ import {
   type AvailabilityResult,
 } from './reservation.service';
 import { ReservationAdminService } from './reservation-admin.service';
+import { ReservationExpirationService } from './reservationExpiration.service';
 import { toDayNumber } from './reservation.model';
 import { formatDate } from '../bookingProcess/date.util';
 import {
@@ -41,6 +42,7 @@ describe('ReservationService (integración)', () => {
   let adminService: ReservationAdminService;
 
   const createPreference = jest.fn();
+  const sendMessage = jest.fn().mockResolvedValue({});
 
   const suffix = Date.now();
   let seq = 0;
@@ -154,6 +156,8 @@ describe('ReservationService (integración)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
+        telegram: { sendMessage },
       })
       .compile();
 
@@ -681,6 +685,203 @@ describe('ReservationService (integración)', () => {
       expect(await service.hasPendingPayment(booking.telegramUserId)).toBe(
         false,
       );
+    });
+  });
+
+  describe('US-22 – vencimiento y recupero de reservas pendientes', () => {
+    const MINUTE = 60 * 1000;
+
+    /** Reserva del bot en la habitación B del 10 al 14 de octubre de 2099. */
+    const seedBotReservation = async (
+      overrides: Partial<Reservation> = {},
+    ): Promise<Reservation> => {
+      const telegramUserId = `tg-us22-${next()}`;
+      guestIds.push(telegramUserId);
+      const reservation = em.create(Reservation, {
+        room: em.getReference(Room, roomB.id),
+        telegramUserId,
+        checkIn: new Date(2099, 9, 10, 12),
+        checkOut: new Date(2099, 9, 14, 12),
+        status: ReservationStatus.PENDING_PAYMENT,
+        totalAmount: 4 * PRICE_B,
+        depositAmount: 0.3 * 4 * PRICE_B,
+        guestFullName: 'Ana Vence',
+        guestDni: '30111222',
+        mpInitPoint: 'https://mp.example/pref-us22',
+        expiresAt: new Date(Date.now() + 30 * MINUTE),
+        ...overrides,
+      });
+      em.persist(reservation);
+      await em.flush();
+      reservationIds.push(reservation.id);
+      return reservation;
+    };
+
+    const reload = (id: string) =>
+      em.fork().findOneOrFail(Reservation, { id }, { refresh: true });
+
+    let expirationService: ReservationExpirationService;
+    beforeAll(() => {
+      expirationService = app.get(ReservationExpirationService);
+    });
+    beforeEach(() => sendMessage.mockClear());
+
+    it('CA1: la reserva que toma el bot vence a los 30 minutos', async () => {
+      const { booking } = await search(ONLY_ROOM_B, 10, 14);
+      const before = Date.now();
+      await service.confirmReservation(booking.telegramUserId, booking, {
+        fullName: 'Ana Plazo',
+        dni: '30111222',
+      });
+      await orm.em.flush();
+
+      const [saved] = await em
+        .fork()
+        .find(Reservation, { telegramUserId: booking.telegramUserId });
+      const expiresIn = saved.expiresAt!.getTime() - before;
+      expect(expiresIn).toBeGreaterThanOrEqual(30 * MINUTE - 1000);
+      expect(expiresIn).toBeLessThanOrEqual(30 * MINUTE + 5000);
+    });
+
+    it('CA2: al vencer pasa a EXPIRED y libera la habitación', async () => {
+      const overdue = await seedBotReservation({
+        expiresAt: new Date(Date.now() - MINUTE),
+      });
+
+      await expirationService.expireOverdue(new Date());
+
+      expect((await reload(overdue.id)).status).toBe(ReservationStatus.EXPIRED);
+      const { result } = await search(ONLY_ROOM_B, 10, 14);
+      expect(offerOf(result)).toContain(PLAIN_OFFER);
+      expect(sendMessage).toHaveBeenCalledWith(
+        overdue.telegramUserId,
+        expect.stringContaining('venció'),
+        expect.objectContaining({ reply_markup: expect.anything() }),
+      );
+    });
+
+    it('CA2 y CA5: no vence las que tienen plazo ni las confirmadas', async () => {
+      const onTime = await seedBotReservation();
+      const confirmed = await seedBotReservation({
+        status: ReservationStatus.CONFIRMED,
+        expiresAt: new Date(Date.now() - MINUTE),
+        checkIn: new Date(2099, 9, 20, 12),
+        checkOut: new Date(2099, 9, 22, 12),
+      });
+
+      await expirationService.expireOverdue(new Date());
+
+      expect((await reload(onTime.id)).status).toBe(
+        ReservationStatus.PENDING_PAYMENT,
+      );
+      expect((await reload(confirmed.id)).status).toBe(
+        ReservationStatus.CONFIRMED,
+      );
+    });
+
+    it('CA3: manda un solo recordatorio cuando faltan menos de 10 minutos', async () => {
+      const now = new Date();
+      const soon = await seedBotReservation({
+        expiresAt: new Date(now.getTime() + 8 * MINUTE),
+      });
+      await seedBotReservation({
+        expiresAt: new Date(now.getTime() + 25 * MINUTE),
+        checkIn: new Date(2099, 9, 20, 12),
+        checkOut: new Date(2099, 9, 22, 12),
+      });
+
+      await expirationService.sendReminders(now);
+      await expirationService.sendReminders(now);
+
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage).toHaveBeenCalledWith(
+        soon.telegramUserId,
+        expect.stringContaining('8 minutos'),
+        { parse_mode: 'HTML' },
+      );
+      expect((await reload(soon.id)).reminderSentAt).toBeTruthy();
+    });
+
+    it('CA4: si la habitación sigue libre, la retoma con los mismos datos y un plazo nuevo', async () => {
+      const expired = await seedBotReservation({
+        status: ReservationStatus.EXPIRED,
+        expiresAt: new Date(Date.now() - MINUTE),
+      });
+
+      const result = await service.resumeExpiredReservation(
+        expired.telegramUserId!,
+        expired.id,
+      );
+      await orm.em.flush();
+
+      expect(result.kind).toBe('reply');
+      const reservations = await em.fork().find(Reservation, {
+        telegramUserId: expired.telegramUserId,
+        status: ReservationStatus.PENDING_PAYMENT,
+      });
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0].room.id).toBe(roomB.id);
+      expect(reservations[0].guestFullName).toBe('Ana Vence');
+      expect(Number(reservations[0].depositAmount)).toBe(0.3 * 4 * PRICE_B);
+      expect(reservations[0].expiresAt!.getTime()).toBeGreaterThan(Date.now());
+      expect((await reload(expired.id)).recoveryAnsweredAt).toBeTruthy();
+
+      const again = await service.resumeExpiredReservation(
+        expired.telegramUserId!,
+        expired.id,
+      );
+      expect(again).toEqual({
+        kind: 'reply',
+        reply: expect.stringContaining('Ya me respondiste'),
+      });
+    });
+
+    it('CA4: si la habitación se ocupó, pide buscar alternativas para las mismas fechas', async () => {
+      const expired = await seedBotReservation({
+        status: ReservationStatus.EXPIRED,
+      });
+      await seedReservation(roomB, 12, 16);
+
+      const result = await service.resumeExpiredReservation(
+        expired.telegramUserId!,
+        expired.id,
+      );
+
+      expect(result).toEqual({
+        kind: 'search',
+        search: { checkIn: d(10), checkOut: d(14), capacity: ONLY_ROOM_B },
+      });
+      expect(createPreference).not.toHaveBeenCalled();
+    });
+
+    it('CA4: no deja retomar la reserva de otro huésped', async () => {
+      const expired = await seedBotReservation({
+        status: ReservationStatus.EXPIRED,
+      });
+
+      const result = await service.resumeExpiredReservation(
+        'otro-huesped',
+        expired.id,
+      );
+
+      expect(result).toEqual({
+        kind: 'reply',
+        reply: expect.stringContaining('ya no se puede retomar'),
+      });
+      expect((await reload(expired.id)).recoveryAnsweredAt).toBeFalsy();
+    });
+
+    it('CA7: una vencida no se cancela ni genera devolución', async () => {
+      const expired = await seedBotReservation({
+        status: ReservationStatus.EXPIRED,
+      });
+
+      await expect(adminService.cancel(expired.id)).rejects.toThrow(
+        'venció por falta de pago',
+      );
+      const row = await reload(expired.id);
+      expect(row.status).toBe(ReservationStatus.EXPIRED);
+      expect(row.refundAmount).toBeNull();
     });
   });
 

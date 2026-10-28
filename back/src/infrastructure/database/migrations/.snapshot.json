@@ -1882,6 +1882,23 @@
           "enumItems": [],
           "mappedType": "decimal"
         },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "guest_dni": {
           "name": "guest_dni",
           "type": "varchar(255)",
@@ -2004,6 +2021,23 @@
           ],
           "mappedType": "enum"
         },
+        "recovery_answered_at": {
+          "name": "recovery_answered_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "refund_account_alias": {
           "name": "refund_account_alias",
           "type": "varchar(20)",
@@ -2109,6 +2143,23 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "reminder_sent_at": {
+          "name": "reminder_sent_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "room_id": {
           "name": "room_id",
           "type": "uuid",
@@ -2143,7 +2194,8 @@
           "enumItems": [
             "PENDING_PAYMENT",
             "CONFIRMED",
-            "CANCELLED"
+            "CANCELLED",
+            "EXPIRED"
           ],
           "mappedType": "enum"
         },
@@ -2226,8 +2278,8 @@
         },
         {
           "name": "reservations_status_check",
-          "expression": "\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED')",
-          "definition": "check (\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED'))",
+          "expression": "\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED')",
+          "definition": "check (\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'))",
           "columnName": "status"
         }
       ],
