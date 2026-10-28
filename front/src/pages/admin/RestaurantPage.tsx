@@ -5,7 +5,7 @@ import type { MenuItem, RestaurantSettings } from '@/config/types';
 import RestaurantSettingsCard from '@/components/admin/RestaurantSettingsCard';
 import MenuItemsTable from '@/components/admin/MenuItemsTable';
 import MenuItemFormModal from '@/components/admin/MenuItemFormModal';
-import RestaurantGallery from '@/components/admin/RestaurantGallery';
+//import RestaurantGallery from '@/components/admin/RestaurantGallery';
 import ConfirmDeleteModal from '@/components/admin/ConfirmDeleteModal';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
@@ -143,7 +143,7 @@ export default function RestaurantPage() {
         </div>
       </section>
 
-      <RestaurantGallery isAdmin={isAdmin} />
+      {/* <RestaurantGallery isAdmin={isAdmin} /> */}
 
       {formModalOpen && (
         <MenuItemFormModal

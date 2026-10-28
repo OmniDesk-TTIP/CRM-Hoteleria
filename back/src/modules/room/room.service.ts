@@ -9,6 +9,7 @@ import { RoomCategory } from '../../infrastructure/database/entities/RoomCategor
 import { CreateRoomDto } from './dto/createRoom.dto';
 import { UpdateRoomDto } from './dto/updateRoom.dto';
 import { RoomOptionDto } from './dto/roomOption.dto';
+import { PublicRoomDto } from './dto/publicRoom.dto';
 
 @Injectable()
 export class RoomService {
@@ -17,6 +18,12 @@ export class RoomService {
   async list(): Promise<RoomOptionDto[]> {
     const rooms = await this.roomRepository.findAllWithCategory();
     return rooms.map((room) => RoomOptionDto.fromEntity(room));
+  }
+
+  async listPublic(): Promise<PublicRoomDto[]> {
+    const categories =
+      await this.roomRepository.findCategoriesWithActiveRooms();
+    return categories.map((category) => PublicRoomDto.fromEntity(category));
   }
 
   async create(payload: CreateRoomDto): Promise<RoomOptionDto> {
