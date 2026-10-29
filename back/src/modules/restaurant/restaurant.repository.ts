@@ -37,6 +37,9 @@ export class RestaurantRepository {
       availableWeekdays: model.availableWeekdays,
       shifts: model.shifts,
       maxPartySize: model.maxPartySize,
+      roomServiceEnabled: model.roomServiceEnabled,
+      roomServiceOpensAt: model.roomServiceOpensAt,
+      roomServiceClosesAt: model.roomServiceClosesAt,
     };
 
     if (entity) Object.assign(entity, data);
@@ -63,6 +66,16 @@ export class RestaurantRepository {
     const entities = await this.em.find(
       RestaurantMenuItem,
       { status: MenuItemStatus.ACTIVE },
+      { orderBy: { category: 'asc', name: 'asc' } },
+    );
+    return entities.map((entity) => this.toMenuItemModel(entity));
+  }
+
+  /** US-24: los platos habilitados que además se pueden pedir a la habitación. */
+  async findRoomServiceMenuItems(): Promise<MenuItemModel[]> {
+    const entities = await this.em.find(
+      RestaurantMenuItem,
+      { status: MenuItemStatus.ACTIVE, availableForRoomService: true },
       { orderBy: { category: 'asc', name: 'asc' } },
     );
     return entities.map((entity) => this.toMenuItemModel(entity));
@@ -100,6 +113,7 @@ export class RestaurantRepository {
     entity.category = model.category;
     entity.price = model.price;
     entity.status = model.status;
+    entity.availableForRoomService = model.availableForRoomService;
     await this.em.flush();
   }
 
@@ -115,6 +129,9 @@ export class RestaurantRepository {
       availableWeekdays: entity.availableWeekdays,
       shifts: entity.shifts,
       maxPartySize: entity.maxPartySize,
+      roomServiceEnabled: entity.roomServiceEnabled,
+      roomServiceOpensAt: entity.roomServiceOpensAt,
+      roomServiceClosesAt: entity.roomServiceClosesAt,
     });
   }
 
@@ -127,6 +144,7 @@ export class RestaurantRepository {
       // decimal llega como string desde pg.
       price: Number(entity.price),
       status: entity.status,
+      availableForRoomService: entity.availableForRoomService,
     });
   }
 }

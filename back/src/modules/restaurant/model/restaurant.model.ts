@@ -18,6 +18,9 @@ export interface RestaurantSettingsProps {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled?: boolean;
+  roomServiceOpensAt?: string;
+  roomServiceClosesAt?: string;
 }
 
 export type RestaurantSettingsChanges = Partial<
@@ -31,6 +34,9 @@ export class RestaurantSettingsModel {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 
   constructor(props: RestaurantSettingsProps) {
     this.id = props.id;
@@ -39,6 +45,9 @@ export class RestaurantSettingsModel {
     this.availableWeekdays = [...props.availableWeekdays];
     this.shifts = props.shifts.map((shift) => ({ ...shift }));
     this.maxPartySize = props.maxPartySize;
+    this.roomServiceEnabled = props.roomServiceEnabled ?? false;
+    this.roomServiceOpensAt = props.roomServiceOpensAt ?? '07:00';
+    this.roomServiceClosesAt = props.roomServiceClosesAt ?? '23:00';
   }
 
   static createDefault(): RestaurantSettingsModel {
@@ -81,6 +90,12 @@ export class RestaurantSettingsModel {
       this.shifts = changes.shifts.map((shift) => ({ ...shift }));
     if (changes.maxPartySize !== undefined)
       this.maxPartySize = changes.maxPartySize;
+    if (changes.roomServiceEnabled !== undefined)
+      this.roomServiceEnabled = changes.roomServiceEnabled;
+    if (changes.roomServiceOpensAt !== undefined)
+      this.roomServiceOpensAt = changes.roomServiceOpensAt;
+    if (changes.roomServiceClosesAt !== undefined)
+      this.roomServiceClosesAt = changes.roomServiceClosesAt;
   }
 
   getScheduleError(): string | null {
@@ -116,6 +131,11 @@ export class RestaurantSettingsModel {
         return 'Las franjas horarias no pueden superponerse';
       }
     }
+
+    // La franja de room service puede cruzar la medianoche (22:00 a 02:00), pero no ser vacía.
+    if (this.roomServiceOpensAt === this.roomServiceClosesAt) {
+      return 'En room service la hora de cierre tiene que ser distinta a la de apertura';
+    }
     return null;
   }
 }
@@ -144,6 +164,7 @@ export interface MenuItemProps {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService?: boolean;
 }
 
 export type MenuItemChanges = Partial<Omit<MenuItemProps, 'id'>>;
@@ -155,6 +176,7 @@ export class MenuItemModel {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 
   constructor(props: MenuItemProps) {
     this.id = props.id;
@@ -163,6 +185,7 @@ export class MenuItemModel {
     this.category = props.category;
     this.price = props.price;
     this.status = props.status;
+    this.availableForRoomService = props.availableForRoomService ?? false;
   }
 
   static create(
@@ -188,6 +211,13 @@ export class MenuItemModel {
     if (changes.category !== undefined) this.category = changes.category;
     if (changes.price !== undefined) this.price = changes.price;
     if (changes.status !== undefined) this.status = changes.status;
+    if (changes.availableForRoomService !== undefined)
+      this.availableForRoomService = changes.availableForRoomService;
+  }
+
+  /** US-24: se ofrece por room service solo si está habilitado y marcado para la habitación. */
+  isAvailableForRoomService(): boolean {
+    return this.isActive() && this.availableForRoomService;
   }
 }
 

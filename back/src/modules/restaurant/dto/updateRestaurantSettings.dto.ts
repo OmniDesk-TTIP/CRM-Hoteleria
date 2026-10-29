@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -66,4 +67,21 @@ export class UpdateRestaurantSettingsDto {
   @Min(1, { message: 'La cantidad máxima de personas debe ser al menos 1' })
   @Max(50, { message: 'La cantidad máxima de personas no puede superar 50' })
   maxPartySize!: number;
+
+  // US-24: opcionales para no romper a los clientes que todavía no los mandan.
+  @IsOptional()
+  @IsBoolean({ message: 'roomServiceEnabled debe ser verdadero o falso' })
+  roomServiceEnabled?: boolean;
+
+  @IsOptional()
+  @Matches(TIME_REGEX, {
+    message: 'roomServiceOpensAt debe tener formato HH:mm',
+  })
+  roomServiceOpensAt?: string;
+
+  @IsOptional()
+  @Matches(TIME_REGEX, {
+    message: 'roomServiceClosesAt debe tener formato HH:mm',
+  })
+  roomServiceClosesAt?: string;
 }
