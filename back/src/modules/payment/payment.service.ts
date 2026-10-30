@@ -101,6 +101,24 @@ export class PaymentService {
     });
   }
 
+  async createRoomServicePreference(order: {
+    id: string;
+    roomNumber: string;
+    amount: number;
+    fullName: string;
+    dni: string;
+  }): Promise<{ preferenceId: string; initPoint: string }> {
+    return this.createCheckout({
+      itemId: order.id,
+      title: `Room service - habitación ${order.roomNumber}`,
+      amount: order.amount,
+      payer: { fullName: order.fullName, dni: order.dni },
+      externalReference: order.id,
+      notificationPath: '/room-service-payments/webhook',
+      successPath: '/room-service-payments/success',
+    });
+  }
+
   private async createCheckout(checkout: {
     itemId: string;
     title: string;

@@ -2261,6 +2261,23 @@
       "name": "restaurant_menu_items",
       "schema": "public",
       "columns": {
+        "available_for_room_service": {
+          "name": "available_for_room_service",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
         "category": {
           "name": "category",
           "type": "varchar(60)",
@@ -2897,6 +2914,57 @@
           "enumItems": [],
           "mappedType": "integer"
         },
+        "room_service_closes_at": {
+          "name": "room_service_closes_at",
+          "type": "varchar(5)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 5,
+          "precision": null,
+          "scale": null,
+          "default": "'23:00'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "room_service_enabled": {
+          "name": "room_service_enabled",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "room_service_opens_at": {
+          "name": "room_service_opens_at",
+          "type": "varchar(5)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 5,
+          "precision": null,
+          "scale": null,
+          "default": "'07:00'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
         "shifts": {
           "name": "shifts",
           "type": "jsonb",
@@ -3101,25 +3169,25 @@
       "comment": null
     },
     {
-      "name": "room_category_photos",
+      "name": "room_service_orders",
       "schema": "public",
       "columns": {
-        "category_id": {
-          "name": "category_id",
-          "type": "uuid",
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamptz(6)",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
-          "nullable": false,
+          "nullable": true,
           "unique": false,
-          "length": null,
+          "length": 6,
           "precision": null,
           "scale": null,
           "default": null,
           "comment": null,
           "collation": null,
           "enumItems": [],
-          "mappedType": "uuid"
+          "mappedType": "datetime"
         },
         "created_at": {
           "name": "created_at",
@@ -3138,22 +3206,22 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
-        "data": {
-          "name": "data",
-          "type": "bytea",
+        "guest_full_name": {
+          "name": "guest_full_name",
+          "type": "varchar(255)",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": false,
           "unique": false,
-          "length": null,
+          "length": 255,
           "precision": null,
           "scale": null,
           "default": null,
           "comment": null,
           "collation": null,
           "enumItems": [],
-          "mappedType": "blob"
+          "mappedType": "string"
         },
         "id": {
           "name": "id",
@@ -3172,15 +3240,32 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "mime_type": {
-          "name": "mime_type",
-          "type": "varchar(60)",
+        "items": {
+          "name": "items",
+          "type": "jsonb",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
           "nullable": false,
           "unique": false,
-          "length": 60,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "mp_init_point": {
+          "name": "mp_init_point",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
           "precision": null,
           "scale": null,
           "default": null,
@@ -3189,9 +3274,60 @@
           "enumItems": [],
           "mappedType": "string"
         },
-        "position": {
-          "name": "position",
-          "type": "int",
+        "mp_payment_id": {
+          "name": "mp_payment_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "mp_preference_id": {
+          "name": "mp_preference_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "payment_status": {
+          "name": "payment_status",
+          "type": "text",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -3200,15 +3336,35 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "0",
+          "default": "'PENDING'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "PENDING",
+            "PAID"
+          ],
+          "mappedType": "enum"
+        },
+        "room_number": {
+          "name": "room_number",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
           "comment": null,
           "collation": null,
           "enumItems": [],
-          "mappedType": "integer"
+          "mappedType": "string"
         },
-        "size_bytes": {
-          "name": "size_bytes",
-          "type": "int",
+        "room_reservation_id": {
+          "name": "room_reservation_id",
+          "type": "uuid",
           "unsigned": false,
           "autoincrement": false,
           "primary": false,
@@ -3221,7 +3377,64 @@
           "comment": null,
           "collation": null,
           "enumItems": [],
-          "mappedType": "integer"
+          "mappedType": "uuid"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'PENDING_CONFIRMATION'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "PENDING_CONFIRMATION",
+            "RECEIVED",
+            "IN_PREPARATION",
+            "DELIVERED",
+            "CANCELLED"
+          ],
+          "mappedType": "enum"
+        },
+        "telegram_user_id": {
+          "name": "telegram_user_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "total": {
+          "name": "total",
+          "type": "numeric(12,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 12,
+          "scale": 2,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "decimal"
         },
         "updated_at": {
           "name": "updated_at",
@@ -3244,39 +3457,51 @@
       "indexes": [
         {
           "columnNames": [
-            "category_id"
-          ],
-          "composite": false,
-          "constraint": false,
-          "keyName": "room_category_photos_category_id_index",
-          "primary": false,
-          "unique": false
-        },
-        {
-          "columnNames": [
             "id"
           ],
           "composite": false,
           "constraint": true,
-          "keyName": "room_category_photos_pkey",
+          "keyName": "room_service_orders_pkey",
           "primary": true,
           "unique": true
+        },
+        {
+          "columnNames": [
+            "status"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "room_service_orders_status_index",
+          "primary": false,
+          "unique": false
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "room_service_orders_payment_status_check",
+          "expression": "\"payment_status\" in ('PENDING', 'PAID')",
+          "definition": "check (\"payment_status\" in ('PENDING', 'PAID'))",
+          "columnName": "payment_status"
+        },
+        {
+          "name": "room_service_orders_status_check",
+          "expression": "\"status\" in ('PENDING_CONFIRMATION', 'RECEIVED', 'IN_PREPARATION', 'DELIVERED', 'CANCELLED')",
+          "definition": "check (\"status\" in ('PENDING_CONFIRMATION', 'RECEIVED', 'IN_PREPARATION', 'DELIVERED', 'CANCELLED'))",
+          "columnName": "status"
+        }
+      ],
       "triggers": [],
       "foreignKeys": {
-        "room_category_photos_category_id_foreign": {
+        "room_service_orders_room_reservation_id_foreign": {
           "columnNames": [
-            "category_id"
+            "room_reservation_id"
           ],
-          "constraintName": "room_category_photos_category_id_foreign",
-          "localTableName": "public.room_category_photos",
+          "constraintName": "room_service_orders_room_reservation_id_foreign",
+          "localTableName": "public.room_service_orders",
           "referencedColumnNames": [
             "id"
           ],
-          "referencedTableName": "public.room_categories",
-          "deleteRule": "cascade"
+          "referencedTableName": "public.reservations"
         }
       },
       "comment": null
@@ -4765,6 +4990,187 @@
       ],
       "triggers": [],
       "foreignKeys": {},
+      "comment": null
+    },
+    {
+      "name": "room_category_photos",
+      "schema": "public",
+      "columns": {
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "data": {
+          "name": "data",
+          "type": "bytea",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "blob"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "varchar(60)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 60,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "position": {
+          "name": "position",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "category_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "room_category_photos_category_id_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "room_category_photos_pkey",
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "triggers": [],
+      "foreignKeys": {
+        "room_category_photos_category_id_foreign": {
+          "columnNames": [
+            "category_id"
+          ],
+          "constraintName": "room_category_photos_category_id_foreign",
+          "localTableName": "public.room_category_photos",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.room_categories",
+          "deleteRule": "cascade"
+        }
+      },
       "comment": null
     },
     {

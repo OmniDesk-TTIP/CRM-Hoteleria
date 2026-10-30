@@ -4,6 +4,8 @@ import type {
   ReservationOrigin,
   ReservationStatus,
   RestaurantReservationStatus,
+  RoomServiceOrderStatus,
+  RoomServicePaymentStatus,
   RoomStatus,
   SpaReservationStatus,
   SpaServiceStatus,
@@ -181,6 +183,42 @@ export function SpaReservationStatusBadge({ status }: { status: SpaReservationSt
 
 export function RestaurantReservationStatusBadge({ status }: { status: RestaurantReservationStatus }) {
   return <SpaReservationStatusBadge status={status} />;
+}
+
+const ROOM_SERVICE_STATUS_LABEL: Record<RoomServiceOrderStatus, string> = {
+  RECEIVED: 'Recibido',
+  IN_PREPARATION: 'En preparación',
+  DELIVERED: 'Entregado',
+  CANCELLED: 'Cancelado',
+};
+
+const ROOM_SERVICE_STATUS_CLASSES: Record<RoomServiceOrderStatus, string> = {
+  RECEIVED: 'bg-gold/15 text-goldLight',
+  IN_PREPARATION: 'bg-goldLight/10 text-text ring-1 ring-inset ring-goldLight/30',
+  DELIVERED: 'bg-success/20 text-successText',
+  CANCELLED: 'bg-danger/15 text-dangerText',
+};
+
+export function RoomServiceOrderStatusBadge({ status }: { status: RoomServiceOrderStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${ROOM_SERVICE_STATUS_CLASSES[status]}`}
+    >
+      {ROOM_SERVICE_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+export function RoomServicePaymentBadge({ status }: { status: RoomServicePaymentStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
+        status === 'PAID' ? 'bg-success/20 text-successText' : 'bg-surface text-textMuted'
+      }`}
+    >
+      {status === 'PAID' ? 'Pagado' : 'Pago pendiente'}
+    </span>
+  );
 }
 type ReviewPublicationState = 'PUBLISHED' | 'CAN_PUBLISH' | 'NO_CONSENT';
 

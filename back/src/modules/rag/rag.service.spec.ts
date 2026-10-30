@@ -359,6 +359,126 @@ describe('RagService', () => {
       });
     });
 
+    describe('room service (US-24)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const ask = (
+        text: string,
+        roomService: {
+          block: string;
+          canOrder: boolean;
+          hasOpenOrder: boolean;
+        } | null,
+      ) =>
+        service.askQuestion(
+          text,
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          null,
+          roomService,
+        );
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('agrega el bloque de room service y su regla (CA1/CA2)', async () => {
+        await ask('¿Tienen room service?', {
+          block:
+            '[ROOM SERVICE]\nCARTA DE ROOM SERVICE:\n- id=1 | Café | $1500',
+          canOrder: true,
+          hasOpenOrder: false,
+        });
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- id=1 | Café | $1500');
+        expect(systemInstruction).toContain('REGLA PARA ROOM SERVICE');
+        expect(systemInstruction).toContain('Confirmar pedido');
+      });
+
+      it('declara cada tool solo cuando corresponde (CA1/CA5/CA8)', async () => {
+        await ask('Hola', {
+          block: '[ROOM SERVICE]',
+          canOrder: true,
+          hasOpenOrder: true,
+        });
+        expect(toolNames()).toEqual(
+          expect.arrayContaining([
+            'prepare_room_service_order',
+            'cancel_room_service_order',
+          ]),
+        );
+
+        getGenerativeModelMock.mockClear();
+        await ask('Hola', {
+          block: '[ROOM SERVICE]',
+          canOrder: false,
+          hasOpenOrder: false,
+        });
+        expect(toolNames()).not.toContain('prepare_room_service_order');
+        expect(toolNames()).not.toContain('cancel_room_service_order');
+      });
+
+      it('devuelve PREPARE_ROOM_SERVICE_ORDER con los datos de la function call', async () => {
+        const datos = { items: [{ menuItemId: 'x', quantity: 2 }] };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([
+            { name: 'prepare_room_service_order', args: datos },
+          ]),
+        );
+
+        const result = await ask('Dos cafés', {
+          block: '[ROOM SERVICE]',
+          canOrder: true,
+          hasOpenOrder: false,
+        });
+
+        expect(result).toEqual({
+          action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+          datos,
+        });
+      });
+
+      it('ignora las tools si el cliente no puede usarlas (defensa en profundidad)', async () => {
+        for (const name of [
+          'prepare_room_service_order',
+          'cancel_room_service_order',
+        ]) {
+          chatModelMock.generateContent.mockResolvedValue(
+            mockChatResponse([{ name, args: {} }], 'texto'),
+          );
+
+          const result = await ask('Dos cafés', {
+            block: '[ROOM SERVICE]',
+            canOrder: false,
+            hasOpenOrder: false,
+          });
+
+          expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+        }
+      });
+
+      it('sin contexto de room service no deja que invente la carta', async () => {
+        await ask('¿Tienen room service?', null);
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información del room service',
+        );
+      });
+    });
+
     it('incluye el estado de la reserva activa en el prompt cuando hay una en curso', async () => {
       chatModelMock.generateContent.mockResolvedValue(
         mockChatResponse([], 'ok'),

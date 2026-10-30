@@ -614,6 +614,9 @@ export interface RestaurantSettings {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 }
 
 export interface RestaurantSettingsFormData {
@@ -622,6 +625,9 @@ export interface RestaurantSettingsFormData {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 }
 
 export type MenuItemStatus = 'ACTIVE' | 'INACTIVE';
@@ -633,6 +639,7 @@ export interface MenuItem {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 }
 
 export interface MenuItemFormData {
@@ -641,6 +648,7 @@ export interface MenuItemFormData {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 }
 
 /** Foto de una galería del panel. `url` es relativa al backend (`/public/...`). */
@@ -677,6 +685,43 @@ export interface RestaurantReservationListFilters {
 
 export interface PaginatedRestaurantReservations {
   items: RestaurantReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type RoomServiceOrderStatus = 'RECEIVED' | 'IN_PREPARATION' | 'DELIVERED' | 'CANCELLED';
+export type RoomServicePaymentStatus = 'PENDING' | 'PAID';
+
+export interface RoomServiceOrderItem {
+  menuItemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  notes: string | null;
+}
+
+export interface RoomServiceOrder {
+  id: string;
+  status: RoomServiceOrderStatus;
+  paymentStatus: RoomServicePaymentStatus;
+  guestFullName: string;
+  roomNumber: string;
+  roomReservationId: string;
+  items: RoomServiceOrderItem[];
+  notes: string | null;
+  total: number;
+  confirmedAt: string | null;
+}
+
+export interface RoomServiceOrderListFilters {
+  status: RoomServiceOrderStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedRoomServiceOrders {
+  items: RoomServiceOrder[];
   total: number;
   page: number;
   pageSize: number;
