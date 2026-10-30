@@ -654,6 +654,8 @@ export interface GalleryPhoto {
 
 export type RestaurantPhoto = GalleryPhoto;
 
+export type SpaPhoto = GalleryPhoto;
+
 export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 
 export interface RestaurantReservation {
