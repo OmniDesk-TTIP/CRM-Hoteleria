@@ -47,6 +47,8 @@ export interface RoomOption {
   basePrice: number;
 }
 
+export type RoomPhoto = GalleryPhoto;
+
 export interface RoomFormData {
   roomNumber: string;
   categoryName: string;
@@ -641,13 +643,16 @@ export interface MenuItemFormData {
   status: MenuItemStatus;
 }
 
-export interface RestaurantPhoto {
+/** Foto de una galería del panel. `url` es relativa al backend (`/public/...`). */
+export interface GalleryPhoto {
   id: string;
   url: string;
   mimeType: string;
   sizeBytes: number;
   position: number;
 }
+
+export type RestaurantPhoto = GalleryPhoto;
 
 export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 

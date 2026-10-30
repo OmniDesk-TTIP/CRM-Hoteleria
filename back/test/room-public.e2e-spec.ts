@@ -103,6 +103,7 @@ describe('Public Rooms (e2e)', () => {
       name: doble,
       capacity: 2,
       pricePerNight: 12000,
+      photos: [],
     });
     expect(rooms.find((room) => room.name === suite)).toMatchObject({
       capacity: 4,
