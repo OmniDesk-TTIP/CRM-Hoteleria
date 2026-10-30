@@ -106,6 +106,13 @@ export class SupportHoursService {
     };
   }
 
+  /** Horario de la recepción del día de ese instante; null si no hay horarios cargados. */
+  async getDaySchedule(now: Date = new Date()): Promise<DaySchedule | null> {
+    const { weekday } = zonedNow(now, this.timeZone);
+    const schedule = await this.loadSchedule();
+    return schedule.find((day) => day.weekday === weekday) ?? null;
+  }
+
   async seedDefaultSchedule(): Promise<void> {
     for (let weekday = 0; weekday < 7; weekday++) {
       this.supportHoursRepository.create({

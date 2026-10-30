@@ -1,12 +1,5 @@
-import { Collection } from '@mikro-orm/core';
-import {
-  Entity,
-  PrimaryKey,
-  Property,
-  OneToMany,
-} from '@mikro-orm/decorators/legacy';
+import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
-import type { Room } from './Room.entity';
 import { CustomBaseEntity } from './CustomBase.entity';
 
 @Entity({ tableName: 'room_categories' })
@@ -22,9 +15,4 @@ export class RoomCategory extends CustomBaseEntity {
 
   @Property({ type: 'decimal', precision: 10, scale: 2 })
   basePrice!: number;
-
-  // require() a propósito: evita el import circular con Room.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
-  @OneToMany(() => require('./Room.entity').Room, 'category')
-  rooms = new Collection<Room>(this);
 }

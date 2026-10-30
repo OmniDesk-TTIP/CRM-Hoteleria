@@ -22,6 +22,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { SatisfactionSurveyModule } from './modules/satisfactionSurvey/satisfactionSurvey.module';
 import { CampaignModule } from './modules/campaign/campaign.module';
 import { RoomServiceModule } from './modules/roomService/roomService.module';
+import { ArrivalMessageModule } from './modules/arrivalMessage/arrivalMessage.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { RoomServiceModule } from './modules/roomService/roomService.module';
     SatisfactionSurveyModule,
     CampaignModule,
     RoomServiceModule,
+    ArrivalMessageModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
