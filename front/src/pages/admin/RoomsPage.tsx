@@ -5,6 +5,7 @@ import type { RoomOption } from '@/config/types';
 import RoomsTable from '@/components/admin/RoomsTable';
 import RoomFormModal from '@/components/admin/RoomFormModal';
 import ConfirmDisableRoomModal from '@/components/admin/ConfirmDisableRoomModal';
+import RoomPhotosGallery from '@/components/admin/RoomPhotosGallery';
 
 export default function RoomsPage() {
   const { user } = useAuth();
@@ -100,6 +101,8 @@ export default function RoomsPage() {
           onReactivate={handleReactivate}
         />
       </div>
+
+      <RoomPhotosGallery rooms={rooms} isAdmin={isAdmin} />
 
       {formModalOpen && (
         <RoomFormModal

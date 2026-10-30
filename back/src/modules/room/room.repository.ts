@@ -51,6 +51,15 @@ export class RoomRepository {
     );
   }
 
+  /** Tipos con al menos una habitación activa, del más barato al más caro. */
+  async findCategoriesWithActiveRooms(): Promise<RoomCategory[]> {
+    return this.em.find(
+      RoomCategory,
+      { rooms: { status: RoomStatus.ACTIVE } },
+      { orderBy: { basePrice: 'asc', name: 'asc' } },
+    );
+  }
+
   async findByRoomNumber(
     roomNumber: string,
     excludeRoomId?: string,
