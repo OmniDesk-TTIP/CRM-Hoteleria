@@ -1318,6 +1318,16 @@
           "keyName": "document_pkey",
           "primary": true,
           "unique": true
+        },
+        {
+          "columnNames": [
+            "source_document_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "document_source_document_id_index",
+          "primary": false,
+          "unique": false
         }
       ],
       "checks": [],
@@ -3987,26 +3997,26 @@
       "checks": [
         {
           "name": "satisfaction_surveys_attention_rating_check",
-          "expression": "attention_rating between 1 and 5",
-          "definition": "check (attention_rating between 1 and 5)",
+          "expression": "(attention_rating >= 1) AND (attention_rating <= 5)",
+          "definition": "CHECK (((attention_rating >= 1) AND (attention_rating <= 5)))",
           "columnName": "attention_rating"
         },
         {
           "name": "satisfaction_surveys_cleanliness_rating_check",
-          "expression": "cleanliness_rating between 1 and 5",
-          "definition": "check (cleanliness_rating between 1 and 5)",
+          "expression": "(cleanliness_rating >= 1) AND (cleanliness_rating <= 5)",
+          "definition": "CHECK (((cleanliness_rating >= 1) AND (cleanliness_rating <= 5)))",
           "columnName": "cleanliness_rating"
         },
         {
           "name": "satisfaction_surveys_overall_rating_check",
-          "expression": "overall_rating between 1 and 5",
-          "definition": "check (overall_rating between 1 and 5)",
+          "expression": "(overall_rating >= 1) AND (overall_rating <= 5)",
+          "definition": "CHECK (((overall_rating >= 1) AND (overall_rating <= 5)))",
           "columnName": "overall_rating"
         },
         {
           "name": "satisfaction_surveys_services_rating_check",
-          "expression": "services_rating between 1 and 5",
-          "definition": "check (services_rating between 1 and 5)",
+          "expression": "(services_rating >= 1) AND (services_rating <= 5)",
+          "definition": "CHECK (((services_rating >= 1) AND (services_rating <= 5)))",
           "columnName": "services_rating"
         },
         {
