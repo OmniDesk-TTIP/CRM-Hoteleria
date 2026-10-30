@@ -11,6 +11,7 @@ import { SpaReservationService } from '../spaReservation/spaReservation.service'
 import { CancellationService } from '../cancellation/cancellation.service';
 import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
+import { RoomServiceService } from '../roomService/roomService.service';
 import {
   ChatSessionStatus,
   HandoverReason,
@@ -27,6 +28,14 @@ describe('TelegramUpdate', () => {
   let spaReservationService: { requestSpa: jest.Mock };
   let restaurantService: { getChatContext: jest.Mock };
   let restaurantReservationService: { requestTable: jest.Mock };
+  let roomServiceService: {
+    getChatContext: jest.Mock;
+    prepareOrder: jest.Mock;
+    confirmOrder: jest.Mock;
+    discardDraft: jest.Mock;
+    requestCancel: jest.Mock;
+    cancelOrder: jest.Mock;
+  };
   let cancellationService: {
     getGuestContextBlock: jest.Mock;
     cancelForGuest: jest.Mock;
@@ -95,6 +104,17 @@ describe('TelegramUpdate', () => {
           useValue: { requestTable: jest.fn() },
         },
         {
+          provide: RoomServiceService,
+          useValue: {
+            getChatContext: jest.fn(),
+            prepareOrder: jest.fn(),
+            confirmOrder: jest.fn(),
+            discardDraft: jest.fn(),
+            requestCancel: jest.fn(),
+            cancelOrder: jest.fn(),
+          },
+        },
+        {
           provide: CancellationService,
           useValue: {
             getGuestContextBlock: jest.fn(),
@@ -136,6 +156,12 @@ describe('TelegramUpdate', () => {
     restaurantService.getChatContext.mockResolvedValue({
       block: '[RESTAURANTE]',
       canBook: true,
+    });
+    roomServiceService = module.get(RoomServiceService);
+    roomServiceService.getChatContext.mockResolvedValue({
+      block: '[ROOM SERVICE]',
+      canOrder: true,
+      hasOpenOrder: false,
     });
     cancellationService = module.get(CancellationService);
     cancellationService.getGuestContextBlock.mockResolvedValue({
@@ -217,6 +243,7 @@ describe('TelegramUpdate', () => {
       { block: '[POLÍTICA DE CANCELACIÓN]', canCancel: false },
       false,
       { block: '[RESTAURANTE]', canBook: true },
+      { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
     );
   });
 
@@ -427,6 +454,7 @@ describe('TelegramUpdate', () => {
         '[SERVICIOS DEL HOTEL]',
         expect.anything(),
         true,
+        expect.anything(),
         expect.anything(),
       );
     });
@@ -1021,6 +1049,230 @@ describe('TelegramUpdate', () => {
         expect.anything(),
         { telegramUserId: mockTelegramUserId, id: { $ne: 'incoming-1' } },
         expect.objectContaining({ limit: 6 }),
+      );
+    });
+  });
+
+  describe('room service (US-24)', () => {
+    const ORDER_ID = '3c9a3c55-2b1f-4f5e-9d38-6c7a2f1b0a11';
+    const datos = {
+      items: [
+        {
+          menuItemId: '5d3f6a4e-8c2b-4b7a-9e1f-0a2b3c4d5e6f',
+          quantity: 2,
+          notes: 'sin sal',
+        },
+      ],
+    };
+
+    const buttonCtx = (data: string) => ({
+      ...mockCtx,
+      callbackQuery: { data },
+      answerCbQuery: jest.fn().mockResolvedValue(true),
+      editMessageReplyMarkup: jest.fn().mockResolvedValue(true),
+    });
+
+    it('le pasa a Chamber el contexto de room service', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.REPLY,
+        texto: 'Hola',
+      });
+
+      await update.onMessage('Hola', mockCtx);
+
+      expect(roomServiceService.getChatContext).toHaveBeenCalledWith(
+        mockTelegramUserId,
+      );
+      expect(ragService.askQuestion).toHaveBeenCalledWith(
+        'Hola',
+        null,
+        [],
+        null,
+        '[SERVICIOS DEL HOTEL]',
+        expect.anything(),
+        false,
+        expect.anything(),
+        { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
+      );
+    });
+
+    it('arma el resumen y lo manda con los botones para confirmar (CA4)', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+        datos,
+      });
+      roomServiceService.prepareOrder.mockResolvedValue({
+        ok: true,
+        orderId: ORDER_ID,
+        reply: 'Tu pedido de room service',
+      });
+
+      await update.onMessage('Quiero 2 hamburguesas sin sal', mockCtx);
+
+      expect(roomServiceService.prepareOrder).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        expect.objectContaining({
+          items: [expect.objectContaining(datos.items[0])],
+        }),
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith('Tu pedido de room service', {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              expect.objectContaining({
+                text: 'Confirmar pedido',
+                callback_data: `roomservice:confirm:${ORDER_ID}`,
+              }),
+              expect.objectContaining({
+                text: 'No, gracias',
+                callback_data: `roomservice:discard:${ORDER_ID}`,
+              }),
+            ],
+          ],
+        },
+      });
+    });
+
+    it('si el backend rechaza el pedido responde el motivo sin botones', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+        datos,
+      });
+      roomServiceService.prepareOrder.mockResolvedValue({
+        ok: false,
+        reason: 'En este momento el room service está cerrado.',
+      });
+
+      await update.onMessage('Quiero una hamburguesa', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'En este momento el room service está cerrado.',
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('pide los platos si los argumentos del modelo son inválidos', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+        datos: { items: [{ menuItemId: 'hamburguesa', quantity: 0 }] },
+      });
+
+      await update.onMessage('Quiero algo', mockCtx);
+
+      expect(roomServiceService.prepareOrder).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('qué platos querés'),
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('para cancelar pregunta con botones (CA8)', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.CANCEL_ROOM_SERVICE_ORDER,
+      });
+      roomServiceService.requestCancel.mockResolvedValue({
+        ok: true,
+        orderId: ORDER_ID,
+        reply: '¿Seguro que querés cancelar?',
+      });
+
+      await update.onMessage('Cancelá mi pedido', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        '¿Seguro que querés cancelar?',
+        expect.objectContaining({
+          reply_markup: {
+            inline_keyboard: [
+              [
+                expect.objectContaining({
+                  callback_data: `roomservice:cancel:${ORDER_ID}`,
+                }),
+                expect.objectContaining({
+                  callback_data: `roomservice:keep:${ORDER_ID}`,
+                }),
+              ],
+            ],
+          },
+        }),
+      );
+    });
+
+    it('el botón "Confirmar pedido" confirma, saca los botones y deja todo en el chat', async () => {
+      const ctx = buttonCtx(`roomservice:confirm:${ORDER_ID}`);
+      roomServiceService.confirmOrder.mockResolvedValue({
+        ok: true,
+        orderId: ORDER_ID,
+        reply: '¡Listo! Recibimos tu pedido',
+      });
+
+      await update.onRoomServiceAction(ctx);
+
+      expect(ctx.answerCbQuery).toHaveBeenCalled();
+      expect(ctx.editMessageReplyMarkup).toHaveBeenCalledWith(undefined);
+      expect(roomServiceService.confirmOrder).toHaveBeenCalledWith(
+        mockTelegramUserId,
+        ORDER_ID,
+      );
+      expect(chatService.recordIncomingMessage).toHaveBeenCalledWith(
+        session,
+        'Confirmar pedido',
+      );
+      expect(chatService.recordBotMessage).toHaveBeenCalledWith(
+        session,
+        '¡Listo! Recibimos tu pedido',
+      );
+      expect(ctx.reply).toHaveBeenCalledWith('¡Listo! Recibimos tu pedido', {
+        parse_mode: 'HTML',
+      });
+    });
+
+    it.each([
+      ['discard', 'discardDraft'],
+      ['cancel', 'cancelOrder'],
+    ] as const)(
+      'el botón %s llama a %s del service',
+      async (button, method) => {
+        const ctx = buttonCtx(`roomservice:${button}:${ORDER_ID}`);
+        roomServiceService[method].mockResolvedValue({
+          ok: true,
+          reply: 'Listo',
+        });
+
+        await update.onRoomServiceAction(ctx);
+
+        expect(roomServiceService[method]).toHaveBeenCalledWith(
+          mockTelegramUserId,
+          ORDER_ID,
+        );
+        expect(ctx.reply).toHaveBeenCalledWith('Listo', { parse_mode: 'HTML' });
+      },
+    );
+
+    it('"No, mantenerlo" no toca el pedido', async () => {
+      const ctx = buttonCtx(`roomservice:keep:${ORDER_ID}`);
+
+      await update.onRoomServiceAction(ctx);
+
+      expect(roomServiceService.cancelOrder).not.toHaveBeenCalled();
+      expect(ctx.reply).toHaveBeenCalledWith(
+        'Perfecto, tu pedido sigue en curso.',
+        { parse_mode: 'HTML' },
+      );
+    });
+
+    it('si el backend rechaza el botón responde el motivo escapado', async () => {
+      const ctx = buttonCtx(`roomservice:confirm:${ORDER_ID}`);
+      roomServiceService.confirmOrder.mockResolvedValue({
+        ok: false,
+        reason: 'Ese pedido ya estaba confirmado.',
+      });
+
+      await update.onRoomServiceAction(ctx);
+
+      expect(ctx.reply).toHaveBeenCalledWith(
+        'Ese pedido ya estaba confirmado.',
+        { parse_mode: 'HTML' },
       );
     });
   });

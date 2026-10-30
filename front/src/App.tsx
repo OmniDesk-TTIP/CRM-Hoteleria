@@ -23,11 +23,13 @@ import RefundsPage from '@/pages/admin/RefundsPage';
 import CancellationPoliciesPage from '@/pages/admin/CancellationPoliciesPage';
 import ReviewsPage from '@/pages/admin/ReviewsPage';
 import CampaignsPage from '@/pages/admin/CampaignsPage';
+import RoomServiceOrdersPage from '@/pages/admin/RoomServiceOrdersPage';
 
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
   { to: '/admin/reservations/spa', label: 'Spa', badge: 'pendingSpaReservations' },
   { to: '/admin/reservations/restaurant', label: 'Restó', badge: 'pendingRestaurantReservations' },
+  { to: '/admin/reservations/room-service', label: 'Room service', roles: ['ADMIN'] },
   { to: '/admin/reservations/refunds', label: 'Devoluciones' },
 ];
 
@@ -75,6 +77,9 @@ function App() {
                     <Route index element={<ReservationsPage />} />
                     <Route path="spa" element={<SpaReservationsPage />} />
                     <Route path="restaurant" element={<RestaurantReservationsPage />} />
+                    <Route element={<ProtectedRoute roles={['ADMIN']} />}>
+                      <Route path="room-service" element={<RoomServiceOrdersPage />} />
+                    </Route>
                     <Route path="refunds" element={<RefundsPage />} />
                   </Route>
                   <Route

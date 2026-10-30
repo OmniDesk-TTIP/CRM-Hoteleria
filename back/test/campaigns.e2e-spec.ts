@@ -46,6 +46,7 @@ describe('Campañas (e2e)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
         telegram: { sendMessage, sendPhoto: jest.fn() },
       })
       .compile();

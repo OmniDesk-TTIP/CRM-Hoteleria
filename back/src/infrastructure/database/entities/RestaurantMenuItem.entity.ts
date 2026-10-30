@@ -32,4 +32,7 @@ export class RestaurantMenuItem extends CustomBaseEntity {
 
   @Enum(() => MenuItemStatus)
   status: MenuItemStatus & Opt = MenuItemStatus.ACTIVE;
+
+  @Property({ type: 'boolean' })
+  availableForRoomService: boolean & Opt = false;
 }

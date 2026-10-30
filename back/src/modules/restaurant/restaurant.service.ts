@@ -67,6 +67,9 @@ export class RestaurantService {
         closesAt,
       })),
       maxPartySize: payload.maxPartySize,
+      roomServiceEnabled: payload.roomServiceEnabled,
+      roomServiceOpensAt: payload.roomServiceOpensAt,
+      roomServiceClosesAt: payload.roomServiceClosesAt,
     });
     const error = settings.getScheduleError();
     if (error) throw new BadRequestException(error);
@@ -116,6 +119,10 @@ export class RestaurantService {
   async removeMenuItem(id: string): Promise<void> {
     await this.getMenuItemOrFail(id);
     await this.restaurantRepository.deleteMenuItem(id);
+  }
+
+  listRoomServiceMenu(): Promise<MenuItemModel[]> {
+    return this.restaurantRepository.findRoomServiceMenuItems();
   }
 
   // ───────── Chamber (CA2/CA3/CA6/CA7) ─────────

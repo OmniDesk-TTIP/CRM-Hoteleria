@@ -21,6 +21,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { SatisfactionSurveyModule } from './modules/satisfactionSurvey/satisfactionSurvey.module';
 import { CampaignModule } from './modules/campaign/campaign.module';
+import { RoomServiceModule } from './modules/roomService/roomService.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CampaignModule } from './modules/campaign/campaign.module';
     DocumentsModule,
     SatisfactionSurveyModule,
     CampaignModule,
+    RoomServiceModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
