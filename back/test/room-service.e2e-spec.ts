@@ -159,10 +159,9 @@ describe('Pedidos de room service en el panel (e2e)', () => {
       await em.nativeDelete(User, {
         id: { $in: [admin.user.id, employee.user.id] },
       });
-    } catch {
-      // no-op: limpieza best-effort
+    } finally {
+      if (app) await app.close();
     }
-    if (app) await app.close();
   });
 
   describe('acceso (CA10)', () => {

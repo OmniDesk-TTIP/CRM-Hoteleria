@@ -101,7 +101,6 @@ export class PaymentService {
     });
   }
 
-  /** US-24: cobro de un pedido de room service, con su propio webhook y redirect (módulo roomService). */
   async createRoomServicePreference(order: {
     id: string;
     roomNumber: string;

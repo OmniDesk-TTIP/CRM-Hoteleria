@@ -36,19 +36,12 @@ import {
   toPublicRoomService,
 } from './roomService.dto';
 
-/**
- * Resultado de una acción del huésped por el chat. Los rechazos no son excepciones: son
- * respuestas esperables y `reason` ya está redactado para mostrárselo. `orderId` viaja en los
- * botones de Telegram (confirmar o cancelar ese pedido puntual).
- */
 export type RoomServiceChatResult =
   { ok: true; reply: string; orderId?: string } | { ok: false; reason: string };
 
 export interface RoomServiceChatContext {
   block: string;
-  /** Huésped alojado, servicio abierto y con platos: Chamber puede tomar el pedido. */
   canOrder: boolean;
-  /** Tiene un pedido en curso (Recibido o En preparación) sobre el que puede preguntar o cancelar. */
   hasOpenOrder: boolean;
 }
 
@@ -71,9 +64,6 @@ export class RoomServiceService {
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
-  // ───────── Chamber ─────────
-
-  /** CA1/CA2/CA5: lo que Chamber sabe del room service para este huésped. */
   async getChatContext(
     telegramUserId: string,
     now: Date = new Date(),
@@ -105,11 +95,6 @@ export class RoomServiceService {
     };
   }
 
-  /**
-   * CA3/CA4: valida el pedido y guarda un borrador. La respuesta es el resumen armado por el
-   * servidor (no por el modelo) y los botones de Telegram apuntan a `orderId`: nada queda
-   * registrado hasta que el huésped toque "Confirmar pedido".
-   */
   async prepareOrder(
     telegramUserId: string,
     dto: PrepareRoomServiceOrderDto,
@@ -163,10 +148,6 @@ export class RoomServiceService {
     };
   }
 
-  /**
-   * CA4/CA9: el huésped tocó "Confirmar pedido". Recién acá el pedido queda Recibido, visible en
-   * el panel y asociado a su reserva, y se genera el link de pago.
-   */
   async confirmOrder(
     telegramUserId: string,
     orderId: string,
@@ -220,7 +201,6 @@ export class RoomServiceService {
     return { ok: true, orderId: order.id, reply };
   }
 
-  /** El huésped tocó "No, gracias" en el resumen: se descarta el borrador. */
   async discardDraft(
     telegramUserId: string,
     orderId: string,
@@ -233,10 +213,6 @@ export class RoomServiceService {
     };
   }
 
-  /**
-   * CA8: el huésped pidió cancelar. Si el pedido sigue Recibido, devuelve la pregunta de
-   * confirmación (los botones apuntan a `orderId`); si ya está en preparación, el motivo.
-   */
   async requestCancel(telegramUserId: string): Promise<RoomServiceChatResult> {
     const order =
       await this.roomServiceRepository.findLatestOpen(telegramUserId);
@@ -257,7 +233,6 @@ export class RoomServiceService {
     };
   }
 
-  /** CA8: el huésped confirmó la cancelación con el botón. */
   async cancelOrder(
     telegramUserId: string,
     orderId: string,
@@ -270,7 +245,6 @@ export class RoomServiceService {
     const error = order.cancelByGuest();
     if (error) return { ok: false, reason: error };
 
-    // Si recepción lo pasó a preparación justo ahora, la cancelación ya no corre.
     const cancelled = await this.roomServiceRepository.cancelIfReceived(
       order.id,
     );
@@ -293,8 +267,6 @@ export class RoomServiceService {
     };
   }
 
-  // ───────── Panel ─────────
-
   async list(
     query: ListRoomServiceOrdersQueryDto,
   ): Promise<PaginatedRoomServiceOrdersDto> {
@@ -308,7 +280,6 @@ export class RoomServiceService {
     };
   }
 
-  /** CA7: el panel cambia el estado y el huésped recibe el aviso por Chamber. */
   async changeStatus(
     id: string,
     status: RoomServiceOrderStatus,
@@ -327,12 +298,6 @@ export class RoomServiceService {
     return RoomServiceOrderDto.fromModel(order);
   }
 
-  // ───────── Pago (CA9) ─────────
-
-  /**
-   * Procesa un pago de Mercado Pago de un pedido (webhook o redirect de vuelta). Es idempotente:
-   * el webhook y el redirect suelen llegar casi juntos y el aviso sale una sola vez.
-   */
   async confirmPayment(paymentId: string, source: string): Promise<void> {
     const payment = await this.paymentService.getPayment(paymentId);
 
@@ -377,8 +342,6 @@ export class RoomServiceService {
     );
   }
 
-  // ───────── Landing (CA2) ─────────
-
   async getPublicMenu(): Promise<PublicRoomServiceDto> {
     const hours = await this.getHours();
     if (!hours.enabled) return toPublicRoomService(null, []);
@@ -394,8 +357,6 @@ export class RoomServiceService {
       ? `${landing.replace(/\/+$/, '')}${DEFAULT_LANDING_ROOM_SERVICE_PATH}`
       : null;
   }
-
-  // ───────── Internos ─────────
 
   private async getHours(): Promise<RoomServiceHours> {
     const { settings } = await this.restaurantService.getSettings();
@@ -420,7 +381,6 @@ export class RoomServiceService {
     );
   }
 
-  /** CA1/CA5: huésped alojado hoy y servicio abierto ahora; si no, el motivo para el huésped. */
   private async checkCanOrder(
     telegramUserId: string,
     now: Date,
@@ -445,7 +405,6 @@ export class RoomServiceService {
     return { ok: true, stay };
   }
 
-  /** Genera el link de Mercado Pago del pedido; null si no se pudo (el pedido igual queda). */
   private async createPaymentLink(
     order: RoomServiceOrderModel,
     stay: CurrentStay,
@@ -474,10 +433,6 @@ export class RoomServiceService {
     }
   }
 
-  /**
-   * Avisa al huésped por Telegram y deja el aviso en el chat, igual que el spa y el restó. Un
-   * problema de mensajería no puede impedir el cambio: el estado ya quedó guardado.
-   */
   private async notifyGuest(
     order: RoomServiceOrderModel,
     notice: string,

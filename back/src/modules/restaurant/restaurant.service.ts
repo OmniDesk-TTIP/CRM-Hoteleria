@@ -121,7 +121,6 @@ export class RestaurantService {
     await this.restaurantRepository.deleteMenuItem(id);
   }
 
-  /** US-24: la carta de room service (platos habilitados y marcados para la habitación). */
   listRoomServiceMenu(): Promise<MenuItemModel[]> {
     return this.restaurantRepository.findRoomServiceMenuItems();
   }

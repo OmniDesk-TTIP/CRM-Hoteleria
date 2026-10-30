@@ -77,7 +77,6 @@ function App() {
                     <Route index element={<ReservationsPage />} />
                     <Route path="spa" element={<SpaReservationsPage />} />
                     <Route path="restaurant" element={<RestaurantReservationsPage />} />
-                    {/* US-24: los pedidos de room service solo los gestiona el administrador */}
                     <Route element={<ProtectedRoute roles={['ADMIN']} />}>
                       <Route path="room-service" element={<RoomServiceOrdersPage />} />
                     </Route>

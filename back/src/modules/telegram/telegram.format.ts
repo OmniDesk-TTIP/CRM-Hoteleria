@@ -7,7 +7,6 @@ export const escapeHtml = (text: string): string =>
 export const htmlLink = (url: string, label: string): string =>
   `<a href="${escapeHtml(encodeURI(url))}">${escapeHtml(label)}</a>`;
 
-/** US-24: botones del resumen de room service y de la confirmación de cancelación. */
 export const ROOM_SERVICE_CONFIRM_LABEL = 'Confirmar pedido';
 export const ROOM_SERVICE_DISCARD_LABEL = 'No, gracias';
 export const ROOM_SERVICE_CANCEL_LABEL = 'Sí, cancelar';

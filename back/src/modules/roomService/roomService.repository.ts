@@ -27,7 +27,6 @@ export interface RoomServiceOrderFilters {
 export class RoomServiceRepository {
   constructor(private readonly em: EntityManager) {}
 
-  /** CA1: la reserva confirmada en curso del huésped, con el número de habitación. */
   async findCurrentStay(
     telegramUserId: string,
     today: string,
@@ -57,8 +56,6 @@ export class RoomServiceRepository {
     };
   }
 
-  // Los cambios de estado van por UPDATE condicional (nativeUpdate), que no toca la identity map:
-  // las lecturas refrescan para no devolver una entidad vieja del mismo contexto.
   async findById(id: string): Promise<RoomServiceOrderModel | null> {
     const entity = await this.em.findOne(
       RoomServiceOrder,
@@ -68,7 +65,6 @@ export class RoomServiceRepository {
     return entity ? this.toModel(entity) : null;
   }
 
-  /** El pedido confirmado más reciente que sigue en curso (Recibido o En preparación). */
   async findLatestOpen(
     telegramUserId: string,
   ): Promise<RoomServiceOrderModel | null> {
@@ -80,7 +76,6 @@ export class RoomServiceRepository {
     return entity ? this.toModel(entity) : null;
   }
 
-  /** CA6: el panel nunca ve los borradores que el huésped no confirmó. */
   async findManyPaginated(
     filters: RoomServiceOrderFilters,
   ): Promise<{ items: RoomServiceOrderModel[]; total: number }> {
@@ -101,7 +96,6 @@ export class RoomServiceRepository {
     return { items: entities.map((entity) => this.toModel(entity)), total };
   }
 
-  /** Guarda el borrador nuevo y descarta los anteriores del huésped: hay un solo resumen vigente. */
   async replaceDraft(model: RoomServiceOrderModel): Promise<void> {
     await this.em.transactional(async (em) => {
       await em.nativeDelete(RoomServiceOrder, {
@@ -138,10 +132,6 @@ export class RoomServiceRepository {
     return deleted === 1;
   }
 
-  /**
-   * Pasa el borrador a Recibido solo si sigue siendo borrador. El UPDATE condicional es atómico:
-   * si el huésped toca "Confirmar pedido" dos veces, uno solo recibe true y se cobra una vez.
-   */
   async confirmIfDraft(model: RoomServiceOrderModel): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       RoomServiceOrder,
@@ -151,7 +141,6 @@ export class RoomServiceRepository {
     return affected === 1;
   }
 
-  /** CA8: cancela solo si sigue Recibido (el panel pudo haberlo pasado a preparación recién). */
   async cancelIfReceived(id: string): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       RoomServiceOrder,
@@ -181,7 +170,6 @@ export class RoomServiceRepository {
     );
   }
 
-  /** Marca el pago una sola vez aunque el webhook y el redirect lleguen juntos. */
   async markPaidIfPending(id: string, mpPaymentId: string): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       RoomServiceOrder,
@@ -202,7 +190,6 @@ export class RoomServiceRepository {
       guestFullName: entity.guestFullName,
       items: entity.items,
       notes: entity.notes ?? null,
-      // decimal llega como string desde pg.
       total: Number(entity.total),
       confirmedAt: entity.confirmedAt ?? null,
       mpInitPoint: entity.mpInitPoint ?? null,

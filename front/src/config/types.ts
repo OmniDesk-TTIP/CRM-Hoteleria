@@ -683,8 +683,6 @@ export interface PaginatedRestaurantReservations {
   pageSize: number;
 }
 
-/* ───────── Pedidos de room service (US-24) ───────── */
-
 export type RoomServiceOrderStatus = 'RECEIVED' | 'IN_PREPARATION' | 'DELIVERED' | 'CANCELLED';
 export type RoomServicePaymentStatus = 'PENDING' | 'PAID';
 

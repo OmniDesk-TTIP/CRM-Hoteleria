@@ -38,7 +38,6 @@ export class RestaurantSettings extends CustomBaseEntity {
   @Property({ type: 'int' })
   maxPartySize: number & Opt = 10;
 
-  /** US-24: room service, con su propia franja (HH:mm de pared del hotel; puede cruzar la medianoche). */
   @Property({ type: 'boolean' })
   roomServiceEnabled: boolean & Opt = false;
 

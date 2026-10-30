@@ -132,7 +132,6 @@ export class RestaurantSettingsModel {
       }
     }
 
-    // La franja de room service puede cruzar la medianoche (22:00 a 02:00), pero no ser vacía.
     if (this.roomServiceOpensAt === this.roomServiceClosesAt) {
       return 'En room service la hora de cierre tiene que ser distinta a la de apertura';
     }
@@ -215,7 +214,6 @@ export class MenuItemModel {
       this.availableForRoomService = changes.availableForRoomService;
   }
 
-  /** US-24: se ofrece por room service solo si está habilitado y marcado para la habitación. */
   isAvailableForRoomService(): boolean {
     return this.isActive() && this.availableForRoomService;
   }

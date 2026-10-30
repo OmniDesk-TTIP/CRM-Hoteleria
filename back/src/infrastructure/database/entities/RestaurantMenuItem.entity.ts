@@ -33,7 +33,6 @@ export class RestaurantMenuItem extends CustomBaseEntity {
   @Enum(() => MenuItemStatus)
   status: MenuItemStatus & Opt = MenuItemStatus.ACTIVE;
 
-  /** US-24: el plato también se puede pedir por room service. */
   @Property({ type: 'boolean' })
   availableForRoomService: boolean & Opt = false;
 }

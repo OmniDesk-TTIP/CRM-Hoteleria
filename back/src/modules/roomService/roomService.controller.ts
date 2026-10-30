@@ -35,7 +35,6 @@ import {
   UpdateRoomServiceOrderStatusDto,
 } from './roomService.dto';
 
-// CA10: solo el Administrador ve y gestiona los pedidos de room service.
 @Roles(UserRole.ADMIN)
 @UseGuards(RolesGuard)
 @Controller('room-service-orders')
@@ -58,8 +57,6 @@ export class RoomServiceOrdersController {
   }
 }
 
-// Fuera de la autenticación: lo llama Mercado Pago (webhook) o el navegador del huésped que
-// vuelve del checkout. Es el circuito de pago de los pedidos de room service (CA9).
 @Public()
 @Controller('room-service-payments')
 export class RoomServicePaymentController {
@@ -106,7 +103,6 @@ export class RoomServicePaymentController {
     return { received: true };
   }
 
-  /** Vuelta del checkout: confirma el pago sin esperar al webhook y lleva al huésped al front. */
   @Get('success')
   async getSuccessPage(
     @Res() res: Response,
@@ -131,8 +127,6 @@ export class RoomServicePaymentController {
   }
 }
 
-// Fuera de la autenticación: la carta de room service para el link de la landing (CA2).
-// Solo expone los platos habilitados y marcados para la habitación.
 @Public()
 @Controller('public/room-service')
 export class RoomServicePublicController {

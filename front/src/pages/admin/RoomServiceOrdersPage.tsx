@@ -17,7 +17,6 @@ const STATUS_FILTERS: { value: RoomServiceOrderStatus | 'ALL'; label: string }[]
   { value: 'ALL', label: 'Todos' },
 ];
 
-/** Qué puede hacer el panel en cada estado (CA7); Entregado y Cancelado son finales. */
 const ACTIONS: Record<RoomServiceOrderStatus, { status: NextStatus; label: string }[]> = {
   RECEIVED: [
     { status: 'IN_PREPARATION', label: 'En preparación' },
@@ -168,7 +167,6 @@ export default function RoomServiceOrdersPage() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
-        {/* Tabla: pantallas anchas */}
         <div className="hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[900px] border-collapse text-left text-sm">
             <thead>
@@ -219,7 +217,6 @@ export default function RoomServiceOrdersPage() {
           </table>
         </div>
 
-        {/* Tarjetas: celular y tablet */}
         <div className="lg:hidden">
           {message && <p className={`px-5 py-10 text-center text-sm ${message.tone}`}>{message.text}</p>}
 

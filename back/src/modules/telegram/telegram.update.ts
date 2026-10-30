@@ -51,7 +51,6 @@ import {
 
 const HISTORY_SIZE = 6;
 
-/** Respuesta del bot; algunas llevan botones (room service: confirmar o cancelar el pedido). */
 type BotReply =
   string | { text: string; keyboard: ReturnType<typeof Markup.inlineKeyboard> };
 
@@ -113,10 +112,6 @@ export class TelegramUpdate {
     );
   }
 
-  /**
-   * US-24: el huésped tocó un botón de room service. Confirmar el pedido o su cancelación pasa
-   * solo por acá: Chamber muestra el resumen, pero no registra nada sin el botón (CA4/CA8).
-   */
   @Action(ROOM_SERVICE_CALLBACK)
   async onRoomServiceAction(@Ctx() ctx: Context) {
     await ctx.answerCbQuery().catch(() => undefined);
@@ -127,7 +122,6 @@ export class TelegramUpdate {
     const match = ROOM_SERVICE_CALLBACK.exec(data);
     if (!ctx.from || !match) return;
 
-    // Se sacan los botones para que no se puedan tocar dos veces.
     await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
 
     const [, button, orderId] = match;
@@ -496,7 +490,6 @@ export class TelegramUpdate {
     return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
-  /** CA3/CA4: arma el resumen del pedido y le agrega los botones para confirmarlo. */
   private async resolvePrepareRoomService(
     datos: unknown,
     telegramUserId: string,
@@ -523,7 +516,6 @@ export class TelegramUpdate {
       : result.reply;
   }
 
-  /** CA8: pregunta si quiere cancelar (con botones) o explica por qué ya no se puede. */
   private async resolveCancelRoomService(
     telegramUserId: string,
   ): Promise<BotReply> {

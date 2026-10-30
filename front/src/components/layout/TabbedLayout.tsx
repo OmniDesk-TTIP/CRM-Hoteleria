@@ -10,7 +10,6 @@ export interface TabItem {
   end?: boolean;
   /** Muestra un contador al lado del nombre cuando es mayor a 0. */
   badge?: 'pendingSpaReservations' | 'pendingRestaurantReservations';
-  /** Sin `roles` la ve cualquier usuario logueado. */
   roles?: UserRole[];
 }
 

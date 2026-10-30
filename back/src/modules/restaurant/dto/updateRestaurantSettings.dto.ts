@@ -68,7 +68,6 @@ export class UpdateRestaurantSettingsDto {
   @Max(50, { message: 'La cantidad máxima de personas no puede superar 50' })
   maxPartySize!: number;
 
-  // US-24: opcionales para no romper a los clientes que todavía no los mandan.
   @IsOptional()
   @IsBoolean({ message: 'roomServiceEnabled debe ser verdadero o falso' })
   roomServiceEnabled?: boolean;

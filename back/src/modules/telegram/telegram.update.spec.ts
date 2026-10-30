@@ -1065,7 +1065,6 @@ describe('TelegramUpdate', () => {
       ],
     };
 
-    /** Callback de un botón inline, como lo manda Telegram. */
     const buttonCtx = (data: string) => ({
       ...mockCtx,
       callbackQuery: { data },

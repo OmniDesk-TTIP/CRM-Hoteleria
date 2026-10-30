@@ -28,8 +28,6 @@ import {
   RoomServiceOrderModel,
 } from './roomService.model';
 
-// ───────── Chamber (`prepare_room_service_order`) ─────────
-
 export class RoomServiceOrderLineDto {
   @IsUUID('all', { message: 'El plato debe ser un id válido' })
   menuItemId!: string;
@@ -66,9 +64,6 @@ export class PrepareRoomServiceOrderDto {
   notes?: string;
 }
 
-// ───────── Panel (`/room-service-orders`) ─────────
-
-/** Estados que el panel puede listar: el borrador del chat nunca se muestra. */
 export const LISTABLE_STATUSES = [
   RoomServiceOrderStatus.RECEIVED,
   RoomServiceOrderStatus.IN_PREPARATION,
@@ -117,7 +112,6 @@ export class RoomServiceOrderDto {
   items: RoomServiceOrderItem[];
   notes: string | null;
   total: number;
-  /** Fecha y hora en que el huésped confirmó el pedido. */
   confirmedAt: string | null;
 
   static fromModel(model: RoomServiceOrderModel): RoomServiceOrderDto {
@@ -144,8 +138,6 @@ export interface PaginatedRoomServiceOrdersDto {
   page: number;
   pageSize: number;
 }
-
-// ───────── Landing (`GET /public/room-service`) ─────────
 
 export interface PublicRoomServiceDto {
   available: boolean;

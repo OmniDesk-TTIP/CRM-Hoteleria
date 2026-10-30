@@ -11,7 +11,6 @@ import {
 import { RoomServiceRepository } from './roomService.repository';
 import { RoomServiceService } from './roomService.service';
 
-// La carta y el horario salen del restó; SpaModule aporta el reloj del hotel.
 @Module({
   imports: [RestaurantModule, SpaModule, ChatModule, PaymentModule],
   controllers: [

@@ -71,7 +71,6 @@ export class RestaurantRepository {
     return entities.map((entity) => this.toMenuItemModel(entity));
   }
 
-  /** US-24: los platos habilitados que además se pueden pedir a la habitación. */
   async findRoomServiceMenuItems(): Promise<MenuItemModel[]> {
     const entities = await this.em.find(
       RestaurantMenuItem,

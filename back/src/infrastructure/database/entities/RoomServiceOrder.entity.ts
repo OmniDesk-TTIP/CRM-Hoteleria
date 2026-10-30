@@ -12,7 +12,6 @@ import { CustomBaseEntity } from './CustomBase.entity';
 import { Reservation } from './Reservation.entity';
 
 export enum RoomServiceOrderStatus {
-  /** Borrador: Chamber le mostró el resumen y espera que el huésped toque "Confirmar pedido". */
   PENDING_CONFIRMATION = 'PENDING_CONFIRMATION',
   RECEIVED = 'RECEIVED',
   IN_PREPARATION = 'IN_PREPARATION',
@@ -33,11 +32,6 @@ export interface RoomServiceOrderItem {
   notes: string | null;
 }
 
-/**
- * Pedido de room service hecho por el chat (US-24). Los platos, el nombre del huésped y el número
- * de habitación son una foto del momento del pedido, para que el panel no cambie si después se
- * reprecia un plato o se mueve la reserva. El total queda asociado a la reserva del huésped.
- */
 @Entity({ tableName: 'room_service_orders' })
 @Index({ properties: ['status'] })
 export class RoomServiceOrder extends CustomBaseEntity {
@@ -73,7 +67,6 @@ export class RoomServiceOrder extends CustomBaseEntity {
   paymentStatus: RoomServicePaymentStatus & Opt =
     RoomServicePaymentStatus.PENDING;
 
-  /** Cuándo el huésped confirmó el pedido; null mientras es borrador. */
   @Property({ type: 'datetime', nullable: true })
   confirmedAt?: Date | null;
 

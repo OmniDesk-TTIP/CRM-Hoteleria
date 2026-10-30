@@ -9,11 +9,9 @@ import { groupMenu, MenuItemModel } from '../restaurant/model/restaurant.model';
 import { toMinutes } from '../supportHours/supportHours.util';
 import { escapeHtml } from '../telegram/telegram.format';
 
-/** Tope de platos distintos y de unidades por plato en un pedido por chat. */
 export const MAX_ORDER_LINES = 20;
 export const MAX_QUANTITY_PER_ITEM = 20;
 
-/** Cuánto vale el resumen que se le mostró al huésped: pasado ese rato hay que armarlo de nuevo. */
 export const DRAFT_TTL_MINUTES = 60;
 
 export const ORDER_STATUS_LABELS: Record<RoomServiceOrderStatus, string> = {
@@ -24,13 +22,11 @@ export const ORDER_STATUS_LABELS: Record<RoomServiceOrderStatus, string> = {
   [RoomServiceOrderStatus.CANCELLED]: 'Cancelado',
 };
 
-/** Estados en los que el pedido sigue en curso (el huésped lo puede consultar o cancelar). */
 export const OPEN_STATUSES = [
   RoomServiceOrderStatus.RECEIVED,
   RoomServiceOrderStatus.IN_PREPARATION,
 ];
 
-/** Lo que el panel puede hacer con un pedido. El borrador no se toca desde el panel. */
 const ALLOWED_TRANSITIONS: Record<
   RoomServiceOrderStatus,
   RoomServiceOrderStatus[]
@@ -48,8 +44,6 @@ const ALLOWED_TRANSITIONS: Record<
   [RoomServiceOrderStatus.CANCELLED]: [],
 };
 
-// ───────── Estadía en curso (CA1) ─────────
-
 export interface CurrentStay {
   reservationId: string;
   guestFullName: string;
@@ -59,18 +53,10 @@ export interface CurrentStay {
 
 interface StayCandidate {
   status: ReservationStatus;
-  /** YYYY-MM-DD */
   checkIn: string;
-  /** YYYY-MM-DD */
   checkOut: string;
 }
 
-/**
- * CA1: room service es solo para el huésped que está alojado hoy. A diferencia del spa y el restó,
- * no alcanza con una reserva futura: tiene que haber empezado (checkIn <= hoy) y no haber
- * terminado (el día de salida todavía cuenta). Fechas en YYYY-MM-DD, así que comparar strings
- * equivale a comparar días.
- */
 export function findCurrentStay<T extends StayCandidate>(
   reservations: T[],
   today: string,
@@ -86,13 +72,9 @@ export function findCurrentStay<T extends StayCandidate>(
   return current[0] ?? null;
 }
 
-// ───────── Horario (CA5) ─────────
-
 export interface RoomServiceHours {
   enabled: boolean;
-  /** HH:mm */
   opensAt: string;
-  /** HH:mm; si es menor que opensAt, la franja cruza la medianoche. */
   closesAt: string;
 }
 
@@ -112,8 +94,6 @@ export function isRoomServiceOpen(
 export function describeRoomServiceHours(hours: RoomServiceHours): string {
   return `todos los días de ${hours.opensAt} a ${hours.closesAt}`;
 }
-
-// ───────── Pedido ─────────
 
 export interface RoomServiceOrderProps {
   id: string;
@@ -139,10 +119,6 @@ export interface OrderLine {
 
 const roundMoney = (amount: number): number => Math.round(amount * 100) / 100;
 
-/**
- * Regla de negocio de un pedido de room service. Pura: sin DB ni ORM.
- * El repository la convierte desde y hacia la entidad.
- */
 export class RoomServiceOrderModel {
   readonly id: string;
   status: RoomServiceOrderStatus;
@@ -174,11 +150,6 @@ export class RoomServiceOrderModel {
     this.createdAt = props.createdAt;
   }
 
-  /**
-   * CA3/CA4: arma el borrador con los platos ya validados. Las líneas del mismo plato se suman
-   * (si el huésped pide "2 cafés" y después "1 café más", es un solo renglón de 3). El borrador no
-   * aparece en el panel hasta que el huésped lo confirma.
-   */
   static createDraft(input: {
     telegramUserId: string;
     stay: CurrentStay;
@@ -225,7 +196,6 @@ export class RoomServiceOrderModel {
     });
   }
 
-  /** ¿Las cantidades y la cantidad de renglones están dentro de lo que se toma por chat? */
   static getLinesError(lines: OrderLine[]): string | null {
     if (lines.length === 0) return 'Decime qué querés pedir.';
     if (lines.length > MAX_ORDER_LINES) {
@@ -255,7 +225,6 @@ export class RoomServiceOrderModel {
     );
   }
 
-  /** CA4: el huésped tocó "Confirmar pedido": recién ahí el pedido existe para el panel. */
   confirm(now: Date): string | null {
     if (!this.isDraft()) return 'Ese pedido ya fue confirmado.';
     this.status = RoomServiceOrderStatus.RECEIVED;
@@ -267,7 +236,6 @@ export class RoomServiceOrderModel {
     return ALLOWED_TRANSITIONS[this.status].includes(next);
   }
 
-  /** CA7: cambio de estado desde el panel. Devuelve el motivo si no se pudo, o null si se aplicó. */
   changeStatus(next: RoomServiceOrderStatus): string | null {
     if (!this.canTransitionTo(next)) {
       return `No se puede pasar un pedido de ${ORDER_STATUS_LABELS[this.status]} a ${ORDER_STATUS_LABELS[next]}`;
@@ -276,7 +244,6 @@ export class RoomServiceOrderModel {
     return null;
   }
 
-  /** CA8: el huésped solo cancela mientras el pedido está "Recibido". */
   getGuestCancelError(): string | null {
     if (this.status === RoomServiceOrderStatus.RECEIVED) return null;
     if (this.status === RoomServiceOrderStatus.IN_PREPARATION) {
@@ -292,7 +259,6 @@ export class RoomServiceOrderModel {
     return null;
   }
 
-  /** CA9: se acreditó el pago del pedido. */
   confirmPayment(): string | null {
     if (this.isDraft()) return 'El pedido todavía no fue confirmado';
     if (this.paymentStatus === RoomServicePaymentStatus.PAID) {
@@ -302,7 +268,6 @@ export class RoomServiceOrderModel {
     return null;
   }
 
-  /** CA4: resumen que se le muestra al huésped antes de confirmar (HTML de Telegram). */
   getSummary(): string {
     const lines = this.items.map((item) => {
       const notes = item.notes ? ` (${escapeHtml(item.notes)})` : '';
@@ -324,7 +289,6 @@ export class RoomServiceOrderModel {
       .join(', ');
   }
 
-  /** CA7: aviso al huésped cuando el panel cambia el estado (texto plano). */
   getStatusNotice(): string | null {
     if (this.status === RoomServiceOrderStatus.IN_PREPARATION) {
       return `👨‍🍳 Tu pedido de room service (${this.describeItems()}) ya está en preparación.`;
@@ -346,8 +310,6 @@ export class RoomServiceOrderModel {
     return `💳 ¡Recibimos el pago de tu pedido de room service ($${this.total})! Gracias.`;
   }
 }
-
-// ───────── Bloque para Chamber (CA1/CA2/CA5) ─────────
 
 export const MAX_ROOM_SERVICE_ITEMS_IN_BLOCK = 60;
 

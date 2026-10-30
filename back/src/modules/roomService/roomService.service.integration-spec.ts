@@ -35,13 +35,6 @@ import {
   RoomServicePaymentStatus,
 } from '../../infrastructure/database/entities/RoomServiceOrder.entity';
 
-/**
- * Integración de RoomServiceService (US-24) contra la base de test: reservas, carta, settings y
- * pedidos son filas reales; Mercado Pago y Telegram están simulados.
- *
- * Estadía del huésped: 10 al 20 de marzo de 2099. Room service de 07:00 a 23:00.
- * "Hoy" lo fija cada test con `now`.
- */
 describe('RoomServiceService (integración)', () => {
   let app: INestApplication;
   let orm: MikroORM;
@@ -56,9 +49,7 @@ describe('RoomServiceService (integración)', () => {
   let seq = 0;
   const next = () => `${suffix}-${++seq}`;
 
-  // 15/03/2099 12:00 en Buenos Aires: dentro de la estadía y del horario.
   const NOW = new Date(Date.UTC(2099, 2, 15, 15, 0));
-  // 15/03/2099 02:00 en Buenos Aires: fuera del horario de room service.
   const NIGHT = new Date(Date.UTC(2099, 2, 15, 5, 0));
   const INIT_POINT = 'https://mp.example/pagar-room-service';
   const GUEST_NAME = 'Ana Room Service';
@@ -91,7 +82,6 @@ describe('RoomServiceService (integración)', () => {
     const reservation = em.create(Reservation, {
       room: em.getReference(Room, roomId),
       telegramUserId,
-      // mediodía local: el día calendario no se corre con ninguna zona horaria
       checkIn,
       checkOut,
       status,
@@ -146,7 +136,6 @@ describe('RoomServiceService (integración)', () => {
     notes?: string,
   ) => service.prepareOrder(telegramUserId, { items, notes }, now);
 
-  /** Arma y confirma un pedido de 2 cafés; devuelve su id. */
   const placeOrder = async (telegramUserId: string) => {
     const draft = await prepare(telegramUserId, [
       { menuItemId: coffee.id, quantity: 2 },
@@ -211,7 +200,6 @@ describe('RoomServiceService (integración)', () => {
     categoryId = category.id;
     roomId = room.id;
 
-    // Los settings del restó son una sola fila compartida: se reusa y se restaura al final.
     const [settings] = await em.find(
       RestaurantSettings,
       {},
@@ -242,7 +230,6 @@ describe('RoomServiceService (integración)', () => {
   });
 
   beforeEach(async () => {
-    // El service usa el EntityManager global: sin esto podría devolver filas cacheadas de otro test.
     orm.em.clear();
     await setHours(true);
     sendMessage.mockReset();
@@ -279,10 +266,9 @@ describe('RoomServiceService (integración)', () => {
       }
       await em.nativeDelete(Room, { id: roomId });
       await em.nativeDelete(RoomCategory, { id: categoryId });
-    } catch {
-      // no-op: limpieza best-effort
+    } finally {
+      if (app) await app.close();
     }
-    if (app) await app.close();
   });
 
   describe('quién puede pedir (CA1)', () => {
@@ -398,7 +384,6 @@ describe('RoomServiceService (integración)', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.orderId).toBeDefined();
-      // resumen: ítems, cantidades, aclaraciones, total y habitación, escapado para Telegram
       expect(result.reply).toContain(`habitación <b>${roomNumber}</b>`);
       expect(result.reply).toContain('2 x Plato &lt;rs&gt;');
       expect(result.reply).toContain('(sin azúcar)');
@@ -486,7 +471,6 @@ describe('RoomServiceService (integración)', () => {
       expect(row.mpInitPoint).toBe(INIT_POINT);
       expect(row.confirmedAt).toEqual(NOW);
 
-      // CA6: visible en el panel con huésped, habitación, ítems, total, fecha y estado
       const panel = await service.list({
         status: RoomServiceOrderStatus.RECEIVED,
         page: 1,
