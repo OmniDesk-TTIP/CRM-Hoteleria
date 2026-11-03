@@ -318,7 +318,6 @@ export interface RoomServiceBlockInput {
   isOpenNow: boolean;
   stay: CurrentStay | null;
   menu: MenuItemModel[];
-  menuUrl: string | null;
   openOrder: RoomServiceOrderModel | null;
 }
 
@@ -327,7 +326,6 @@ export function buildRoomServiceBlock({
   isOpenNow,
   stay,
   menu,
-  menuUrl,
   openOrder,
 }: RoomServiceBlockInput): string {
   const lines = ['[ROOM SERVICE]'];
@@ -350,9 +348,6 @@ export function buildRoomServiceBlock({
     isOpenNow
       ? 'ESTADO: ABIERTO, se pueden tomar pedidos ahora.'
       : 'ESTADO: CERRADO en este momento. No tomes pedidos: informale el horario.',
-    menuUrl
-      ? `CARTA EN LA WEB: ${menuUrl}`
-      : 'CARTA EN LA WEB: no hay link publicado.',
   );
 
   if (openOrder) {
