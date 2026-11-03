@@ -59,7 +59,7 @@ export class ArrivalMessageService {
       configService.get<string>('HOTEL_ARRIVAL_INFO') || DEFAULT_ARRIVAL_INFO;
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_MINUTE)
   async handleMessagesCron(): Promise<void> {
     try {
       await this.sendDueMessages(new Date());

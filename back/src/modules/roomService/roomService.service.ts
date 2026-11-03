@@ -4,7 +4,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectBot } from 'nestjs-telegraf';
 import { Context, Telegraf } from 'telegraf';
 import {
@@ -45,8 +44,6 @@ export interface RoomServiceChatContext {
   hasOpenOrder: boolean;
 }
 
-const DEFAULT_LANDING_ROOM_SERVICE_PATH = '/room-service';
-
 const NOT_STAYING_REASON =
   'El room service es exclusivo para huéspedes alojados en el hotel.';
 
@@ -60,7 +57,6 @@ export class RoomServiceService {
     private readonly spaService: SpaService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaymentService,
-    private readonly configService: ConfigService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
@@ -87,7 +83,6 @@ export class RoomServiceService {
         isOpenNow,
         stay,
         menu,
-        menuUrl: this.getMenuUrl(),
         openOrder,
       }),
       canOrder: stay !== null && isOpenNow && menu.length > 0,
@@ -349,13 +344,6 @@ export class RoomServiceService {
       hours,
       await this.restaurantService.listRoomServiceMenu(),
     );
-  }
-
-  getMenuUrl(): string | null {
-    const landing = this.configService.get<string>('LANDING_BASE_URL');
-    return landing
-      ? `${landing.replace(/\/+$/, '')}${DEFAULT_LANDING_ROOM_SERVICE_PATH}`
-      : null;
   }
 
   private async getHours(): Promise<RoomServiceHours> {
