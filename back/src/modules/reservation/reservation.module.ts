@@ -7,6 +7,7 @@ import { BookingProcessModule } from '../bookingProcess/bookingProcess.module';
 import { RoomModule } from '../room/room.module';
 import { PaymentModule } from '../payment/payment.module';
 import { CancellationModule } from '../cancellation/cancellation.module';
+import { PromotionModule } from '../promotion/promotion.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CancellationModule } from '../cancellation/cancellation.module';
     RoomModule,
     PaymentModule,
     CancellationModule,
+    PromotionModule,
   ],
   controllers: [ReservationAdminController],
   providers: [

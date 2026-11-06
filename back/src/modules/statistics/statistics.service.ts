@@ -21,10 +21,11 @@ export class StatisticsService {
     const fromKey = this.rangeStartKey(range, now, timeZone);
     const from = fromKey ? zonedStartOfDay(fromKey, timeZone) : null;
 
-    const [salesRows, handover, cancellations] = await Promise.all([
+    const [salesRows, handover, cancellations, promotions] = await Promise.all([
       this.statisticsRepository.salesByOrigin(from),
       this.statisticsRepository.handoverCounts(from),
       this.statisticsRepository.cancellationTotals(from),
+      this.statisticsRepository.promotionDiscountTotals(from),
     ]);
 
     const bot = salesRows.find((row) => row.origin === ReservationOrigin.BOT);
@@ -51,6 +52,8 @@ export class StatisticsService {
         cancellationRetained: round2(cancellations.retained),
         refundsPending: round2(cancellations.refundsPending),
         refundsCompleted: round2(cancellations.refundsCompleted),
+        promotionDiscounts: round2(promotions.discounts),
+        promotionSales: promotions.count,
       },
       handover: {
         totalSessions: handover.totalSessions,

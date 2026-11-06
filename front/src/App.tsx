@@ -23,6 +23,7 @@ import RefundsPage from '@/pages/admin/RefundsPage';
 import CancellationPoliciesPage from '@/pages/admin/CancellationPoliciesPage';
 import ReviewsPage from '@/pages/admin/ReviewsPage';
 import CampaignsPage from '@/pages/admin/CampaignsPage';
+import PromotionsPage from '@/pages/admin/PromotionsPage';
 import RoomServiceOrdersPage from '@/pages/admin/RoomServiceOrdersPage';
 
 const RESERVATION_TABS: TabItem[] = [
@@ -37,6 +38,11 @@ const SERVICE_TABS: TabItem[] = [
   { to: '/admin/services', label: 'Habitaciones', end: true },
   { to: '/admin/services/spa', label: 'Spa' },
   { to: '/admin/services/restaurant', label: 'Restó' },
+];
+
+const CAMPAIGN_TABS: TabItem[] = [
+  { to: '/admin/campaigns', label: 'Campañas', end: true },
+  { to: '/admin/campaigns/promotions', label: 'Promociones' },
 ];
 
 const SETTINGS_TABS: TabItem[] = [
@@ -106,8 +112,14 @@ function App() {
                   <Route element={<ProtectedRoute roles={['ADMIN']} />}>
                     <Route path="/admin/statistics" element={<StatisticsPage />} />
                     <Route path="/admin/reviews" element={<ReviewsPage />} />
-                    {/* US-13: campañas masivas por Telegram */}
-                    <Route path="/admin/campaigns" element={<CampaignsPage />} />
+                    {/* US-13: campañas masivas por Telegram. US-21: promociones, que se difunden con ellas */}
+                    <Route
+                      path="/admin/campaigns"
+                      element={<TabbedLayout tabs={CAMPAIGN_TABS} maxWidth="max-w-7xl" />}
+                    >
+                      <Route index element={<CampaignsPage />} />
+                      <Route path="promotions" element={<PromotionsPage />} />
+                    </Route>
 
                     {/* Configuración: las reglas del bot y los horarios de la recepción, la primera es Reglas */}
                     <Route

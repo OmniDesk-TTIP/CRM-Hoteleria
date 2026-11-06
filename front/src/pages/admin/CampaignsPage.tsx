@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { countCampaignRecipients, createCampaign, listCampaigns } from '@/services/campaign.service';
-import type { Campaign, CampaignAudience } from '@/config/types';
+import type { Campaign, CampaignAudience, Promotion } from '@/config/types';
+import { buildPromotionMessage } from '@/components/admin/promotionFormat';
 import CampaignPreview from '@/components/campaigns/CampaignPreview';
 import ConfirmCampaignModal from '@/components/campaigns/ConfirmCampaignModal';
 import CampaignHistory from '@/components/campaigns/CampaignHistory';
@@ -24,8 +26,13 @@ const inputClasses =
 
 /** US-13: campañas masivas por Telegram. Solo Administradores (CA6). */
 export default function CampaignsPage() {
-  const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  // US-21 CA8: la pantalla de promociones llega acá con la promoción a difundir.
+  const promotion = (location.state as { promotion?: Promotion } | null)?.promotion;
+
+  const [title, setTitle] = useState(promotion?.title ?? '');
+  const [message, setMessage] = useState(promotion ? buildPromotionMessage(promotion) : '');
   const [audience, setAudience] = useState<CampaignAudience>('ALL');
   const [image, setImage] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -37,13 +44,20 @@ export default function CampaignsPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    promotion ? `Armamos la campaña con la promoción «${promotion.title}». Revisala y elegí los destinatarios.` : null,
+  );
 
   const [page, setPage] = useState(1);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // El formulario ya tomó la promoción: si queda en el historial, recargar lo volvería a pisar.
+  useEffect(() => {
+    if (location.state) navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const fetchCampaigns = useCallback(async () => {
     setIsLoading(true);

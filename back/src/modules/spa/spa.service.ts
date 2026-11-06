@@ -7,6 +7,9 @@ import {
 import { ReservationRepository } from '../reservation/reservation.repository';
 import { SupportHoursService } from '../supportHours/supportHours.service';
 import { zonedNow } from '../supportHours/supportHours.util';
+import { PromotionTarget } from '../../infrastructure/database/entities/Promotion.entity';
+import { PromotionService } from '../promotion/promotion.service';
+import { pickBestPromotion } from '../promotion/promotion.model';
 import { SpaRepository } from './spa.repository';
 import {
   buildSpaServicesBlock,
@@ -25,6 +28,7 @@ export class SpaService {
     private readonly spaRepository: SpaRepository,
     private readonly reservationRepository: ReservationRepository,
     private readonly supportHoursService: SupportHoursService,
+    private readonly promotionService: PromotionService,
   ) {}
 
   list(): Promise<SpaServiceModel[]> {
@@ -78,8 +82,13 @@ export class SpaService {
    */
   async getSpaContextBlock(telegramUserId: string): Promise<string> {
     const isGuest = (await this.findEligibleStay(telegramUserId)) !== null;
+    const promotion = isGuest
+      ? null
+      : pickBestPromotion(await this.promotionService.listActive(), {
+          target: PromotionTarget.SPA,
+        });
 
-    return buildSpaServicesBlock(await this.listActive(), isGuest);
+    return buildSpaServicesBlock(await this.listActive(), isGuest, promotion);
   }
 
   /** Hoy (YYYY-MM-DD) y minutos desde la medianoche, en la zona horaria del hotel. */

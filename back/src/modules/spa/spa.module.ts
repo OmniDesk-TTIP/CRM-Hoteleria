@@ -8,9 +8,10 @@ import { SpaRepository } from './spa.repository';
 import { SpaPhotoRepository } from './spaPhoto.repository';
 import { ReservationModule } from '../reservation/reservation.module';
 import { SupportHoursModule } from '../supportHours/supportHours.module';
+import { PromotionModule } from '../promotion/promotion.module';
 
 @Module({
-  imports: [ReservationModule, SupportHoursModule],
+  imports: [ReservationModule, SupportHoursModule, PromotionModule],
   controllers: [SpaController, SpaPhotoController, SpaPublicController],
   providers: [SpaRepository, SpaPhotoRepository, SpaService, SpaPhotoService],
   exports: [SpaService],

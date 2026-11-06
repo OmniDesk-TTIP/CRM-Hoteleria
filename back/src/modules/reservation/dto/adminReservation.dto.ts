@@ -15,6 +15,9 @@ export class AdminReservationDto {
   origin!: ReservationOrigin;
   totalAmount!: number;
   depositAmount!: number;
+  promotionTitle!: string | null;
+  promotionPercentage!: number | null;
+  discountAmount!: number;
   room!: {
     id: string;
     roomNumber: string;
@@ -40,6 +43,9 @@ export class AdminReservationDto {
     dto.origin = reservation.origin;
     dto.totalAmount = Number(reservation.totalAmount);
     dto.depositAmount = Number(reservation.depositAmount);
+    dto.promotionTitle = reservation.promotionTitle ?? null;
+    dto.promotionPercentage = reservation.promotionPercentage ?? null;
+    dto.discountAmount = Number(reservation.discountAmount);
     dto.room = {
       id: reservation.room.id,
       roomNumber: reservation.room.roomNumber,

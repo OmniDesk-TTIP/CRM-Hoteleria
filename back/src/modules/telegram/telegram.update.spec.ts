@@ -12,6 +12,7 @@ import { CancellationService } from '../cancellation/cancellation.service';
 import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import { RoomServiceService } from '../roomService/roomService.service';
+import { PromotionService } from '../promotion/promotion.service';
 import {
   ChatSessionStatus,
   HandoverReason,
@@ -120,6 +121,12 @@ describe('TelegramUpdate', () => {
             getGuestContextBlock: jest.fn(),
             cancelForGuest: jest.fn(),
             registerRefundAccountForGuest: jest.fn(),
+          },
+        },
+        {
+          provide: PromotionService,
+          useValue: {
+            getChatBlock: jest.fn().mockResolvedValue('[PROMOCIONES VIGENTES]'),
           },
         },
         {
@@ -244,6 +251,7 @@ describe('TelegramUpdate', () => {
       false,
       { block: '[RESTAURANTE]', canBook: true },
       { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
+      '[PROMOCIONES VIGENTES]',
     );
   });
 
@@ -454,6 +462,7 @@ describe('TelegramUpdate', () => {
         '[SERVICIOS DEL HOTEL]',
         expect.anything(),
         true,
+        expect.anything(),
         expect.anything(),
         expect.anything(),
       );
@@ -1093,6 +1102,7 @@ describe('TelegramUpdate', () => {
         false,
         expect.anything(),
         { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
+        expect.anything(),
       );
     });
 

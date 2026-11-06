@@ -159,6 +159,52 @@ describe('RagService', () => {
       jest.useRealTimers();
     });
 
+    describe('promociones (US-21 CA4)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+
+      it('agrega las promociones vigentes y le prohíbe inventar descuentos', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          '¿Tienen promociones?',
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          null,
+          null,
+          '[PROMOCIONES VIGENTES]\n- Escapada | 20% de descuento',
+        );
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- Escapada | 20% de descuento');
+        expect(systemInstruction).toContain('REGLA PARA PROMOCIONES');
+        expect(systemInstruction).toContain('No inventes promociones');
+        expect(systemInstruction).not.toContain(
+          'No tenés información de promociones',
+        );
+      });
+
+      it('sin información de promociones no promete descuentos', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion('¿Tienen promociones?');
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información de promociones',
+        );
+      });
+    });
+
     describe('spa (CA3)', () => {
       const readChatConfig = () =>
         getGenerativeModelMock.mock.calls.find(
