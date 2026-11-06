@@ -14,6 +14,7 @@ interface CreateReservationData {
   telegramUserId: string;
   checkIn: Date;
   checkOut: Date;
+  guestCount: number;
   totalAmount: number;
   depositAmount: number;
   guestFullName: string;

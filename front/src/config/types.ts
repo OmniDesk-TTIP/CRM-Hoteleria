@@ -761,12 +761,25 @@ export type CampaignAudience = 'ALL' | 'CONFIRMED' | 'NO_RESERVATION';
 
 export type CampaignStatus = 'SENDING' | 'COMPLETED' | 'INTERRUPTED';
 
-/** Una campaña del historial, con el progreso del envío (CA5). */
-export interface Campaign {
+/** Filtro opcional por la estadía, que se suma a los destinatarios base. */
+export type CampaignStayFilter = 'IN_HOUSE' | 'UPCOMING' | 'FINISHED' | 'UNPAID' | 'QUOTED';
+
+/** A quién va la campaña. Todo lo que no es `audience` es opcional (null = sin filtrar). */
+export interface CampaignRecipientFilter {
+  audience: CampaignAudience;
+  stayFilter: CampaignStayFilter | null;
+  /** YYYY-MM-DD. Con UPCOMING y QUOTED acota el check-in (reservado o consultado); con FINISHED, el check-out. */
+  stayFrom: string | null;
+  stayTo: string | null;
+  minGuests: number | null;
+  maxGuests: number | null;
+}
+
+/** Una campaña del historial, con los filtros aplicados y el progreso del envío (CA5). */
+export interface Campaign extends CampaignRecipientFilter {
   id: string;
   title: string;
   message: string;
-  audience: CampaignAudience;
   hasImage: boolean;
   status: CampaignStatus;
   totalRecipients: number;
@@ -780,10 +793,9 @@ export interface Campaign {
   finishedAt: string | null;
 }
 
-export interface CampaignFormData {
+export interface CampaignFormData extends CampaignRecipientFilter {
   title: string;
   message: string;
-  audience: CampaignAudience;
   image: File | null;
 }
 

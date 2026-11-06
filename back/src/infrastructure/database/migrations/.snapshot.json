@@ -555,6 +555,23 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "max_guests": {
+          "name": "max_guests",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
         "message": {
           "name": "message",
           "type": "text",
@@ -571,6 +588,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "text"
+        },
+        "min_guests": {
+          "name": "min_guests",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
         },
         "sent_count": {
           "name": "sent_count",
@@ -609,6 +643,63 @@
             "INTERRUPTED"
           ],
           "mappedType": "enum"
+        },
+        "stay_filter": {
+          "name": "stay_filter",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "IN_HOUSE",
+            "UPCOMING",
+            "FINISHED",
+            "UNPAID",
+            "QUOTED"
+          ],
+          "mappedType": "enum"
+        },
+        "stay_from": {
+          "name": "stay_from",
+          "type": "varchar(10)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 10,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "stay_to": {
+          "name": "stay_to",
+          "type": "varchar(10)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 10,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
         },
         "title": {
           "name": "title",
@@ -696,6 +787,12 @@
           "expression": "\"status\" in ('SENDING', 'COMPLETED', 'INTERRUPTED')",
           "definition": "check (\"status\" in ('SENDING', 'COMPLETED', 'INTERRUPTED'))",
           "columnName": "status"
+        },
+        {
+          "name": "campaigns_stay_filter_check",
+          "expression": "\"stay_filter\" in ('IN_HOUSE', 'UPCOMING', 'FINISHED', 'UNPAID', 'QUOTED')",
+          "definition": "check (\"stay_filter\" in ('IN_HOUSE', 'UPCOMING', 'FINISHED', 'UNPAID', 'QUOTED'))",
+          "columnName": "stay_filter"
         }
       ],
       "triggers": [],
@@ -2364,6 +2461,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "decimal"
+        },
+        "guest_count": {
+          "name": "guest_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
         },
         "guest_dni": {
           "name": "guest_dni",

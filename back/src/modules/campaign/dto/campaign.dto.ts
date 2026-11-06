@@ -1,10 +1,13 @@
+import { applyDecorators } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -14,14 +17,80 @@ import {
   Campaign,
   CampaignAudience,
   CampaignStatus,
+  CampaignStayFilter,
 } from '../../../infrastructure/database/entities/Campaign.entity';
-import { MAX_TEXT_LENGTH, MAX_TITLE_LENGTH } from '../campaign.model';
+import {
+  MAX_GUESTS_FILTER,
+  MAX_TEXT_LENGTH,
+  MAX_TITLE_LENGTH,
+} from '../campaign.model';
 
 const AUDIENCE_MESSAGE =
   'Los destinatarios deben ser ALL, CONFIRMED o NO_RESERVATION';
+const STAY_FILTER_MESSAGE =
+  'El estado de la estadía debe ser IN_HOUSE, UPCOMING, FINISHED, UNPAID o QUOTED';
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Query y multipart mandan los opcionales vacíos como "": se tratan como ausentes. */
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  value === '' || value === null ? undefined : value;
+
+/** Como `emptyToUndefined`, pero además pasa a número (sin `@Type`, que convertiría "" en 0). */
+const toOptionalNumber = ({ value }: { value: unknown }) => {
+  const present = emptyToUndefined({ value });
+  return typeof present === 'string' ? Number(present) : present;
+};
+
+const OptionalGuests = (label: string) =>
+  applyDecorators(
+    Transform(toOptionalNumber),
+    IsOptional(),
+    IsInt({ message: `${label} debe ser un número entero` }),
+    Min(1, { message: `${label} debe ser al menos 1` }),
+    Max(MAX_GUESTS_FILTER, {
+      message: `${label} no puede superar ${MAX_GUESTS_FILTER}`,
+    }),
+  );
+
+const OptionalDate = (label: string) =>
+  applyDecorators(
+    Transform(emptyToUndefined),
+    IsOptional(),
+    Matches(DATE_PATTERN, {
+      message: `${label} debe tener el formato YYYY-MM-DD`,
+    }),
+    IsISO8601({ strict: true }, { message: `${label} no es una fecha válida` }),
+  );
+
+/**
+ * A quién va la campaña: el grupo base (CA3 de US-13) más el filtro opcional por estadía.
+ * Las reglas que cruzan campos (fechas solo con ciertos estados, desde ≤ hasta, mín ≤ máx)
+ * están en `validateRecipientFilter`.
+ */
+export class RecipientFilterDto {
+  @IsIn(Object.values(CampaignAudience), { message: AUDIENCE_MESSAGE })
+  audience!: CampaignAudience;
+
+  @Transform(emptyToUndefined)
+  @IsOptional()
+  @IsIn(Object.values(CampaignStayFilter), { message: STAY_FILTER_MESSAGE })
+  stayFilter?: CampaignStayFilter;
+
+  @OptionalDate('La fecha "desde"')
+  stayFrom?: string;
+
+  @OptionalDate('La fecha "hasta"')
+  stayTo?: string;
+
+  @OptionalGuests('La cantidad mínima de personas')
+  minGuests?: number;
+
+  @OptionalGuests('La cantidad máxima de personas')
+  maxGuests?: number;
+}
 
 /** Llega como multipart (por la imagen opcional), así que todos los campos son texto. */
-export class CreateCampaignDto {
+export class CreateCampaignDto extends RecipientFilterDto {
   @Transform(trimString)
   @IsString({ message: 'El título debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'El título no puede estar vacío' })
@@ -37,15 +106,9 @@ export class CreateCampaignDto {
     message: `El mensaje no puede superar ${MAX_TEXT_LENGTH} caracteres`,
   })
   message!: string;
-
-  @IsIn(Object.values(CampaignAudience), { message: AUDIENCE_MESSAGE })
-  audience!: CampaignAudience;
 }
 
-export class RecipientsCountQueryDto {
-  @IsIn(Object.values(CampaignAudience), { message: AUDIENCE_MESSAGE })
-  audience!: CampaignAudience;
-}
+export class RecipientsCountQueryDto extends RecipientFilterDto {}
 
 export class RecipientsCountDto {
   audience!: CampaignAudience;
@@ -72,6 +135,11 @@ export class CampaignDto {
   title!: string;
   message!: string;
   audience!: CampaignAudience;
+  stayFilter!: CampaignStayFilter | null;
+  stayFrom!: string | null;
+  stayTo!: string | null;
+  minGuests!: number | null;
+  maxGuests!: number | null;
   hasImage!: boolean;
   status!: CampaignStatus;
   totalRecipients!: number;
@@ -88,6 +156,11 @@ export class CampaignDto {
     dto.title = campaign.title;
     dto.message = campaign.message;
     dto.audience = campaign.audience;
+    dto.stayFilter = campaign.stayFilter ?? null;
+    dto.stayFrom = campaign.stayFrom ?? null;
+    dto.stayTo = campaign.stayTo ?? null;
+    dto.minGuests = campaign.minGuests ?? null;
+    dto.maxGuests = campaign.maxGuests ?? null;
     dto.hasImage = campaign.hasImage;
     dto.status = campaign.status;
     dto.totalRecipients = campaign.totalRecipients;
