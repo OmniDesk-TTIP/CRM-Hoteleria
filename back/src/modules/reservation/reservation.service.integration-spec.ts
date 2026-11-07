@@ -568,6 +568,8 @@ describe('ReservationService (integración)', () => {
         telegramUserId: booking.telegramUserId,
       });
       expect(Number(saved.depositAmount)).toBe(0.3 * 4 * PRICE_B);
+      // Lo usan los filtros de campañas por cantidad de personas.
+      expect(saved.guestCount).toBe(ONLY_ROOM_B);
       expect(reply).toContain(`Total de la estadía: $${4 * PRICE_B}`);
       expect(reply).toContain(`Seña para reservarla: $${0.3 * 4 * PRICE_B}`);
       expect(reply).toContain(

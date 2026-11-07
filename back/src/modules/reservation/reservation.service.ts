@@ -221,6 +221,7 @@ export class ReservationService {
         telegramUserId,
         checkIn: checkInDate,
         checkOut: checkOutDate,
+        guestCount: capacity,
         totalAmount,
         depositAmount,
         guestFullName: guestData.fullName,

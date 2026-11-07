@@ -46,6 +46,13 @@ export class Reservation extends CustomBaseEntity {
   @Property({ type: 'date' })
   checkOut!: Date;
 
+  /**
+   * Cantidad de personas que pidió el huésped al buscar disponibilidad. Null en las reservas
+   * manuales (el panel no lo pide) y en las del bot anteriores a que se guardara.
+   */
+  @Property({ type: 'integer', nullable: true })
+  guestCount?: number | null;
+
   @Enum(() => ReservationStatus)
   status: ReservationStatus = ReservationStatus.PENDING_PAYMENT;
 

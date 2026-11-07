@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { countCampaignRecipients, createCampaign, listCampaigns } from '@/services/campaign.service';
-import type { Campaign, CampaignAudience, Promotion } from '@/config/types';
+import type { Campaign, CampaignRecipientFilter, Promotion } from '@/config/types';
 import { buildPromotionMessage } from '@/components/admin/promotionFormat';
 import CampaignPreview from '@/components/campaigns/CampaignPreview';
 import ConfirmCampaignModal from '@/components/campaigns/ConfirmCampaignModal';
 import CampaignHistory from '@/components/campaigns/CampaignHistory';
+import RecipientFilters from '@/components/campaigns/RecipientFilters';
 import {
   ACCEPTED_IMAGE_TYPES,
-  AUDIENCE_OPTIONS,
+  EMPTY_RECIPIENT_FILTER,
   MAX_IMAGE_BYTES,
   MAX_TITLE_LENGTH,
   maxMessageLength,
   pluralizeContacts,
+  recipientFilterError,
 } from '@/components/campaigns/campaignFormat';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
@@ -20,6 +22,8 @@ const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ?
 const PAGE_SIZE = 10;
 /** Mientras haya una campaña enviándose, el historial se actualiza solo. */
 const POLL_INTERVAL_MS = 3000;
+/** Espera a que el administrador termine de tipear fechas o personas antes de contar. */
+const COUNT_DEBOUNCE_MS = 400;
 
 const inputClasses =
   'w-full min-w-0 rounded-xl border border-goldLight/20 bg-surface px-3 py-2 text-sm text-text placeholder:text-textMuted focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60';
@@ -33,7 +37,7 @@ export default function CampaignsPage() {
 
   const [title, setTitle] = useState(promotion?.title ?? '');
   const [message, setMessage] = useState(promotion ? buildPromotionMessage(promotion) : '');
-  const [audience, setAudience] = useState<CampaignAudience>('ALL');
+  const [filter, setFilter] = useState<CampaignRecipientFilter>(EMPTY_RECIPIENT_FILTER);
   const [image, setImage] = useState<File | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -84,19 +88,33 @@ export default function CampaignsPage() {
     return () => clearInterval(timer);
   }, [isSending, fetchCampaigns]);
 
-  const refreshRecipients = useCallback(async (target: CampaignAudience) => {
+  const filterError = recipientFilterError(filter);
+
+  // Si el filtro cambia mientras se cuenta, la respuesta vieja llega tarde y no tiene que pisar a la nueva.
+  const countRequest = useRef(0);
+  const refreshRecipients = useCallback(async (target: CampaignRecipientFilter) => {
+    const request = ++countRequest.current;
     setRecipients(null);
     setRecipientsError(null);
     try {
-      setRecipients(await countCampaignRecipients(target));
+      const count = await countCampaignRecipients(target);
+      if (request === countRequest.current) setRecipients(count);
     } catch (err: unknown) {
-      setRecipientsError(errorMessage(err, 'No pude contar los destinatarios.'));
+      if (request === countRequest.current) setRecipientsError(errorMessage(err, 'No pude contar los destinatarios.'));
     }
   }, []);
 
   useEffect(() => {
-    refreshRecipients(audience);
-  }, [audience, refreshRecipients]);
+    // Con un filtro inválido no se cuenta: el panel muestra el error y no deja seguir.
+    if (filterError) {
+      countRequest.current += 1;
+      return;
+    }
+    const timer = setTimeout(() => refreshRecipients(filter), COUNT_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [filter, filterError, refreshRecipients]);
+
+  const changeFilter = (patch: Partial<CampaignRecipientFilter>) => setFilter((current) => ({ ...current, ...patch }));
 
   // El object URL vive mientras esté elegida la imagen; si no se libera, queda en memoria.
   const imageUrl = useMemo(() => (image ? URL.createObjectURL(image) : null), [image]);
@@ -131,7 +149,8 @@ export default function CampaignsPage() {
   const trimmedMessage = message.trim();
   const messageLimit = maxMessageLength(trimmedTitle, !!image);
   const isTooLong = trimmedMessage.length > messageLimit;
-  const canPreview = !!trimmedTitle && !!trimmedMessage && !isTooLong && recipients !== 0;
+  const canPreview =
+    !!trimmedTitle && !!trimmedMessage && !isTooLong && !filterError && recipients !== null && recipients > 0;
 
   const openConfirmation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,14 +159,14 @@ export default function CampaignsPage() {
     setSubmitError(null);
     setIsConfirming(true);
     // Se vuelve a contar: entre que se eligió el filtro y ahora pudieron escribir contactos nuevos.
-    refreshRecipients(audience);
+    refreshRecipients(filter);
   };
 
   const handleSend = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const campaign = await createCampaign({ title: trimmedTitle, message: trimmedMessage, audience, image });
+      const campaign = await createCampaign({ title: trimmedTitle, message: trimmedMessage, image, ...filter });
       setIsConfirming(false);
       setNotice(
         `Campaña «${campaign.title}» en camino a ${pluralizeContacts(campaign.totalRecipients)}. Podés seguir el envío en el historial.`,
@@ -163,8 +182,6 @@ export default function CampaignsPage() {
       setIsSubmitting(false);
     }
   };
-
-  const selectedAudience = AUDIENCE_OPTIONS.find((option) => option.value === audience);
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 md:space-y-6 md:p-6">
@@ -252,30 +269,12 @@ export default function CampaignsPage() {
             )}
           </div>
 
-          <label className="flex flex-col gap-1 text-sm text-textMuted">
-            Destinatarios *
-            <select
-              value={audience}
-              onChange={(e) => setAudience(e.target.value as CampaignAudience)}
-              className={inputClasses}
-            >
-              {AUDIENCE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs">
-              {selectedAudience?.description}{' '}
-              {recipientsError ? (
-                <span className="text-dangerText">{recipientsError}</span>
-              ) : recipients === null ? (
-                'Contando…'
-              ) : (
-                <strong className="text-text">{pluralizeContacts(recipients)}.</strong>
-              )}
-            </span>
-          </label>
+          <RecipientFilters
+            filter={filter}
+            onChange={changeFilter}
+            recipients={recipients}
+            error={filterError ?? recipientsError}
+          />
 
           <div className="flex justify-end">
             <button
@@ -312,7 +311,7 @@ export default function CampaignsPage() {
           title={trimmedTitle}
           message={trimmedMessage}
           imageUrl={imageUrl}
-          audience={audience}
+          filter={filter}
           recipients={recipients}
           isSubmitting={isSubmitting}
           error={submitError}
