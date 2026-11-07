@@ -24,6 +24,7 @@ import {
   RoomServiceService,
 } from '../roomService/roomService.service';
 import { PrepareRoomServiceOrderDto } from '../roomService/roomService.dto';
+import { PromotionService } from '../promotion/promotion.service';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -81,6 +82,7 @@ export class TelegramUpdate {
     private readonly restaurantReservationService: RestaurantReservationService,
     private readonly cancellationService: CancellationService,
     private readonly roomServiceService: RoomServiceService,
+    private readonly promotionService: PromotionService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -257,6 +259,7 @@ export class TelegramUpdate {
         await this.reservationService.hasPendingPayment(telegramUserId);
       const roomService =
         await this.roomServiceService.getChatContext(telegramUserId);
+      const promotions = await this.promotionService.getChatBlock();
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
@@ -267,6 +270,7 @@ export class TelegramUpdate {
         hasPendingPayment,
         restaurant,
         roomService,
+        promotions,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -585,8 +589,9 @@ export class TelegramUpdate {
         isShorterStay,
         roomCategory,
         totalAmount,
+        promotion,
       }) =>
-        `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}`,
+        `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}${promotion ? ` con la promoción ${escapeHtml(promotion)}` : ''}`,
     );
     return [
       'Lamentablemente no tenemos lugar en esas fechas, pero encontré estas opciones cercanas:',

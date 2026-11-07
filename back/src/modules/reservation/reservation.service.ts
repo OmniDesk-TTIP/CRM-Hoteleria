@@ -10,6 +10,17 @@ import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { RoomRepository } from '../room/room.repository';
 import { CancellationService } from '../cancellation/cancellation.service';
+import { PromotionTarget } from '../../infrastructure/database/entities/Promotion.entity';
+import { PromotionService } from '../promotion/promotion.service';
+import {
+  buildPromotionLine,
+  describeAmount,
+  priceWithPromotions,
+  PromotionModel,
+  PromotionPrice,
+  toAppliedPromotion,
+} from '../promotion/promotion.model';
+import { round2 } from '../../common/number.util';
 import { ReservationRepository } from './reservation.repository';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
 import {
@@ -53,7 +64,9 @@ export interface AlternativeDates {
   nights: number;
   isShorterStay: boolean;
   roomCategory: string;
+  /** Con el descuento de `promotion` ya aplicado. */
   totalAmount: number;
+  promotion?: string;
 }
 
 export type AvailabilityResult =
@@ -93,6 +106,7 @@ export class ReservationService {
     private readonly paymentService: PaymentService,
     private readonly configService: ConfigService,
     private readonly cancellationService: CancellationService,
+    private readonly promotionService: PromotionService,
   ) {}
 
   async searchAvailability(
@@ -118,6 +132,7 @@ export class ReservationService {
       bookingData.checkOut,
       bookingData.capacity,
     );
+    const promotions = await this.promotionService.listActive();
 
     if (choice) {
       const nights = this.calculateNights(
@@ -128,15 +143,24 @@ export class ReservationService {
         choice.leavesGap && !isInsistingOnSameDates
           ? await this.findGapFreeVariants(bookingData, choice.reservations)
           : [];
+      const price = this.priceStay(choice.room, nights, promotions);
       if (variants.length > 0) {
         this.bookingProcessService.markInProgress(booking);
       } else {
+        booking.quotedTotal = price.finalAmount;
         this.bookingProcessService.markPendingConfirmation(booking);
       }
 
       return {
         available: true,
-        reply: this.buildOfferReply(choice.room, bookingData, nights, variants),
+        reply: this.buildOfferReply(
+          choice.room,
+          bookingData,
+          nights,
+          price,
+          variants,
+          promotions,
+        ),
       };
     }
 
@@ -145,6 +169,7 @@ export class ReservationService {
       bookingData.checkIn,
       bookingData.checkOut,
       bookingData.capacity,
+      promotions,
     );
     return { available: false, alternatives };
   }
@@ -167,8 +192,29 @@ export class ReservationService {
       const checkInDate = parseDate(savedCheckIn);
       const checkOutDate = parseDate(savedCheckOut);
       const nights = this.calculateNights(savedCheckIn, savedCheckOut);
-      const totalAmount = roomToBook.category.basePrice * nights;
-      const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
+      const price = this.priceStay(
+        roomToBook,
+        nights,
+        await this.promotionService.listActive(),
+      );
+      const totalAmount = price.finalAmount;
+      const depositAmount = this.depositFor(totalAmount);
+
+      // La promoción pudo vencer o deshabilitarse desde la oferta: no se reserva a otro precio sin avisar.
+      if (
+        activeBooking.quotedTotal != null &&
+        Number(activeBooking.quotedTotal) !== totalAmount
+      ) {
+        activeBooking.quotedTotal = totalAmount;
+        return [
+          `Antes de reservarte: el precio cambió desde que te lo ofrecí, las promociones disponibles ya no son las mismas.`,
+          '',
+          ...this.promotionLines(price),
+          `El total de tu estadía (${nights} noches) ahora es de ${describeAmount(price)}, con una seña del 30% de $${depositAmount}.`,
+          '',
+          '¿Querés que te la reserve igual?',
+        ].join('\n');
+      }
 
       const newReservation = this.reservationRepository.create({
         room: roomToBook,
@@ -179,6 +225,7 @@ export class ReservationService {
         depositAmount,
         guestFullName: guestData.fullName,
         guestDni: guestData.dni,
+        promotion: toAppliedPromotion(price),
       });
 
       // Primero el link de pago: si Mercado Pago falla, la reserva no se guarda (ni la arrastra el
@@ -207,7 +254,8 @@ export class ReservationService {
       botReply = [
         `Te estoy guardando la ${escapeHtml(roomToBook.category.name)} del ${savedCheckIn} al ${savedCheckOut}, a nombre de ${escapeHtml(guestData.fullName)}.`,
         '',
-        `Total de la estadía: $${totalAmount}`,
+        ...this.promotionLines(price),
+        `Total de la estadía: ${describeAmount(price)}`,
         `Seña para reservarla: $${depositAmount}`,
         '',
         `<b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
@@ -287,6 +335,26 @@ export class ReservationService {
     return daysBetween(parseDate(checkIn), parseDate(checkOut));
   }
 
+  private priceStay(
+    room: Room,
+    nights: number,
+    promotions: PromotionModel[],
+  ): PromotionPrice {
+    return priceWithPromotions(
+      Number(room.category.basePrice) * nights,
+      promotions,
+      { target: PromotionTarget.ROOMS, nights },
+    );
+  }
+
+  private depositFor(totalAmount: number): number {
+    return round2(totalAmount * DEPOSIT_PERCENTAGE);
+  }
+
+  private promotionLines({ promotion }: PromotionPrice): string[] {
+    return promotion ? [buildPromotionLine(promotion), ''] : [];
+  }
+
   private async findAvailableRoom(
     checkIn: string,
     checkOut: string,
@@ -340,38 +408,54 @@ export class ReservationService {
     }));
   }
 
-  private describeVariant({ variant, room }: VariantOption): string {
+  private describeVariant(
+    { variant, room }: VariantOption,
+    promotions: PromotionModel[],
+  ): string {
     const checkIn = formatDate(fromDayNumber(variant.stay.checkIn));
     const checkOut = formatDate(fromDayNumber(variant.stay.checkOut));
     const nights = variant.stay.checkOut - variant.stay.checkIn;
-    const total = room.category.basePrice * nights;
-    return `${escapeHtml(room.category.name)}: del ${checkIn} al ${checkOut} (${nights} noches), total $${total}`;
+    const price = this.priceStay(room, nights, promotions);
+    const promotion = price.promotion
+      ? ` con la promoción ${escapeHtml(price.promotion.title)}`
+      : '';
+    return `${escapeHtml(room.category.name)}: del ${checkIn} al ${checkOut} (${nights} noches), total ${describeAmount(price)}${promotion}`;
   }
 
   private buildOfferReply(
     room: Room,
     { checkIn, checkOut }: SearchAvailabilityDto,
     nights: number,
+    price: PromotionPrice,
     variants: VariantOption[],
+    promotions: PromotionModel[],
   ): string {
     if (variants.length > 0) {
       return [
         'Tenemos disponibilidad en estas opciones:',
-        ...variants.map((option) => `• ${this.describeVariant(option)}`),
+        ...variants.map(
+          (option) => `• ${this.describeVariant(option, promotions)}`,
+        ),
         '',
         '¿Cuál te viene mejor?',
       ].join('\n');
     }
 
-    const totalAmount = room.category.basePrice * nights;
-    const depositAmount = totalAmount * DEPOSIT_PERCENTAGE;
-    return `Tenemos disponibilidad en nuestra ${escapeHtml(room.category.name)} del ${checkIn} al ${checkOut} por $${Number(room.category.basePrice)} la noche.\n\nEl total de tu estadía (${nights} noches) sería de $${totalAmount}, con una seña del 30% de $${depositAmount} para reservarla.\n\n¿Querés que te la reserve?`;
+    return [
+      `Tenemos disponibilidad en nuestra ${escapeHtml(room.category.name)} del ${checkIn} al ${checkOut} por $${Number(room.category.basePrice)} la noche.`,
+      '',
+      ...this.promotionLines(price),
+      `El total de tu estadía (${nights} noches) sería de ${describeAmount(price)}, con una seña del 30% de $${this.depositFor(price.finalAmount)} para reservarla.`,
+      '',
+      '¿Querés que te la reserve?',
+    ].join('\n');
   }
 
   private async findAlternativeDates(
     checkIn: string,
     checkOut: string,
     capacity: number,
+    promotions: PromotionModel[],
   ): Promise<AlternativeDates[]> {
     const requestedStart = parseDate(checkIn);
     const requestedNights = daysBetween(requestedStart, parseDate(checkOut));
@@ -447,13 +531,19 @@ export class ReservationService {
       if (seen.has(key)) continue;
       seen.add(key);
 
+      const price = this.priceStay(block.room, block.nights, promotions);
       alternatives.push({
         checkIn: formatDate(addDays(windowStart, block.start)),
         checkOut: formatDate(addDays(windowStart, block.start + block.nights)),
         nights: block.nights,
         isShorterStay: block.nights < requestedNights,
         roomCategory: block.room.category.name,
-        totalAmount: block.room.category.basePrice * block.nights,
+        totalAmount: price.finalAmount,
+        ...(price.promotion
+          ? {
+              promotion: `${price.promotion.title} (${price.promotion.discountPercentage}% de descuento)`,
+            }
+          : {}),
       });
       if (alternatives.length === MAX_ALTERNATIVE_DATES) break;
     }

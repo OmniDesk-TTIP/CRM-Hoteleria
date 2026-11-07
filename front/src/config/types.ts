@@ -69,6 +69,10 @@ export interface AdminReservation {
   origin: ReservationOrigin;
   totalAmount: number;
   depositAmount: number;
+  /** US-21: promoción aplicada. `totalAmount` y `depositAmount` ya tienen el descuento. */
+  promotionTitle: string | null;
+  promotionPercentage: number | null;
+  discountAmount: number;
   room: {
     id: string;
     roomNumber: string;
@@ -468,6 +472,9 @@ export interface BotStatistics {
     refundsPending: number;
     /** US-14: devoluciones ya realizadas. */
     refundsCompleted: number;
+    /** US-21: descuento otorgado en reservas y turnos de spa confirmados. */
+    promotionDiscounts: number;
+    promotionSales: number;
   };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
@@ -580,8 +587,11 @@ export interface SpaReservation {
   requestedDate: string;
   /** HH:mm */
   requestedTime: string;
-  /** Lo que se cobra: 0 para huéspedes. */
+  /** Lo que se cobra, con el descuento aplicado: 0 para huéspedes. */
   amount: number;
+  promotionTitle: string | null;
+  promotionPercentage: number | null;
+  discountAmount: number;
   createdAt: string | null;
 }
 
@@ -775,4 +785,37 @@ export interface CampaignFormData {
   message: string;
   audience: CampaignAudience;
   image: File | null;
+}
+
+/* ───────── Promociones (US-21) ───────── */
+
+export type PromotionStatus = 'SCHEDULED' | 'ACTIVE' | 'EXPIRED' | 'DISABLED';
+
+export type PromotionTarget = 'ROOMS' | 'SPA';
+
+export interface PromotionFormData {
+  title: string;
+  description: string;
+  discountPercentage: number;
+  /** YYYY-MM-DD */
+  startDate: string;
+  /** YYYY-MM-DD */
+  endDate: string;
+  target: PromotionTarget;
+  /** Solo para habitaciones. */
+  minNights: number | null;
+}
+
+export interface Promotion extends PromotionFormData {
+  id: string;
+  enabled: boolean;
+  /** Lo calcula el back con `enabled` y las fechas, en el día del hotel. */
+  status: PromotionStatus;
+  createdAt: string | null;
+}
+
+export interface PromotionListFilters {
+  status: PromotionStatus | 'ALL';
+  page: number;
+  pageSize: number;
 }

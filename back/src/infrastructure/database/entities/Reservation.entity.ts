@@ -8,6 +8,7 @@ import {
 } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { Room } from './Room.entity';
+import { Promotion } from './Promotion.entity';
 import { CustomBaseEntity } from './CustomBase.entity';
 
 export enum ReservationStatus {
@@ -56,6 +57,20 @@ export class Reservation extends CustomBaseEntity {
 
   @Property({ type: 'decimal', precision: 12, scale: 2 })
   depositAmount!: number;
+
+  // set null y no cascade: eliminar una promoción no puede borrar reservas.
+  @ManyToOne(() => Promotion, { nullable: true, deleteRule: 'set null' })
+  promotion?: Promotion | null;
+
+  /** Foto de la promoción aplicada: `totalAmount` y `depositAmount` ya tienen el descuento. */
+  @Property({ type: 'varchar', length: 100, nullable: true })
+  promotionTitle?: string | null;
+
+  @Property({ type: 'integer', nullable: true })
+  promotionPercentage?: number | null;
+
+  @Property({ type: 'decimal', precision: 12, scale: 2 })
+  discountAmount: number & Opt = 0;
 
   @Property({ type: 'varchar' })
   guestFullName!: string;
