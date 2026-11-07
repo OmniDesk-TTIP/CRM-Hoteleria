@@ -33,4 +33,8 @@ export class BookingProcess extends CustomBaseEntity {
 
   @Property({ type: 'integer', nullable: true })
   capacity?: number;
+
+  /** Total que se le ofreció al huésped: si al confirmar dio otro, se le avisa antes de reservar. */
+  @Property({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  quotedTotal?: number | null;
 }

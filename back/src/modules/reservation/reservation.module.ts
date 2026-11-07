@@ -9,6 +9,7 @@ import { PaymentModule } from '../payment/payment.module';
 import { CancellationModule } from '../cancellation/cancellation.module';
 import { ChatModule } from '../chat/chat.module';
 import { ReservationExpirationService } from './reservationExpiration.service';
+import { PromotionModule } from '../promotion/promotion.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ReservationExpirationService } from './reservationExpiration.service';
     PaymentModule,
     CancellationModule,
     ChatModule,
+    PromotionModule,
   ],
   controllers: [ReservationAdminController],
   providers: [

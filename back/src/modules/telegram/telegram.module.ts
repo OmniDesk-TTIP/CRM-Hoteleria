@@ -9,6 +9,8 @@ import { SpaReservationModule } from '../spaReservation/spaReservation.module';
 import { CancellationModule } from '../cancellation/cancellation.module';
 import { RestaurantModule } from '../restaurant/restaurant.module';
 import { RestaurantReservationModule } from '../restaurantReservation/restaurantReservation.module';
+import { RoomServiceModule } from '../roomService/roomService.module';
+import { PromotionModule } from '../promotion/promotion.module';
 
 @Module({
   imports: [
@@ -20,7 +22,9 @@ import { RestaurantReservationModule } from '../restaurantReservation/restaurant
     SpaReservationModule,
     RestaurantModule,
     RestaurantReservationModule,
+    RoomServiceModule,
     CancellationModule,
+    PromotionModule,
   ],
   providers: [TelegramUpdate],
 })

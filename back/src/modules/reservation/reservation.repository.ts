@@ -6,17 +6,21 @@ import {
   ReservationStatus,
 } from '../../infrastructure/database/entities/Reservation.entity';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
+import { Promotion } from '../../infrastructure/database/entities/Promotion.entity';
+import { AppliedPromotion } from '../promotion/promotion.model';
 
 interface CreateReservationData {
   room: Room;
   telegramUserId: string;
   checkIn: Date;
   checkOut: Date;
+  guestCount: number;
   totalAmount: number;
   depositAmount: number;
   guestFullName: string;
   guestDni: string;
   expiresAt: Date;
+  promotion: AppliedPromotion | null;
 }
 
 interface AdminReservationFilters {
@@ -67,10 +71,20 @@ export class ReservationRepository {
     });
   }
 
-  create(data: CreateReservationData): Reservation {
+  create({ promotion, ...data }: CreateReservationData): Reservation {
     return this.em.create(Reservation, {
       ...data,
       status: ReservationStatus.PENDING_PAYMENT,
+      ...(promotion
+        ? {
+            promotion: promotion.id
+              ? this.em.getReference(Promotion, promotion.id)
+              : null,
+            promotionTitle: promotion.title,
+            promotionPercentage: promotion.percentage,
+            discountAmount: promotion.discountAmount,
+          }
+        : {}),
     });
   }
 

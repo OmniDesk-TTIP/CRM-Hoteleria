@@ -1,5 +1,5 @@
 import type { SpaReservation } from '@/config/types';
-import { SpaReservationStatusBadge } from './Badges';
+import { PromotionNote, SpaReservationStatusBadge } from './Badges';
 import { formatCurrency, formatIsoDay } from './spaFormat';
 
 interface SpaReservationsTableProps {
@@ -108,7 +108,14 @@ export default function SpaReservationsTable({
                 </td>
                 <td className="px-4 py-3 text-text sm:px-5">{request.serviceName}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-text sm:px-5">{slotLabel(request)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">{chargeLabel(request)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">
+                  {chargeLabel(request)}
+                  <PromotionNote
+                    title={request.promotionTitle}
+                    percentage={request.promotionPercentage}
+                    discountAmount={request.discountAmount}
+                  />
+                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">
                   {formatRequestedAt(request.createdAt)}
                 </td>
@@ -138,6 +145,11 @@ export default function SpaReservationsTable({
                     <p className="text-xs text-textMuted">
                       {clientLabel(request)} · {chargeLabel(request)}
                     </p>
+                    <PromotionNote
+                      title={request.promotionTitle}
+                      percentage={request.promotionPercentage}
+                      discountAmount={request.discountAmount}
+                    />
                     <p className="truncate text-sm text-text">{request.serviceName}</p>
                   </div>
                   <SpaReservationStatusBadge status={request.status} />

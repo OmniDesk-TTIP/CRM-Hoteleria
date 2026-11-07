@@ -6,6 +6,7 @@ import {
 } from '../../infrastructure/database/entities/SpaReservation.entity';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import { SpaService } from '../../infrastructure/database/entities/SpaService.entity';
+import { Promotion } from '../../infrastructure/database/entities/Promotion.entity';
 import { hasFreeCapacity } from '../spa/model/spa.model';
 import {
   OCCUPYING_STATUSES,
@@ -118,6 +119,16 @@ export class SpaReservationRepository {
           requestedDate: model.requestedDate,
           requestedTime: model.requestedTime,
           amount: model.amount,
+          ...(model.promotion
+            ? {
+                promotion: model.promotion.id
+                  ? em.getReference(Promotion, model.promotion.id)
+                  : null,
+                promotionTitle: model.promotion.title,
+                promotionPercentage: model.promotion.percentage,
+                discountAmount: model.promotion.discountAmount,
+              }
+            : {}),
         }),
       );
       return true;
@@ -188,6 +199,14 @@ export class SpaReservationRepository {
       requestedTime: entity.requestedTime,
       // decimal llega como string desde pg.
       amount: Number(entity.amount),
+      promotion: entity.promotionTitle
+        ? {
+            id: entity.promotion?.id ?? null,
+            title: entity.promotionTitle,
+            percentage: entity.promotionPercentage ?? 0,
+            discountAmount: Number(entity.discountAmount),
+          }
+        : null,
       createdAt: entity.createdAt,
     });
   }

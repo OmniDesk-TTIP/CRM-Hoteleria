@@ -1,12 +1,12 @@
-import type { CampaignAudience } from '@/config/types';
+import type { CampaignRecipientFilter } from '@/config/types';
 import CampaignPreview from './CampaignPreview';
-import { audienceLabel, pluralizeContacts } from './campaignFormat';
+import { audienceLabel, describeStayFilters, pluralizeContacts } from './campaignFormat';
 
 interface ConfirmCampaignModalProps {
   title: string;
   message: string;
   imageUrl: string | null;
-  audience: CampaignAudience;
+  filter: CampaignRecipientFilter;
   /** null mientras se recalcula. */
   recipients: number | null;
   isSubmitting: boolean;
@@ -15,12 +15,12 @@ interface ConfirmCampaignModalProps {
   onConfirm: () => void;
 }
 
-/** CA3: vista previa, cantidad de destinatarios y confirmación antes de mandar. */
+/** Vista previa, filtros aplicados, cantidad de destinatarios y confirmación antes de mandar (CA4). */
 export default function ConfirmCampaignModal({
   title,
   message,
   imageUrl,
-  audience,
+  filter,
   recipients,
   isSubmitting,
   error,
@@ -28,6 +28,7 @@ export default function ConfirmCampaignModal({
   onConfirm,
 }: ConfirmCampaignModalProps) {
   const canSend = !isSubmitting && recipients !== null && recipients > 0;
+  const stayFilters = describeStayFilters(filter);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -44,15 +45,26 @@ export default function ConfirmCampaignModal({
         <CampaignPreview title={title} message={message} imageUrl={imageUrl} />
 
         <div role="status" className="rounded-xl border border-goldLight/20 bg-surface p-3 text-sm text-textMuted">
+          <dl className="mb-2 space-y-1">
+            <div className="flex flex-wrap gap-x-2">
+              <dt>Contactos:</dt>
+              <dd className="text-text">{audienceLabel(filter.audience)}</dd>
+            </div>
+            {stayFilters.length > 0 && (
+              <div className="flex flex-wrap gap-x-2">
+                <dt>Filtros:</dt>
+                <dd className="text-text">{stayFilters.join(' · ')}</dd>
+              </div>
+            )}
+          </dl>
           {recipients === null ? (
             'Contando destinatarios…'
           ) : recipients === 0 ? (
-            <>No hay contactos en «{audienceLabel(audience)}». Elegí otros destinatarios.</>
+            <span className="text-dangerText">Ningún contacto cumple estos filtros. Volvé y elegí otros destinatarios.</span>
           ) : (
             <>
-              Se enviará a <strong className="text-text">{pluralizeContacts(recipients)}</strong> (
-              {audienceLabel(audience).toLowerCase()}) por Telegram. El envío sigue en segundo plano y no se puede
-              cancelar una vez iniciado.
+              Se enviará a <strong className="text-text">{pluralizeContacts(recipients)}</strong> por Telegram. El envío
+              sigue en segundo plano y no se puede cancelar una vez iniciado.
             </>
           )}
         </div>

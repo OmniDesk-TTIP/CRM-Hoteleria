@@ -1,5 +1,5 @@
 import { Update, Ctx, Start, On, Message, Action } from 'nestjs-telegraf';
-import { Context } from 'telegraf';
+import { Context, Markup } from 'telegraf';
 import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
@@ -19,6 +19,12 @@ import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dt
 import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import { RequestTableBookingDto } from '../restaurantReservation/dto/restaurantReservation.dto';
+import {
+  RoomServiceChatResult,
+  RoomServiceService,
+} from '../roomService/roomService.service';
+import { PrepareRoomServiceOrderDto } from '../roomService/roomService.dto';
+import { PromotionService } from '../promotion/promotion.service';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -40,9 +46,17 @@ import {
   EXPIRED_DECLINE_LABEL,
   EXPIRED_RECOVERY_CALLBACK,
   EXPIRED_RESUME_LABEL,
+  ROOM_SERVICE_BUTTON_LABELS,
+  ROOM_SERVICE_CALLBACK,
+  RoomServiceButton,
+  roomServiceCancelKeyboard,
+  roomServiceConfirmKeyboard,
 } from './telegram.format';
 
 const HISTORY_SIZE = 6;
+
+type BotReply =
+  string | { text: string; keyboard: ReturnType<typeof Markup.inlineKeyboard> };
 
 const GENERIC_FALLBACK =
   'Disculpá, no pude procesar tu mensaje. ¿Podés reformularlo?';
@@ -70,6 +84,8 @@ export class TelegramUpdate {
     private readonly restaurantService: RestaurantService,
     private readonly restaurantReservationService: RestaurantReservationService,
     private readonly cancellationService: CancellationService,
+    private readonly roomServiceService: RoomServiceService,
+    private readonly promotionService: PromotionService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -99,6 +115,97 @@ export class TelegramUpdate {
     await this.withRequestContext(() =>
       this.handleGuestMessage(text, ctx, ctx.from!.id.toString()),
     );
+  }
+
+  @Action(ROOM_SERVICE_CALLBACK)
+  async onRoomServiceAction(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    const data =
+      ctx.callbackQuery && 'data' in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : '';
+    const match = ROOM_SERVICE_CALLBACK.exec(data);
+    if (!ctx.from || !match) return;
+
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+
+    const [, button, orderId] = match;
+    await this.withRequestContext(() =>
+      this.handleRoomServiceAction(
+        ctx,
+        ctx.from!.id.toString(),
+        button as RoomServiceButton,
+        orderId,
+      ),
+    );
+  }
+
+  private async handleRoomServiceAction(
+    ctx: Context,
+    telegramUserId: string,
+    button: RoomServiceButton,
+    orderId: string,
+  ): Promise<void> {
+    let session: ChatSession | undefined;
+    try {
+      session = await this.chatService.getOrCreateSession(
+        telegramUserId,
+        this.readProfile(ctx),
+      );
+      await this.chatService.recordIncomingMessage(
+        session,
+        ROOM_SERVICE_BUTTON_LABELS[button],
+      );
+      await ctx.sendChatAction('typing');
+
+      const botReply = await this.resolveRoomServiceButton(
+        telegramUserId,
+        button,
+        orderId,
+      );
+
+      await this.chatService.recordBotMessage(session, botReply);
+      await ctx.reply(botReply, { parse_mode: 'HTML' });
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error procesando el botón de room service ${button} del pedido ${orderId}: ${String(error)}`,
+      );
+      if (session) await this.registerFailureSafely(session);
+      await ctx.reply(
+        'Hubo un error técnico con tu pedido de room service. Por favor, intentá nuevamente en unos minutos.',
+      );
+    }
+  }
+
+  private async resolveRoomServiceButton(
+    telegramUserId: string,
+    button: RoomServiceButton,
+    orderId: string,
+  ): Promise<string> {
+    let result: RoomServiceChatResult;
+    switch (button) {
+      case 'confirm':
+        result = await this.roomServiceService.confirmOrder(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'discard':
+        result = await this.roomServiceService.discardDraft(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'cancel':
+        result = await this.roomServiceService.cancelOrder(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'keep':
+        return 'Perfecto, tu pedido sigue en curso.';
+    }
+    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   @Action(EXPIRED_RECOVERY_CALLBACK)
@@ -242,6 +349,9 @@ export class TelegramUpdate {
         await this.cancellationService.getGuestContextBlock(telegramUserId);
       const hasPendingPayment =
         await this.reservationService.hasPendingPayment(telegramUserId);
+      const roomService =
+        await this.roomServiceService.getChatContext(telegramUserId);
+      const promotions = await this.promotionService.getChatBlock();
       const aiResponse = await this.ragService.askQuestion(
         text,
         activeBooking,
@@ -251,6 +361,8 @@ export class TelegramUpdate {
         cancellation,
         hasPendingPayment,
         restaurant,
+        roomService,
+        promotions,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -258,14 +370,18 @@ export class TelegramUpdate {
         return;
       }
 
-      const botReply =
-        (await this.resolveBotReply(
-          aiResponse,
-          telegramUserId,
-          activeBooking,
-          text,
-          history,
-        )) || GENERIC_FALLBACK;
+      const reply = await this.resolveBotReply(
+        aiResponse,
+        telegramUserId,
+        activeBooking,
+        text,
+        history,
+      );
+      const { text: replyText, keyboard } =
+        typeof reply === 'string'
+          ? { text: reply, keyboard: undefined }
+          : reply;
+      const botReply = replyText || GENERIC_FALLBACK;
 
       if (await this.chatService.wasTakenOverMeanwhile(session)) {
         this.logger.log(
@@ -276,7 +392,7 @@ export class TelegramUpdate {
 
       await this.chatService.recordBotMessage(session, botReply);
 
-      await ctx.reply(botReply, { parse_mode: 'HTML' });
+      await ctx.reply(botReply, { parse_mode: 'HTML', ...keyboard });
 
       if (isUnresolvedReply(botReply))
         await this.chatService.registerBotFailure(session);
@@ -342,7 +458,7 @@ export class TelegramUpdate {
     activeBooking: BookingProcess | null,
     userText: string,
     history: ChatMessage[],
-  ): Promise<string> {
+  ): Promise<BotReply> {
     switch (aiResponse.action) {
       case ChatAction.SEARCH_AVAILABILITY:
         return this.resolveSearchAvailability(
@@ -368,6 +484,10 @@ export class TelegramUpdate {
         return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
       case ChatAction.REQUEST_TABLE_BOOKING:
         return this.resolveTableBooking(aiResponse.datos, telegramUserId);
+      case ChatAction.PREPARE_ROOM_SERVICE_ORDER:
+        return this.resolvePrepareRoomService(aiResponse.datos, telegramUserId);
+      case ChatAction.CANCEL_ROOM_SERVICE_ORDER:
+        return this.resolveCancelRoomService(telegramUserId);
       case ChatAction.CANCEL_RESERVATION:
         return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
       case ChatAction.REGISTER_REFUND_ACCOUNT:
@@ -466,6 +586,45 @@ export class TelegramUpdate {
     return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
+  private async resolvePrepareRoomService(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<BotReply> {
+    const orderDto = plainToInstance(PrepareRoomServiceOrderDto, datos);
+    const validationErrors = await validate(orderDto);
+    if (validationErrors.length > 0) {
+      this.logger.warn(
+        `Pedido de room service incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
+      );
+      return '¿Me confirmás qué platos querés y cuántos de cada uno?';
+    }
+
+    const result = await this.roomServiceService.prepareOrder(
+      telegramUserId,
+      orderDto,
+    );
+    if (!result.ok) return escapeHtml(result.reason);
+    return result.orderId
+      ? {
+          text: result.reply,
+          keyboard: roomServiceConfirmKeyboard(result.orderId),
+        }
+      : result.reply;
+  }
+
+  private async resolveCancelRoomService(
+    telegramUserId: string,
+  ): Promise<BotReply> {
+    const result = await this.roomServiceService.requestCancel(telegramUserId);
+    if (!result.ok) return escapeHtml(result.reason);
+    return result.orderId
+      ? {
+          text: result.reply,
+          keyboard: roomServiceCancelKeyboard(result.orderId),
+        }
+      : result.reply;
+  }
+
   private async resolveSearchAvailability(
     datos: unknown,
     telegramUserId: string,
@@ -525,8 +684,9 @@ export class TelegramUpdate {
         isShorterStay,
         roomCategory,
         totalAmount,
+        promotion,
       }) =>
-        `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}`,
+        `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}${promotion ? ` con la promoción ${escapeHtml(promotion)}` : ''}`,
     );
     return [intro, ...options, '', '¿Te sirve alguna?'].join('\n');
   }

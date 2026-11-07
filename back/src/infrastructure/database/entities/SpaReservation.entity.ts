@@ -8,6 +8,7 @@ import {
 } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { CustomBaseEntity } from './CustomBase.entity';
+import { Promotion } from './Promotion.entity';
 import { Reservation } from './Reservation.entity';
 import { SpaService } from './SpaService.entity';
 
@@ -78,6 +79,20 @@ export class SpaReservation extends CustomBaseEntity {
   /** Lo que se cobra: 0 para huéspedes, el precio del servicio para externos. */
   @Property({ type: 'decimal', precision: 12, scale: 2 })
   amount: number & Opt = 0;
+
+  // set null y no cascade: eliminar una promoción no puede borrar turnos.
+  @ManyToOne(() => Promotion, { nullable: true, deleteRule: 'set null' })
+  promotion?: Promotion | null;
+
+  /** Foto de la promoción aplicada: `amount` ya tiene el descuento. */
+  @Property({ type: 'varchar', length: 100, nullable: true })
+  promotionTitle?: string | null;
+
+  @Property({ type: 'integer', nullable: true })
+  promotionPercentage?: number | null;
+
+  @Property({ type: 'decimal', precision: 12, scale: 2 })
+  discountAmount: number & Opt = 0;
 
   @Property({ type: 'varchar', nullable: true })
   mpPreferenceId?: string;

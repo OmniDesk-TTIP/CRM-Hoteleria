@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -38,6 +39,10 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsIn(Object.values(MenuItemStatus), { message: 'Estado inválido' })
   status?: MenuItemStatus;
+
+  @IsOptional()
+  @IsBoolean({ message: 'availableForRoomService debe ser verdadero o falso' })
+  availableForRoomService?: boolean;
 }
 
 export class UpdateMenuItemDto {
@@ -69,6 +74,10 @@ export class UpdateMenuItemDto {
   @IsOptional()
   @IsIn(Object.values(MenuItemStatus), { message: 'Estado inválido' })
   status?: MenuItemStatus;
+
+  @IsOptional()
+  @IsBoolean({ message: 'availableForRoomService debe ser verdadero o falso' })
+  availableForRoomService?: boolean;
 }
 
 export class MenuItemDto {
@@ -78,6 +87,7 @@ export class MenuItemDto {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 
   static fromModel(model: MenuItemModel): MenuItemDto {
     const dto = new MenuItemDto();
@@ -87,6 +97,7 @@ export class MenuItemDto {
     dto.category = model.category;
     dto.price = model.price;
     dto.status = model.status;
+    dto.availableForRoomService = model.availableForRoomService;
     return dto;
   }
 }

@@ -1,18 +1,14 @@
 import {
-  ArgumentsHost,
   BadRequestException,
   Body,
-  Catch,
   Controller,
   Delete,
-  ExceptionFilter,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
-  PayloadTooLargeException,
   Post,
   Put,
   UploadedFile,
@@ -20,9 +16,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response } from 'express';
-import { memoryStorage } from 'multer';
 import { RestaurantService } from './restaurant.service';
 import { RestaurantPhotoService } from './restaurantPhoto.service';
 import { UpdateRestaurantSettingsDto } from './dto/updateRestaurantSettings.dto';
@@ -36,25 +29,13 @@ import {
   RestaurantPhotoDto,
   RestaurantSettingsDto,
 } from './dto/restaurant.dto';
-import { MAX_PHOTO_BYTES } from './model/restaurantPhoto.model';
 import { RolesGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/auth.decorators';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
-
-@Catch(PayloadTooLargeException)
-export class PhotoTooLargeFilter implements ExceptionFilter {
-  catch(_exception: PayloadTooLargeException, host: ArgumentsHost): void {
-    host
-      .switchToHttp()
-      .getResponse<Response>()
-      .status(413)
-      .json({
-        statusCode: 413,
-        error: 'Payload Too Large',
-        message: `La imagen supera el tamaño máximo (${MAX_PHOTO_BYTES / 1024 / 1024} MB)`,
-      });
-  }
-}
+import {
+  PhotoTooLargeFilter,
+  PhotoUploadInterceptor,
+} from '../../common/photo.http';
 
 // Panel del restó (US-17 CA1/CA6). Leer lo puede cualquier usuario del panel; cargar y editar,
 // solo el administrador (igual que los servicios de spa).
@@ -132,12 +113,7 @@ export class RestaurantController {
   @UseGuards(RolesGuard)
   @Post('photos')
   @UseFilters(PhotoTooLargeFilter)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: memoryStorage(),
-      limits: { fileSize: MAX_PHOTO_BYTES },
-    }),
-  )
+  @UseInterceptors(PhotoUploadInterceptor())
   async uploadPhoto(
     @UploadedFile() file: Express.Multer.File | undefined,
   ): Promise<RestaurantPhotoDto> {

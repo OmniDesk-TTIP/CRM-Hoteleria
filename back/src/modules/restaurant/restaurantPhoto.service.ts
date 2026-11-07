@@ -3,17 +3,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { RestaurantPhotoRepository } from './restaurantPhoto.repository';
 import {
-  PhotoContent,
-  RestaurantPhotoRepository,
-} from './restaurantPhoto.repository';
-import {
-  detectImageType,
-  isSamePhotoSet,
-  MAX_PHOTO_BYTES,
   MAX_PHOTOS,
   RestaurantPhotoModel,
 } from './model/restaurantPhoto.model';
+import {
+  assertValidPhoto,
+  isSamePhotoSet,
+  PhotoContent,
+} from '../../common/photo.util';
 
 @Injectable()
 export class RestaurantPhotoService {
@@ -24,18 +23,7 @@ export class RestaurantPhotoService {
   }
 
   async upload(buffer: Buffer): Promise<RestaurantPhotoModel> {
-    if (buffer.length === 0)
-      throw new BadRequestException('La imagen está vacía');
-    if (buffer.length > MAX_PHOTO_BYTES) {
-      throw new BadRequestException(
-        `La imagen supera el tamaño máximo (${MAX_PHOTO_BYTES / 1024 / 1024} MB)`,
-      );
-    }
-
-    const mimeType = detectImageType(buffer);
-    if (!mimeType) {
-      throw new BadRequestException('Solo se aceptan imágenes JPG, PNG o WebP');
-    }
+    const mimeType = assertValidPhoto(buffer);
 
     if ((await this.photoRepository.count()) >= MAX_PHOTOS) {
       throw new BadRequestException(

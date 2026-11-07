@@ -1,5 +1,5 @@
 import type { AdminReservation, ReservationListFilters, ReservationSortBy } from '@/config/types';
-import { CancellationNote, ExpirationNote, OriginBadge, StatusBadge } from './Badges';
+import { CancellationNote, ExpirationNote, OriginBadge, PromotionNote, StatusBadge } from './Badges';
 
 interface ReservationsTableProps {
   reservations: AdminReservation[];
@@ -103,6 +103,11 @@ export default function ReservationsTable({
                 <td className="px-4 py-3 sm:px-5 whitespace-nowrap">
                   <p className="text-text">{formatCurrency(reservation.totalAmount)}</p>
                   <p className="text-xs text-textMuted">Seña {formatCurrency(reservation.depositAmount)}</p>
+                  <PromotionNote
+                    title={reservation.promotionTitle}
+                    percentage={reservation.promotionPercentage}
+                    discountAmount={reservation.discountAmount}
+                  />
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <div className="flex justify-end gap-2">
@@ -173,6 +178,11 @@ export default function ReservationsTable({
                     <dd className="text-text">
                       {formatCurrency(reservation.totalAmount)}
                       <span className="block text-xs text-textMuted">Seña {formatCurrency(reservation.depositAmount)}</span>
+                      <PromotionNote
+                        title={reservation.promotionTitle}
+                        percentage={reservation.promotionPercentage}
+                        discountAmount={reservation.discountAmount}
+                      />
                     </dd>
                   </div>
                 </dl>

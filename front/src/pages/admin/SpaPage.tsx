@@ -5,6 +5,7 @@ import type { SpaService } from '@/config/types';
 import SpaServicesTable from '@/components/admin/SpaServicesTable';
 import SpaServiceFormModal from '@/components/admin/SpaServiceFormModal';
 import ConfirmDisableSpaServiceModal from '@/components/admin/ConfirmDisableSpaServiceModal';
+import SpaGallery from '@/components/admin/SpaGallery';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
@@ -107,6 +108,8 @@ export default function SpaPage() {
           onReactivate={handleReactivate}
         />
       </div>
+
+      <SpaGallery isAdmin={isAdmin} />
 
       {formModalOpen && (
         <SpaServiceFormModal
