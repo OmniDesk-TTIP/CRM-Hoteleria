@@ -37,22 +37,41 @@ export class ReservationExpirationService {
   }
 
   async expireOverdue(now: Date): Promise<number> {
-    const overdue = await this.reservationRepository.findDueForExpiration(now);
+  const overdue = await this.reservationRepository.findDueForExpiration(now);
 
-    let expired = 0;
-    for (const reservation of overdue) {
-      if (!(await this.reservationRepository.expireIfPending(reservation.id)))
-        continue;
-      expired += 1;
-      if (reservation.telegramUserId) {
-        await this.notify(
+  // Intentamos expirar todas en paralelo de forma limpia
+  const expirationResults = await Promise.all(
+    overdue.map(async (reservation) => {
+      const isExpired = await this.reservationRepository.expireIfPending(reservation.id);
+      return { reservation, isExpired };
+    })
+  );
+
+  // Filtramos solo las que efectivamente pasaron a estado expirado
+  const successfullyExpired = expirationResults.filter(({ isExpired }) => isExpired);
+
+  // Enviamos las notificaciones en paralelo para las que tienen Telegram
+  await Promise.all(
+    successfullyExpired
+      .filter(({ reservation }) => Boolean(reservation.telegramUserId))
+      .map(({ reservation }) =>
+        this.notify(
           reservation,
           this.reservationService.buildExpirationNotice(reservation),
           'el aviso de vencimiento',
           expiredRecoveryKeyboard(reservation.id),
-        );
-      }
-    }
+        )
+      )
+  );
+
+  const expiredCount = successfullyExpired.length;
+
+  if (expiredCount > 0) {
+    this.logger.log(`Vencidas ${expiredCount} reserva(s) por falta de pago`);
+  }
+
+  return expiredCount;
+}
 
     if (expired > 0) {
       this.logger.log(`Vencidas ${expired} reserva(s) por falta de pago`);
