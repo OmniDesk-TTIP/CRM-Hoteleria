@@ -7,6 +7,8 @@ import { BookingProcessModule } from '../bookingProcess/bookingProcess.module';
 import { RoomModule } from '../room/room.module';
 import { PaymentModule } from '../payment/payment.module';
 import { CancellationModule } from '../cancellation/cancellation.module';
+import { ChatModule } from '../chat/chat.module';
+import { ReservationExpirationService } from './reservationExpiration.service';
 import { PromotionModule } from '../promotion/promotion.module';
 
 @Module({
@@ -15,6 +17,7 @@ import { PromotionModule } from '../promotion/promotion.module';
     RoomModule,
     PaymentModule,
     CancellationModule,
+    ChatModule,
     PromotionModule,
   ],
   controllers: [ReservationAdminController],
@@ -22,6 +25,7 @@ import { PromotionModule } from '../promotion/promotion.module';
     ReservationService,
     ReservationRepository,
     ReservationAdminService,
+    ReservationExpirationService,
   ],
   exports: [ReservationService, ReservationRepository],
 })

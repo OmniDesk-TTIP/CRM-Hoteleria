@@ -2791,7 +2791,8 @@
           "enumItems": [
             "PENDING_PAYMENT",
             "CONFIRMED",
-            "CANCELLED"
+            "CANCELLED",
+            "EXPIRED"
           ],
           "mappedType": "enum"
         },
@@ -2845,6 +2846,57 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "datetime"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "recovery_answered_at": {
+          "name": "recovery_answered_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "reminder_sent_at": {
+          "name": "reminder_sent_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
         }
       },
       "indexes": [
@@ -2874,8 +2926,8 @@
         },
         {
           "name": "reservations_status_check",
-          "expression": "\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED')",
-          "definition": "check (\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED'))",
+          "expression": "\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED')",
+          "definition": "check (\"status\" in ('PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'))",
           "columnName": "status"
         }
       ],
