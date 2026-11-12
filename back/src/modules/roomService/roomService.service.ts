@@ -359,9 +359,10 @@ export class RoomServiceService {
     return isRoomServiceOpen(hours, this.spaService.getHotelClock(now).minutes);
   }
 
-  private findCurrentStay(
+  /** La estadía en curso del huésped (alojado hoy), o null. */
+  findCurrentStay(
     telegramUserId: string,
-    now: Date,
+    now: Date = new Date(),
   ): Promise<CurrentStay | null> {
     return this.roomServiceRepository.findCurrentStay(
       telegramUserId,
