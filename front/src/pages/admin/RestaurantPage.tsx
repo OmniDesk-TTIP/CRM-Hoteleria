@@ -7,6 +7,7 @@ import MenuItemsTable from '@/components/admin/MenuItemsTable';
 import MenuItemFormModal from '@/components/admin/MenuItemFormModal';
 import RestaurantGallery from '@/components/admin/RestaurantGallery';
 import ConfirmDeleteModal from '@/components/admin/ConfirmDeleteModal';
+import MenuPdfActions from '@/components/admin/MenuPdfActions';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
@@ -123,6 +124,13 @@ export default function RestaurantPage() {
             </button>
           )}
         </div>
+
+        {isAdmin && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-6">
+            <MenuPdfActions kind="restaurant" label="la carta del restó" filename="carta-resto.pdf" />
+            <MenuPdfActions kind="room-service" label="la carta de room service" filename="carta-room-service.pdf" />
+          </div>
+        )}
 
         {actionError && (
           <div role="alert" className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">

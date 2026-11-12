@@ -15,6 +15,7 @@ import { RoomServiceService } from '../roomService/roomService.service';
 import { PromotionService } from '../promotion/promotion.service';
 import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
 import { detectLanguage } from '../guestLanguage/language.detector';
+import { MenuPdfService } from '../menuPdf/menuPdf.service';
 import {
   ChatSessionStatus,
   GuestLanguage,
@@ -40,6 +41,7 @@ describe('TelegramUpdate', () => {
     requestCancel: jest.Mock;
     cancelOrder: jest.Mock;
   };
+  let menuPdfService: { buildForGuest: jest.Mock };
   let cancellationService: {
     getGuestContextBlock: jest.Mock;
     cancelForGuest: jest.Mock;
@@ -142,6 +144,10 @@ describe('TelegramUpdate', () => {
           },
         },
         {
+          provide: MenuPdfService,
+          useValue: { buildForGuest: jest.fn() },
+        },
+        {
           provide: MikroORM,
           // RequestContext.create forkea este em; el TelegramUpdate sigue usando el EntityManager inyectado.
           useValue: { em: { fork: () => ({ name: 'default' }) } },
@@ -176,6 +182,7 @@ describe('TelegramUpdate', () => {
       block: '[RESTAURANTE]',
       canBook: true,
     });
+    menuPdfService = module.get(MenuPdfService);
     roomServiceService = module.get(RoomServiceService);
     roomServiceService.getChatContext.mockResolvedValue({
       block: '[ROOM SERVICE]',
@@ -1300,6 +1307,79 @@ describe('TelegramUpdate', () => {
         'Ese pedido ya estaba confirmado.',
         { parse_mode: 'HTML' },
       );
+    });
+  });
+
+  describe('cartas en PDF (US-25)', () => {
+    const document = {
+      source: Buffer.from('%PDF-1.3'),
+      filename: 'carta-resto.pdf',
+    };
+    const askFor = (menu: unknown) =>
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.SEND_MENU_PDF,
+        datos: { menu },
+      });
+
+    beforeEach(() => {
+      mockCtx.replyWithDocument = jest.fn();
+    });
+
+    it('responde por chat y después envía el PDF (CA1)', async () => {
+      askFor('restaurant');
+      menuPdfService.buildForGuest.mockResolvedValue({
+        ok: true,
+        reply: 'Te envío el PDF con la carta del restó',
+        document,
+      });
+
+      await update.onMessage('¿Me pasás la carta?', mockCtx);
+
+      expect(menuPdfService.buildForGuest).toHaveBeenCalledWith(
+        'restaurant',
+        mockTelegramUserId,
+      );
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'Te envío el PDF con la carta del restó',
+        { parse_mode: 'HTML' },
+      );
+      expect(mockCtx.replyWithDocument).toHaveBeenCalledWith(document);
+      expect(mockCtx.reply.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCtx.replyWithDocument.mock.invocationCallOrder[0],
+      );
+      expect(chatService.recordBotMessage).toHaveBeenCalledWith(
+        session,
+        'Te envío el PDF con la carta del restó',
+      );
+    });
+
+    it('si no corresponde enviarlo informa el motivo y no manda ningún archivo (CA6/CA7)', async () => {
+      askFor('room-service');
+      menuPdfService.buildForGuest.mockResolvedValue({
+        ok: false,
+        reason: 'La carta de room service es para huéspedes <alojados>.',
+      });
+
+      await update.onMessage('Pasame la carta de room service', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        'La carta de room service es para huéspedes &lt;alojados&gt;.',
+        { parse_mode: 'HTML' },
+      );
+      expect(mockCtx.replyWithDocument).not.toHaveBeenCalled();
+    });
+
+    it('si Chamber no indica una carta válida pregunta cuál quiere', async () => {
+      askFor('bar');
+
+      await update.onMessage('Pasame la carta', mockCtx);
+
+      expect(menuPdfService.buildForGuest).not.toHaveBeenCalled();
+      expect(mockCtx.reply).toHaveBeenCalledWith(
+        expect.stringContaining('¿Qué querés que te envíe'),
+        { parse_mode: 'HTML' },
+      );
+      expect(mockCtx.replyWithDocument).not.toHaveBeenCalled();
     });
   });
 });

@@ -28,6 +28,7 @@ const TEXT_FIELDS: Record<string, 'text' | 'caption'> = {
   sendMessage: 'text',
   editMessageText: 'text',
   sendPhoto: 'caption',
+  sendDocument: 'caption',
   editMessageCaption: 'caption',
 };
 

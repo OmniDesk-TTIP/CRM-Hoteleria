@@ -408,6 +408,65 @@ describe('RagService', () => {
       });
     });
 
+    describe('cartas en PDF (US-25)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const askWithRestaurant = (text: string) =>
+        service.askQuestion(text, null, [], null, null, null, false, {
+          block: '[RESTAURANTE]',
+          canBook: true,
+        });
+
+      it('ofrece send_menu_pdf y su regla cuando hay contexto de restó, room service o spa (CA1)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await askWithRestaurant('¿Me pasás la carta?');
+
+        expect(toolNames()).toContain('send_menu_pdf');
+        expect(readChatConfig().systemInstruction).toContain(
+          'REGLA PARA LAS CARTAS EN PDF',
+        );
+      });
+
+      it('sin ese contexto no la ofrece ni la acepta', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'send_menu_pdf', args: { menu: 'spa' } }],
+            'No tengo esa información',
+          ),
+        );
+
+        const result = await service.askQuestion('¿Me pasás la carta?');
+
+        expect(toolNames()).not.toContain('send_menu_pdf');
+        expect(readChatConfig().systemInstruction).not.toContain(
+          'REGLA PARA LAS CARTAS EN PDF',
+        );
+        expect(result.action).toBe(ChatAction.REPLY);
+      });
+
+      it('devuelve SEND_MENU_PDF con la carta pedida', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([
+            { name: 'send_menu_pdf', args: { menu: 'restaurant' } },
+          ]),
+        );
+
+        expect(await askWithRestaurant('¿Me pasás la carta?')).toEqual({
+          action: ChatAction.SEND_MENU_PDF,
+          datos: { menu: 'restaurant' },
+        });
+      });
+    });
+
     describe('room service (US-24)', () => {
       const readChatConfig = () =>
         getGenerativeModelMock.mock.calls.find(

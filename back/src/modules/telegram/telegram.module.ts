@@ -13,6 +13,7 @@ import { RoomServiceModule } from '../roomService/roomService.module';
 import { PromotionModule } from '../promotion/promotion.module';
 import { GuestLanguageModule } from '../guestLanguage/guestLanguage.module';
 import { TelegramLanguageHook } from './telegramLanguage.hook';
+import { MenuPdfModule } from '../menuPdf/menuPdf.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { TelegramLanguageHook } from './telegramLanguage.hook';
     CancellationModule,
     PromotionModule,
     GuestLanguageModule,
+    MenuPdfModule,
   ],
   providers: [TelegramUpdate, TelegramLanguageHook],
 })

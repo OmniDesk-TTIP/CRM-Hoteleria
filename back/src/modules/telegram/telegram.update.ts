@@ -26,6 +26,8 @@ import {
 import { PrepareRoomServiceOrderDto } from '../roomService/roomService.dto';
 import { PromotionService } from '../promotion/promotion.service';
 import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
+import { MenuPdfService } from '../menuPdf/menuPdf.service';
+import { isMenuPdfKind, MenuPdfFile } from '../menuPdf/menuPdf.model';
 import {
   detectHumanRequest,
   isUnresolvedReply,
@@ -56,8 +58,14 @@ import {
 
 const HISTORY_SIZE = 6;
 
-type BotReply =
-  string | { text: string; keyboard: ReturnType<typeof Markup.inlineKeyboard> };
+interface RichReply {
+  text: string;
+  keyboard?: ReturnType<typeof Markup.inlineKeyboard>;
+  /** Archivo que se manda después del texto (US-25). */
+  document?: MenuPdfFile;
+}
+
+type BotReply = string | RichReply;
 
 const GENERIC_FALLBACK =
   'Disculpá, no pude procesar tu mensaje. ¿Podés reformularlo?';
@@ -71,6 +79,9 @@ export class TelegramUpdate {
 
   private static readonly NO_PENDING_PAYMENT =
     'No tenés ninguna reserva esperando el pago de la seña. Si querés, buscamos disponibilidad: decime las fechas de entrada y salida y para cuántas personas.';
+
+  private static readonly ASK_WHICH_MENU =
+    '¿Qué querés que te envíe: la carta del restó, la de room service o los servicios del spa?';
 
   private static readonly ASK_WHICH_OPTION =
     'Antes de tomar la reserva necesito que me confirmes cuál de las opciones que te pasé preferís (fechas de entrada y salida).';
@@ -88,6 +99,7 @@ export class TelegramUpdate {
     private readonly roomServiceService: RoomServiceService,
     private readonly promotionService: PromotionService,
     private readonly guestLanguage: GuestLanguageService,
+    private readonly menuPdfService: MenuPdfService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
   ) {}
@@ -383,10 +395,11 @@ export class TelegramUpdate {
         text,
         history,
       );
-      const { text: replyText, keyboard } =
-        typeof reply === 'string'
-          ? { text: reply, keyboard: undefined }
-          : reply;
+      const {
+        text: replyText,
+        keyboard,
+        document,
+      }: RichReply = typeof reply === 'string' ? { text: reply } : reply;
       const botReply = replyText || GENERIC_FALLBACK;
 
       if (await this.chatService.wasTakenOverMeanwhile(session)) {
@@ -399,6 +412,7 @@ export class TelegramUpdate {
       await this.chatService.recordBotMessage(session, botReply);
 
       await ctx.reply(botReply, { parse_mode: 'HTML', ...keyboard });
+      if (document) await ctx.replyWithDocument(document);
 
       if (isUnresolvedReply(botReply))
         await this.chatService.registerBotFailure(session);
@@ -495,6 +509,8 @@ export class TelegramUpdate {
         return this.resolvePrepareRoomService(aiResponse.datos, telegramUserId);
       case ChatAction.CANCEL_ROOM_SERVICE_ORDER:
         return this.resolveCancelRoomService(telegramUserId);
+      case ChatAction.SEND_MENU_PDF:
+        return this.resolveSendMenuPdf(aiResponse.datos, telegramUserId);
       case ChatAction.CANCEL_RESERVATION:
         return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
       case ChatAction.REGISTER_REFUND_ACCOUNT:
@@ -630,6 +646,22 @@ export class TelegramUpdate {
           keyboard: roomServiceCancelKeyboard(result.orderId),
         }
       : result.reply;
+  }
+
+  private async resolveSendMenuPdf(
+    datos: unknown,
+    telegramUserId: string,
+  ): Promise<BotReply> {
+    const kind = (datos as { menu?: unknown } | null)?.menu;
+    if (!isMenuPdfKind(kind)) return TelegramUpdate.ASK_WHICH_MENU;
+
+    const result = await this.menuPdfService.buildForGuest(
+      kind,
+      telegramUserId,
+    );
+    return result.ok
+      ? { text: result.reply, document: result.document }
+      : escapeHtml(result.reason);
   }
 
   private async resolveSearchAvailability(
