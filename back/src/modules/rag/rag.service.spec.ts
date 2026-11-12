@@ -778,10 +778,18 @@ describe('RagService', () => {
       expect(segunda).not.toContain('El spa abre de 9 a 21 hs.');
     });
 
-    it('busca solo con los 3 chunks más cercanos a la pregunta', async () => {
+    it('busca con los 6 chunks más cercanos a la pregunta, con margen para las faltas de ortografía', async () => {
       await service.askQuestion('¿Aceptan mascotas?');
 
-      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 3);
+      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 6);
+    });
+
+    it('le pide a Chamber que interprete las faltas de ortografía y repregunte en vez de derivar', async () => {
+      await service.askQuestion('tienen guardaequipage?');
+
+      const [instruction] = chatInstructions();
+      expect(instruction).toContain('REGLA PARA MENSAJES CON ERRORES');
+      expect(instruction).toContain('hacele una pregunta concreta');
     });
   });
 });
