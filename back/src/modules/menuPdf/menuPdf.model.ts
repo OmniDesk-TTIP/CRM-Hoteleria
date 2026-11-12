@@ -2,7 +2,6 @@ import { groupMenu, MenuItemModel } from '../restaurant/model/restaurant.model';
 import { SpaServiceModel } from '../spa/model/spa.model';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 
-
 export enum MenuPdfKind {
   RESTAURANT = 'restaurant',
   ROOM_SERVICE = 'room-service',
