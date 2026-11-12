@@ -46,6 +46,7 @@ describe('Campañas (e2e)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
         telegram: { sendMessage, sendPhoto: jest.fn() },
       })
       .compile();
@@ -127,6 +128,40 @@ describe('Campañas (e2e)', () => {
 
       expect(response.body.message).toMatch(/destinatarios/i);
     });
+
+    it('acepta el filtro por estadía en la query y trata los vacíos como ausentes', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/campaigns/recipients-count')
+        .query({
+          audience: 'ALL',
+          stayFilter: 'FINISHED',
+          stayFrom: '2026-01-01',
+          stayTo: '',
+          minGuests: '2',
+          maxGuests: '',
+        })
+        .set('Authorization', bearer(admin.accessToken))
+        .expect(200);
+
+      expect(response.body.count).toBeGreaterThanOrEqual(0);
+    });
+
+    it.each([
+      [{ stayFilter: 'VIP' }, /estado de la estadía/],
+      [{ stayFilter: 'UPCOMING', stayFrom: '2026-02-30' }, /fecha válida/],
+      [{ stayFilter: 'UPCOMING', stayTo: '01-02-2026' }, /YYYY-MM-DD/],
+      [{ stayFilter: 'IN_HOUSE', stayFrom: '2026-01-01' }, /rango de fechas/],
+      [{ minGuests: '0' }, /al menos 1/],
+      [{ maxGuests: 'dos' }, /número entero/],
+    ])('rechaza el filtro %o', async (filter, message) => {
+      const response = await request(app.getHttpServer())
+        .get('/campaigns/recipients-count')
+        .query({ audience: 'ALL', ...filter })
+        .set('Authorization', bearer(admin.accessToken))
+        .expect(400);
+
+      expect(response.body.message).toMatch(message);
+    });
   });
 
   describe('envío', () => {
@@ -160,11 +195,16 @@ describe('Campañas (e2e)', () => {
         .field('title', 'Promo e2e')
         .field('message', 'Hola')
         .field('audience', 'ALL')
+        // El panel manda los filtros sin completar como campos vacíos.
+        .field('stayFilter', '')
+        .field('minGuests', '')
         .expect(202);
 
       expect(response.body).toMatchObject({
         title: 'Promo e2e',
         audience: 'ALL',
+        stayFilter: null,
+        minGuests: null,
         hasImage: false,
         status: 'SENDING',
         sentCount: 0,

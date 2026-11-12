@@ -33,6 +33,7 @@ describe('ValidationPipe global (e2e)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
       })
       .compile();
 

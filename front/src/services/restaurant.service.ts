@@ -1,4 +1,4 @@
-import apiClient, { API_BASE_URL } from '@/config/api';
+import apiClient from '@/config/api';
 import type {
   MenuItem,
   MenuItemFormData,
@@ -66,5 +66,3 @@ export const reorderRestaurantPhotos = async (ids: string[]): Promise<Restaurant
 export const deleteRestaurantPhoto = async (id: string): Promise<void> => {
   await apiClient.delete(`/restaurant/photos/${id}`);
 };
-
-export const photoSrc = (photo: RestaurantPhoto): string => `${API_BASE_URL}${photo.url}`;

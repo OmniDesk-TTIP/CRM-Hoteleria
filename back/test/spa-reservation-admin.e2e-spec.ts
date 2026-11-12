@@ -87,6 +87,7 @@ describe('Solicitudes de servicios en el panel (e2e)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
         telegram: { sendMessage: jest.fn() },
       })
       .compile();

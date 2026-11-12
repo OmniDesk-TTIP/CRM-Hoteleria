@@ -4,6 +4,7 @@ import {
   ReservationOrigin,
   ReservationStatus,
 } from '../../../infrastructure/database/entities/Reservation.entity';
+import { EXPIRED_REASON } from '../reservation.model';
 
 export class AdminReservationDto {
   id!: string;
@@ -15,12 +16,17 @@ export class AdminReservationDto {
   origin!: ReservationOrigin;
   totalAmount!: number;
   depositAmount!: number;
+  promotionTitle!: string | null;
+  promotionPercentage!: number | null;
+  discountAmount!: number;
   room!: {
     id: string;
     roomNumber: string;
     categoryName: string;
   };
   createdAt!: Date;
+  expiresAt!: Date | null;
+  closureReason!: string | null;
   cancelledAt!: Date | null;
   cancellationPolicyName!: string | null;
   refundPercentage!: number | null;
@@ -40,12 +46,18 @@ export class AdminReservationDto {
     dto.origin = reservation.origin;
     dto.totalAmount = Number(reservation.totalAmount);
     dto.depositAmount = Number(reservation.depositAmount);
+    dto.promotionTitle = reservation.promotionTitle ?? null;
+    dto.promotionPercentage = reservation.promotionPercentage ?? null;
+    dto.discountAmount = Number(reservation.discountAmount);
     dto.room = {
       id: reservation.room.id,
       roomNumber: reservation.room.roomNumber,
       categoryName: reservation.room.category?.name ?? '',
     };
     dto.createdAt = reservation.createdAt;
+    dto.expiresAt = reservation.expiresAt ?? null;
+    dto.closureReason =
+      reservation.status === ReservationStatus.EXPIRED ? EXPIRED_REASON : null;
     dto.cancelledAt = reservation.cancelledAt ?? null;
     dto.cancellationPolicyName = reservation.cancellationPolicyName ?? null;
     dto.refundPercentage =

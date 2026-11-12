@@ -1,6 +1,6 @@
 import type { Campaign, CampaignStatus } from '@/config/types';
 import Pagination from '@/components/admin/Pagination';
-import { audienceLabel, formatCampaignDate, STATUS_LABELS } from './campaignFormat';
+import { audienceLabel, describeStayFilters, formatCampaignDate, STATUS_LABELS } from './campaignFormat';
 
 const STATUS_CLASSES: Record<CampaignStatus, string> = {
   SENDING: 'bg-gold/15 text-goldLight',
@@ -15,6 +15,21 @@ function StatusBadge({ status }: { status: CampaignStatus }) {
     >
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+/** Destinatarios base y, debajo, los filtros por estadía que se aplicaron (CA5). */
+function Recipients({ campaign }: { campaign: Campaign }) {
+  const stayFilters = describeStayFilters(campaign);
+  return (
+    <div className="space-y-0.5">
+      <p className="text-text">{audienceLabel(campaign.audience)}</p>
+      {stayFilters.map((part) => (
+        <p key={part} className="text-xs text-textMuted">
+          {part}
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -118,7 +133,9 @@ export default function CampaignHistory({
                   <p className="line-clamp-2 text-xs text-textMuted">{campaign.message}</p>
                   {campaign.hasImage && <p className="mt-1 text-xs text-goldLight">Con imagen</p>}
                 </td>
-                <td className="px-4 py-3 text-text sm:px-5">{audienceLabel(campaign.audience)}</td>
+                <td className="px-4 py-3 sm:px-5">
+                  <Recipients campaign={campaign} />
+                </td>
                 <td className="px-4 py-3 sm:px-5">
                   <Results campaign={campaign} />
                 </td>
@@ -152,7 +169,9 @@ export default function CampaignHistory({
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   <div>
                     <dt className="text-xs text-textMuted">Destinatarios</dt>
-                    <dd className="text-text">{audienceLabel(campaign.audience)}</dd>
+                    <dd>
+                      <Recipients campaign={campaign} />
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-textMuted">Resultado</dt>

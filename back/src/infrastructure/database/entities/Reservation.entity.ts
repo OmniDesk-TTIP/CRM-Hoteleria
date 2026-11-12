@@ -8,15 +8,16 @@ import {
 } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
 import { Room } from './Room.entity';
+import { Promotion } from './Promotion.entity';
 import { CustomBaseEntity } from './CustomBase.entity';
 
 export enum ReservationStatus {
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   CONFIRMED = 'CONFIRMED',
   CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
 }
 
-/** estado de la devolucion de la seña que genera una cancelacion con reintegro*/
 export enum RefundStatus {
   PENDING = 'PENDING',
   COMPLETED = 'COMPLETED',
@@ -45,6 +46,13 @@ export class Reservation extends CustomBaseEntity {
   @Property({ type: 'date' })
   checkOut!: Date;
 
+  /**
+   * Cantidad de personas que pidió el huésped al buscar disponibilidad. Null en las reservas
+   * manuales (el panel no lo pide) y en las del bot anteriores a que se guardara.
+   */
+  @Property({ type: 'integer', nullable: true })
+  guestCount?: number | null;
+
   @Enum(() => ReservationStatus)
   status: ReservationStatus = ReservationStatus.PENDING_PAYMENT;
 
@@ -56,6 +64,20 @@ export class Reservation extends CustomBaseEntity {
 
   @Property({ type: 'decimal', precision: 12, scale: 2 })
   depositAmount!: number;
+
+  // set null y no cascade: eliminar una promoción no puede borrar reservas.
+  @ManyToOne(() => Promotion, { nullable: true, deleteRule: 'set null' })
+  promotion?: Promotion | null;
+
+  /** Foto de la promoción aplicada: `totalAmount` y `depositAmount` ya tienen el descuento. */
+  @Property({ type: 'varchar', length: 100, nullable: true })
+  promotionTitle?: string | null;
+
+  @Property({ type: 'integer', nullable: true })
+  promotionPercentage?: number | null;
+
+  @Property({ type: 'decimal', precision: 12, scale: 2 })
+  discountAmount: number & Opt = 0;
 
   @Property({ type: 'varchar' })
   guestFullName!: string;
@@ -71,6 +93,15 @@ export class Reservation extends CustomBaseEntity {
 
   @Property({ type: 'varchar', nullable: true })
   mpPaymentId?: string;
+
+  @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
+  expiresAt?: Date;
+
+  @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
+  reminderSentAt?: Date;
+
+  @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
+  recoveryAnsweredAt?: Date;
 
   @Property({
     type: 'datetime',

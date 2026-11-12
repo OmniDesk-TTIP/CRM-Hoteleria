@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useLayoutContext } from '@/components/layout/layout.context';
+import { useAuth } from '@/context/auth.context';
+import type { UserRole } from '@/config/types';
 
 export interface TabItem {
   to: string;
@@ -8,6 +10,7 @@ export interface TabItem {
   end?: boolean;
   /** Muestra un contador al lado del nombre cuando es mayor a 0. */
   badge?: 'pendingSpaReservations' | 'pendingRestaurantReservations';
+  roles?: UserRole[];
 }
 
 interface TabbedLayoutProps {
@@ -19,6 +22,8 @@ interface TabbedLayoutProps {
 /** Barra de pestañas (una ruta por pestaña) y, debajo, la pantalla que corresponde. */
 export default function TabbedLayout({ tabs, maxWidth }: TabbedLayoutProps) {
   const context = useLayoutContext();
+  const { user } = useAuth();
+  const visibleTabs = tabs.filter((tab) => !tab.roles || (user && tab.roles.includes(user.role)));
 
   return (
     <>
@@ -27,7 +32,7 @@ export default function TabbedLayout({ tabs, maxWidth }: TabbedLayoutProps) {
           aria-label="Secciones"
           className="inline-flex gap-1 rounded-full border border-goldLight/15 bg-card p-1"
         >
-          {tabs.map(({ to, label, end, badge }) => {
+          {visibleTabs.map(({ to, label, end, badge }) => {
             const count = badge ? context[badge] : 0;
 
             return (

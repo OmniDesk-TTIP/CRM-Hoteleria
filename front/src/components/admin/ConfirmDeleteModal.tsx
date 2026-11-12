@@ -1,11 +1,18 @@
 interface ConfirmDeleteModalProps {
   title: string;
   children: React.ReactNode;
+  confirmLabel?: string;
   onClose: () => void;
   onConfirm: () => void;
 }
 
-export default function ConfirmDeleteModal({ title, children, onClose, onConfirm }: ConfirmDeleteModalProps) {
+export default function ConfirmDeleteModal({
+  title,
+  children,
+  confirmLabel = 'Sí, eliminar',
+  onClose,
+  onConfirm,
+}: ConfirmDeleteModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl border border-danger/20 bg-card p-5 text-center shadow-xl sm:p-6">
@@ -28,7 +35,7 @@ export default function ConfirmDeleteModal({ title, children, onClose, onConfirm
             onClick={onConfirm}
             className="rounded-xl bg-danger/90 px-4 py-2 font-medium text-white transition hover:bg-danger"
           >
-            Sí, eliminar
+            {confirmLabel}
           </button>
         </div>
       </div>

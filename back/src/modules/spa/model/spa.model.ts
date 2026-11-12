@@ -2,6 +2,8 @@ import { v4 } from 'uuid';
 import { SpaServiceStatus } from '../../../infrastructure/database/entities/SpaService.entity';
 import { ReservationStatus } from '../../../infrastructure/database/entities/Reservation.entity';
 import { toMinutes, WEEKDAY_NAMES } from '../../supportHours/supportHours.util';
+import { round2 } from '../../../common/number.util';
+import type { PromotionModel } from '../../promotion/promotion.model';
 
 export interface SpaServiceProps {
   id: string;
@@ -270,6 +272,7 @@ function truncate(text: string, max: number): string {
 export function buildSpaServicesBlock(
   spaServices: SpaServiceModel[],
   isGuest: boolean,
+  promotion: PromotionModel | null = null,
 ): string {
   const lines = [
     '[SERVICIOS DEL HOTEL]',
@@ -284,7 +287,11 @@ export function buildSpaServicesBlock(
   }
 
   for (const service of spaServices.slice(0, MAX_SPA_SERVICES_IN_BLOCK)) {
-    const price = isGuest ? 'SIN CARGO' : `$${service.price}`;
+    const price = isGuest
+      ? 'SIN CARGO'
+      : promotion
+        ? `$${round2(service.price - promotion.discountOn(service.price))} con la promoción ${promotion.title} (precio de lista $${service.price})`
+        : `$${service.price}`;
     lines.push(
       `- id=${service.id} | ${service.name} | ${service.durationMinutes} min | ${price} | ${describeWeekdays(service.availableWeekdays)} de ${service.opensAt} a ${service.closesAt}`,
       `  ${truncate(service.description, MAX_DESCRIPTION_LENGTH)}`,

@@ -21,6 +21,9 @@ export class RestaurantSettingsDto {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 
   static fromModel(
     model: RestaurantSettingsModel,
@@ -33,6 +36,9 @@ export class RestaurantSettingsDto {
     dto.availableWeekdays = model.availableWeekdays;
     dto.shifts = sortShifts(model.shifts);
     dto.maxPartySize = model.maxPartySize;
+    dto.roomServiceEnabled = model.roomServiceEnabled;
+    dto.roomServiceOpensAt = model.roomServiceOpensAt;
+    dto.roomServiceClosesAt = model.roomServiceClosesAt;
     return dto;
   }
 }

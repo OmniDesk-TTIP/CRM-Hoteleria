@@ -41,6 +41,7 @@ describe('Chats / Handover (e2e)', () => {
     on: jest.fn(),
     start: jest.fn(),
     use: jest.fn(),
+    action: jest.fn(),
     telegram: { sendMessage: jest.fn().mockResolvedValue(undefined) },
   };
 

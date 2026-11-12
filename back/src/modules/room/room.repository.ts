@@ -51,6 +51,21 @@ export class RoomRepository {
     );
   }
 
+  /** Tipos con al menos una habitación activa, del más barato al más caro. */
+  async findCategoriesWithActiveRooms(): Promise<RoomCategory[]> {
+    const rooms = await this.em.find(
+      Room,
+      { status: RoomStatus.ACTIVE },
+      {
+        populate: ['category'],
+        orderBy: { category: { basePrice: 'asc', name: 'asc' } },
+      },
+    );
+
+    // El Set deja cada tipo una sola vez: las habitaciones del mismo tipo comparten la instancia.
+    return [...new Set(rooms.map((room) => room.category))];
+  }
+
   async findByRoomNumber(
     roomNumber: string,
     excludeRoomId?: string,

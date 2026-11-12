@@ -51,6 +51,7 @@ describe('StatisticsService (integración)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
       })
       .compile();
 
@@ -200,6 +201,8 @@ describe('StatisticsService (integración)', () => {
         cancellationRetained: 15000,
         refundsPending: 15000,
         refundsCompleted: 30000,
+        promotionDiscounts: 0,
+        promotionSales: 0,
       },
       handover: { totalSessions: 4, handedOver: 2, ratePct: 50 },
     });
@@ -218,6 +221,8 @@ describe('StatisticsService (integración)', () => {
         cancellationRetained: 30000,
         refundsPending: 20000,
         refundsCompleted: 30000,
+        promotionDiscounts: 0,
+        promotionSales: 0,
       },
       handover: { totalSessions: 5, handedOver: 3, ratePct: 60 },
     });
@@ -245,6 +250,8 @@ describe('StatisticsService (integración)', () => {
         cancellationRetained: 0,
         refundsPending: 0,
         refundsCompleted: 0,
+        promotionDiscounts: 0,
+        promotionSales: 0,
       },
       handover: { totalSessions: 0, handedOver: 0, ratePct: 0 },
     });

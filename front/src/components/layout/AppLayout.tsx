@@ -49,7 +49,13 @@ const NAV_ITEMS: NavItem[] = [
   },
   { to: '/admin/statistics', label: 'Métricas', icon: ChartIcon, roles: ['ADMIN'] },
   { to: '/admin/reviews', label: 'Reseñas', icon: StarIcon, roles: ['ADMIN'] },
-  { to: '/admin/campaigns', label: 'Campañas', icon: MegaphoneIcon, roles: ['ADMIN'] },
+  {
+    to: '/admin/campaigns',
+    label: 'Campañas y promociones',
+    shortLabel: 'Campañas',
+    icon: MegaphoneIcon,
+    roles: ['ADMIN'],
+  },
   {
     to: '/admin/settings',
     label: 'Configuración',

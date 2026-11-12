@@ -4,6 +4,7 @@ import {
   ReservationOrigin,
   ReservationStatus,
 } from '../../infrastructure/database/entities/Reservation.entity';
+import { SpaReservationStatus } from '../../infrastructure/database/entities/SpaReservation.entity';
 
 export interface SalesByOriginRow {
   origin: ReservationOrigin;
@@ -19,6 +20,13 @@ export interface CancellationRevenueTotals {
   refundsPending: number;
   /** Devoluciones ya realizadas. */
   refundsCompleted: number;
+}
+
+export interface PromotionDiscountTotals {
+  /** Descuento otorgado en reservas y turnos confirmados: lo que el hotel dejó de cobrar. */
+  discounts: number;
+  /** Cuántas reservas y turnos confirmados se vendieron con promoción. */
+  count: number;
 }
 
 interface HandoverRow {
@@ -104,6 +112,45 @@ export class StatisticsRepository {
       retained: Number(row?.retained ?? 0),
       refundsPending: Number(row?.refunds_pending ?? 0),
       refundsCompleted: Number(row?.refunds_completed ?? 0),
+    };
+  }
+
+  async promotionDiscountTotals(
+    from: Date | null,
+  ): Promise<PromotionDiscountTotals> {
+    const params: unknown[] = [
+      ReservationStatus.CONFIRMED,
+      SpaReservationStatus.CONFIRMED,
+    ];
+    let where = 'discount_amount > 0';
+
+    if (from) {
+      where += ' AND created_at >= ?::timestamp';
+      params.push(from.toISOString());
+    }
+
+    const [row] = await this.em.getConnection().execute<
+      {
+        discounts: string;
+        count: string;
+      }[]
+    >(
+      `
+      SELECT COALESCE(SUM(discount_amount), 0) AS discounts,
+             COUNT(*) AS count
+      FROM (
+        SELECT discount_amount, created_at FROM reservations WHERE status = ?
+        UNION ALL
+        SELECT discount_amount, created_at FROM spa_reservations WHERE status = ?
+      ) AS sold
+      WHERE ${where}
+      `,
+      params,
+    );
+
+    return {
+      discounts: Number(row?.discounts ?? 0),
+      count: Number(row?.count ?? 0),
     };
   }
 

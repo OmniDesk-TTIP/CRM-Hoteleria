@@ -42,6 +42,9 @@ import {
   UpdateCancellationPolicyDto,
 } from './dto/cancellation.dto';
 
+const EXPIRED_NOT_CANCELLABLE =
+  'La reserva ya venció por falta de pago: no se cancela ni genera devolución';
+
 export interface CancellationOutcome extends RefundCalculation {
   reservationId: string;
   alreadyCancelled: boolean;
@@ -127,6 +130,9 @@ export class CancellationService {
     if (reservation.status === ReservationStatus.CANCELLED) {
       return this.alreadyCancelled(reservation.id, reservation.refund);
     }
+    if (reservation.status === ReservationStatus.EXPIRED) {
+      throw new ConflictException(EXPIRED_NOT_CANCELLABLE);
+    }
 
     const policy = await this.cancellationRepository.findActivePolicy();
     const calculation = calculateRefund(policy, reservation, this.today(now));
@@ -138,6 +144,9 @@ export class CancellationService {
     );
     if (!applied) {
       const current = await this.cancellationRepository.findReservation(id);
+      if (current?.status === ReservationStatus.EXPIRED) {
+        throw new ConflictException(EXPIRED_NOT_CANCELLABLE);
+      }
       return this.alreadyCancelled(id, current?.refund ?? null);
     }
 
@@ -205,6 +214,7 @@ export class CancellationService {
     }
     if (
       reservation.status === ReservationStatus.CANCELLED ||
+      reservation.status === ReservationStatus.EXPIRED ||
       reservation.checkOut < this.today(now)
     ) {
       return {

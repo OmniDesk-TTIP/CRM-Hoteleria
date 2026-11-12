@@ -12,12 +12,16 @@ import {
 import { RoomRepository } from '../room/room.repository';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
 import { ReservationStatus } from '../../infrastructure/database/entities/Reservation.entity';
+import { RESERVATION_HOLD_MINUTES } from '../payment/payment.service';
+import { addMinutes, EXPIRED_REASON } from './reservation.model';
 import { ListReservationsQueryDto } from './dto/listReservations.dto';
 import { SaveReservationDto } from './dto/saveReservation.dto';
 import {
   AdminReservationDto,
   PaginatedResultDto,
 } from './dto/adminReservation.dto';
+
+const holdDeadline = (now: Date) => addMinutes(now, RESERVATION_HOLD_MINUTES);
 
 @Injectable()
 export class ReservationAdminService {
@@ -50,7 +54,10 @@ export class ReservationAdminService {
     };
   }
 
-  async create(payload: SaveReservationDto): Promise<AdminReservationDto> {
+  async create(
+    payload: SaveReservationDto,
+    now: Date = new Date(),
+  ): Promise<AdminReservationDto> {
     const { room, checkIn, checkOut } =
       await this.validateAndResolveRoom(payload);
 
@@ -63,6 +70,9 @@ export class ReservationAdminService {
       status: payload.status,
       totalAmount: payload.totalAmount,
       depositAmount: payload.depositAmount,
+      ...(payload.status === ReservationStatus.PENDING_PAYMENT
+        ? { expiresAt: holdDeadline(now) }
+        : {}),
     });
 
     await this.reservationRepository.saveNew(reservation);
@@ -72,9 +82,15 @@ export class ReservationAdminService {
   async update(
     id: string,
     payload: SaveReservationDto,
+    now: Date = new Date(),
   ): Promise<AdminReservationDto> {
     const reservation = await this.reservationRepository.findById(id);
     if (!reservation) throw new NotFoundException('Reserva no encontrada');
+    if (reservation.status === ReservationStatus.EXPIRED) {
+      throw new ConflictException(
+        `La reserva no se puede editar: ${EXPIRED_REASON.toLowerCase()}`,
+      );
+    }
 
     const { room, checkIn, checkOut } = await this.validateAndResolveRoom(
       payload,
@@ -84,6 +100,10 @@ export class ReservationAdminService {
     const isCancelling =
       payload.status === ReservationStatus.CANCELLED &&
       reservation.status !== ReservationStatus.CANCELLED;
+    //si vuelve a quedar pendiente, arranca un plazo nuevo para pagar la seña
+    const isBackToPending =
+      payload.status === ReservationStatus.PENDING_PAYMENT &&
+      reservation.status !== ReservationStatus.PENDING_PAYMENT;
 
     await this.reservationRepository.applyUpdate(reservation, {
       room,
@@ -94,6 +114,7 @@ export class ReservationAdminService {
       status: isCancelling ? reservation.status : payload.status,
       totalAmount: payload.totalAmount,
       depositAmount: payload.depositAmount,
+      ...(isBackToPending ? { expiresAt: holdDeadline(now) } : {}),
     });
 
     if (isCancelling) {

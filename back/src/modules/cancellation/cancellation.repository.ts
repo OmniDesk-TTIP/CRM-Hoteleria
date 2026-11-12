@@ -134,7 +134,12 @@ export class CancellationRepository {
   ): Promise<boolean> {
     const affected = await this.em.nativeUpdate(
       Reservation,
-      { id, status: { $ne: ReservationStatus.CANCELLED } },
+      {
+        id,
+        status: {
+          $in: [ReservationStatus.PENDING_PAYMENT, ReservationStatus.CONFIRMED],
+        },
+      },
       {
         status: ReservationStatus.CANCELLED,
         cancelledAt,

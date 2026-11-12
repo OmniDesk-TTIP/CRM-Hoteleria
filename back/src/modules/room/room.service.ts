@@ -4,19 +4,38 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RoomRepository } from './room.repository';
+import { RoomPhotoRepository } from './roomPhoto.repository';
 import { RoomStatus } from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 import { CreateRoomDto } from './dto/createRoom.dto';
 import { UpdateRoomDto } from './dto/updateRoom.dto';
 import { RoomOptionDto } from './dto/roomOption.dto';
+import { PublicRoomDto } from './dto/publicRoom.dto';
 
 @Injectable()
 export class RoomService {
-  constructor(private readonly roomRepository: RoomRepository) {}
+  constructor(
+    private readonly roomRepository: RoomRepository,
+    private readonly photoRepository: RoomPhotoRepository,
+  ) {}
 
   async list(): Promise<RoomOptionDto[]> {
     const rooms = await this.roomRepository.findAllWithCategory();
     return rooms.map((room) => RoomOptionDto.fromEntity(room));
+  }
+
+  async listPublic(): Promise<PublicRoomDto[]> {
+    const categories =
+      await this.roomRepository.findCategoriesWithActiveRooms();
+    const photos = await this.photoRepository.findByCategories(
+      categories.map((category) => category.id),
+    );
+    return categories.map((category) =>
+      PublicRoomDto.fromEntity(
+        category,
+        photos.filter((photo) => photo.category.id === category.id),
+      ),
+    );
   }
 
   async create(payload: CreateRoomDto): Promise<RoomOptionDto> {
