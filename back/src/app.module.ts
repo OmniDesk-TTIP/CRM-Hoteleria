@@ -24,6 +24,8 @@ import { CampaignModule } from './modules/campaign/campaign.module';
 import { RoomServiceModule } from './modules/roomService/roomService.module';
 import { ArrivalMessageModule } from './modules/arrivalMessage/arrivalMessage.module';
 import { PromotionModule } from './modules/promotion/promotion.module';
+import { GuestLanguageModule } from './modules/guestLanguage/guestLanguage.module';
+import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.service';
 
 @Module({
   imports: [
@@ -49,12 +51,16 @@ import { PromotionModule } from './modules/promotion/promotion.module';
     ArrivalMessageModule,
     PromotionModule,
     TelegrafModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
+      imports: [ConfigModule, GuestLanguageModule],
+      useFactory: (
+        configService: ConfigService,
+        guestLanguage: GuestLanguageService,
+      ) => ({
         token: configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN'),
-        middlewares: [session()],
+        // El middleware traduce las respuestas al idioma de cada huésped.
+        middlewares: [session(), guestLanguage.middleware()],
       }),
-      inject: [ConfigService],
+      inject: [ConfigService, GuestLanguageService],
     }),
     ScheduleModule.forRoot(),
   ],

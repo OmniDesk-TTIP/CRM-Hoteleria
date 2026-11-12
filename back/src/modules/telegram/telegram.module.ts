@@ -11,6 +11,8 @@ import { RestaurantModule } from '../restaurant/restaurant.module';
 import { RestaurantReservationModule } from '../restaurantReservation/restaurantReservation.module';
 import { RoomServiceModule } from '../roomService/roomService.module';
 import { PromotionModule } from '../promotion/promotion.module';
+import { GuestLanguageModule } from '../guestLanguage/guestLanguage.module';
+import { TelegramLanguageHook } from './telegramLanguage.hook';
 import { MenuPdfModule } from '../menuPdf/menuPdf.module';
 
 @Module({
@@ -26,8 +28,9 @@ import { MenuPdfModule } from '../menuPdf/menuPdf.module';
     RoomServiceModule,
     CancellationModule,
     PromotionModule,
+    GuestLanguageModule,
     MenuPdfModule,
   ],
-  providers: [TelegramUpdate],
+  providers: [TelegramUpdate, TelegramLanguageHook],
 })
 export class TelegramModule {}

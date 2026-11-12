@@ -13,9 +13,12 @@ import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import { RoomServiceService } from '../roomService/roomService.service';
 import { PromotionService } from '../promotion/promotion.service';
+import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
+import { detectLanguage } from '../guestLanguage/language.detector';
 import { MenuPdfService } from '../menuPdf/menuPdf.service';
 import {
   ChatSessionStatus,
+  GuestLanguage,
   HandoverReason,
 } from '../../infrastructure/database/entities/ChatSession.entity';
 
@@ -132,6 +135,15 @@ describe('TelegramUpdate', () => {
           },
         },
         {
+          provide: GuestLanguageService,
+          useValue: {
+            applyDetectedLanguage: jest.fn((s: any, text: string) => {
+              const detected = detectLanguage(text);
+              if (detected) s.language = detected;
+            }),
+          },
+        },
+        {
           provide: MenuPdfService,
           useValue: { buildForGuest: jest.fn() },
         },
@@ -193,6 +205,7 @@ describe('TelegramUpdate', () => {
       id: '8f1d2a1e-0000-4000-8000-000000000001',
       telegramUserId: mockTelegramUserId,
       status: ChatSessionStatus.BOT,
+      language: GuestLanguage.ES,
     };
     chatService.getOrCreateSession.mockResolvedValue(session);
     chatService.recordIncomingMessage.mockResolvedValue({ id: 'incoming-1' });
@@ -259,6 +272,7 @@ describe('TelegramUpdate', () => {
       { block: '[RESTAURANTE]', canBook: true },
       { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
       '[PROMOCIONES VIGENTES]',
+      GuestLanguage.ES,
     );
   });
 
@@ -472,6 +486,7 @@ describe('TelegramUpdate', () => {
         expect.anything(),
         expect.anything(),
         expect.anything(),
+        GuestLanguage.ES,
       );
     });
 
@@ -1110,6 +1125,7 @@ describe('TelegramUpdate', () => {
         expect.anything(),
         { block: '[ROOM SERVICE]', canOrder: true, hasOpenOrder: false },
         expect.anything(),
+        GuestLanguage.ES,
       );
     });
 

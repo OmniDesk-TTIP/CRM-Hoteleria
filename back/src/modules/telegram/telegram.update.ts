@@ -25,6 +25,7 @@ import {
 } from '../roomService/roomService.service';
 import { PrepareRoomServiceOrderDto } from '../roomService/roomService.dto';
 import { PromotionService } from '../promotion/promotion.service';
+import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
 import { MenuPdfService } from '../menuPdf/menuPdf.service';
 import { isMenuPdfKind, MenuPdfFile } from '../menuPdf/menuPdf.model';
 import {
@@ -97,6 +98,7 @@ export class TelegramUpdate {
     private readonly cancellationService: CancellationService,
     private readonly roomServiceService: RoomServiceService,
     private readonly promotionService: PromotionService,
+    private readonly guestLanguage: GuestLanguageService,
     private readonly menuPdfService: MenuPdfService,
     private readonly orm: MikroORM,
     private readonly em: EntityManager,
@@ -321,6 +323,9 @@ export class TelegramUpdate {
         telegramUserId,
         this.readProfile(ctx),
       );
+      // Antes de registrar el mensaje: ese flush guarda el idioma, y las respuestas y avisos que
+      // salen hacia Telegram se traducen según lo que haya en la base.
+      this.guestLanguage.applyDetectedLanguage(session, text);
 
       const incoming = await this.chatService.recordIncomingMessage(
         session,
@@ -375,6 +380,7 @@ export class TelegramUpdate {
         restaurant,
         roomService,
         promotions,
+        session.language,
       );
 
       if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
@@ -463,6 +469,7 @@ export class TelegramUpdate {
       firstName: ctx.from.first_name,
       lastName: ctx.from.last_name,
       username: ctx.from.username,
+      languageCode: ctx.from.language_code,
     };
   }
 
