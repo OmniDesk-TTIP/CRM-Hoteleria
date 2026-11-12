@@ -11,6 +11,8 @@ import { RestaurantModule } from '../restaurant/restaurant.module';
 import { RestaurantReservationModule } from '../restaurantReservation/restaurantReservation.module';
 import { RoomServiceModule } from '../roomService/roomService.module';
 import { PromotionModule } from '../promotion/promotion.module';
+import { GuestLanguageModule } from '../guestLanguage/guestLanguage.module';
+import { TelegramLanguageHook } from './telegramLanguage.hook';
 
 @Module({
   imports: [
@@ -25,7 +27,8 @@ import { PromotionModule } from '../promotion/promotion.module';
     RoomServiceModule,
     CancellationModule,
     PromotionModule,
+    GuestLanguageModule,
   ],
-  providers: [TelegramUpdate],
+  providers: [TelegramUpdate, TelegramLanguageHook],
 })
 export class TelegramModule {}

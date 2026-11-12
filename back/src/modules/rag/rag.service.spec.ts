@@ -5,6 +5,7 @@ import { RagService, ChatAction } from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
 import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
+import { GuestLanguage } from '../../infrastructure/database/entities/ChatSession.entity';
 
 jest.mock('@google/generative-ai', () => {
   const actual = jest.requireActual('@google/generative-ai');
@@ -790,6 +791,28 @@ describe('RagService', () => {
       const [instruction] = chatInstructions();
       expect(instruction).toContain('REGLA PARA MENSAJES CON ERRORES');
       expect(instruction).toContain('hacele una pregunta concreta');
+    });
+
+    it('con un huésped que escribe en inglés le pide responder siempre en inglés', async () => {
+      await service.askQuestion(
+        'Do you have parking?',
+        null,
+        [],
+        null,
+        null,
+        null,
+        false,
+        null,
+        null,
+        null,
+        GuestLanguage.EN,
+      );
+      await service.askQuestion('¿Tienen estacionamiento?');
+
+      const [english, spanish] = chatInstructions();
+      expect(english).toContain('El cliente escribe en INGLÉS');
+      expect(spanish).not.toContain('El cliente escribe en INGLÉS');
+      expect(spanish).toContain('REGLA DE IDIOMA');
     });
   });
 });

@@ -1413,6 +1413,26 @@
           "enumItems": [],
           "mappedType": "integer"
         },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'es'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "es",
+            "en"
+          ],
+          "mappedType": "enum"
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp(6)",
@@ -1482,6 +1502,12 @@
           "expression": "\"status\" in ('BOT', 'WAITING_HUMAN', 'HUMAN')",
           "definition": "check (\"status\" in ('BOT', 'WAITING_HUMAN', 'HUMAN'))",
           "columnName": "status"
+        },
+        {
+          "name": "chat_sessions_language_check",
+          "expression": "\"language\" in ('es', 'en')",
+          "definition": "check (\"language\" in ('es', 'en'))",
+          "columnName": "language"
         }
       ],
       "triggers": [],

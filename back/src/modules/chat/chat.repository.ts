@@ -8,6 +8,7 @@ import {
 import {
   ChatSession,
   ChatSessionStatus,
+  GuestLanguage,
 } from '../../infrastructure/database/entities/ChatSession.entity';
 import {
   ChatMessage,
@@ -19,6 +20,8 @@ export interface TelegramProfile {
   firstName?: string;
   lastName?: string;
   username?: string;
+  /** Idioma de la app de Telegram del huésped ("en", "es-AR"...). */
+  languageCode?: string;
 }
 
 export interface ListChatsFilters {
@@ -73,6 +76,10 @@ export class ChatRepository {
     forked.create(ChatSession, {
       telegramUserId,
       ...this.profileFields(profile),
+      // Hasta que escriba algo, se le habla en el idioma de su Telegram (sirve para el /start).
+      language: profile?.languageCode?.toLowerCase().startsWith('en')
+        ? GuestLanguage.EN
+        : GuestLanguage.ES,
     });
 
     try {
