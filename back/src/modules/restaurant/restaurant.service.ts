@@ -121,6 +121,10 @@ export class RestaurantService {
     await this.restaurantRepository.deleteMenuItem(id);
   }
 
+  listActiveMenu(): Promise<MenuItemModel[]> {
+    return this.restaurantRepository.findActiveMenuItems();
+  }
+
   listRoomServiceMenu(): Promise<MenuItemModel[]> {
     return this.restaurantRepository.findRoomServiceMenuItems();
   }
