@@ -3,14 +3,12 @@ import { fetchMenuPdf, type MenuPdfKind } from '@/services/menuPdf.service';
 
 interface Props {
   kind: MenuPdfKind;
-  /** Cómo se nombra la carta en los botones: "carta del restó", "servicios del spa"… */
   label: string;
   filename: string;
 }
 
 type Action = 'preview' | 'download';
 
-/** El navegador necesita la URL un rato más después del click; después se libera. */
 const REVOKE_AFTER_MS = 60_000;
 
 const BUTTON_CLASS =
@@ -23,13 +21,11 @@ const download = (url: string, filename: string) => {
   link.click();
 };
 
-/** US-25 CA8: previsualizar y descargar la carta en PDF. Solo se muestra al administrador. */
 export default function MenuPdfActions({ kind, label, filename }: Props) {
   const [pending, setPending] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const run = async (action: Action) => {
-    // La pestaña se abre antes del await: después, el navegador la bloquearía como popup.
     const tab = action === 'preview' ? window.open('', '_blank') : null;
     setPending(action);
     setError(null);
