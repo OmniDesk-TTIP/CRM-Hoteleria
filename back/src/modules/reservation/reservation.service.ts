@@ -4,8 +4,14 @@ import {
   BookingProcess,
   BookingProcessStep,
 } from '../../infrastructure/database/entities/BookingProcess.entity';
-import { Room } from '../../infrastructure/database/entities/Room.entity';
-import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
+import {
+  Room,
+  RoomStatus,
+} from '../../infrastructure/database/entities/Room.entity';
+import {
+  Reservation,
+  ReservationStatus,
+} from '../../infrastructure/database/entities/Reservation.entity';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { RoomRepository } from '../room/room.repository';
@@ -13,6 +19,7 @@ import { CancellationService } from '../cancellation/cancellation.service';
 import { PromotionTarget } from '../../infrastructure/database/entities/Promotion.entity';
 import { PromotionService } from '../promotion/promotion.service';
 import {
+  AppliedPromotion,
   buildPromotionLine,
   describeAmount,
   priceWithPromotions,
@@ -31,9 +38,12 @@ import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { ConfirmReservationDto } from './dto/confirmReservation.dto';
 import { toCalendarDayString } from '../spa/model/spa.model';
 import {
+  addMinutes,
   DayRange,
+  describeMinutes,
   findGapFreeVariants,
   fromDayNumber,
+  minutesUntil,
   pickRoomAvoidingGap,
   RoomSchedule,
   StayVariant,
@@ -96,6 +106,28 @@ interface RoomChoice {
   leavesGap: boolean;
   reservations: Reservation[];
 }
+
+interface HeldStay {
+  room: Room;
+  checkIn: Date;
+  checkOut: Date;
+  guestCount: number;
+  totalAmount: number;
+  depositAmount: number;
+  promotion: AppliedPromotion | null;
+  priceLines: string[];
+  guest: ConfirmReservationDto;
+}
+
+export type ExpiredRecoveryResult =
+  | { kind: 'reply'; reply: string }
+  | { kind: 'search'; search: SearchAvailabilityDto };
+
+const CANNOT_RESUME =
+  'Esa reserva ya no se puede retomar. Si querés, buscamos disponibilidad de nuevo: decime las fechas de entrada y salida y para cuántas personas.';
+
+const RECOVERY_ALREADY_ANSWERED =
+  'Ya me respondiste sobre esa reserva. Si querés reservar de nuevo, decime las fechas de entrada y salida y para cuántas personas.';
 
 @Injectable()
 export class ReservationService {
@@ -187,92 +219,149 @@ export class ReservationService {
       await this.findAvailableRoom(savedCheckIn, savedCheckOut, capacity)
     )?.room;
 
-    let botReply: string;
-    if (roomToBook) {
-      const checkInDate = parseDate(savedCheckIn);
-      const checkOutDate = parseDate(savedCheckOut);
-      const nights = this.calculateNights(savedCheckIn, savedCheckOut);
-      const price = this.priceStay(
-        roomToBook,
-        nights,
-        await this.promotionService.listActive(),
-      );
-      const totalAmount = price.finalAmount;
-      const depositAmount = this.depositFor(totalAmount);
-
-      // La promoción pudo vencer o deshabilitarse desde la oferta: no se reserva a otro precio sin avisar.
-      if (
-        activeBooking.quotedTotal != null &&
-        Number(activeBooking.quotedTotal) !== totalAmount
-      ) {
-        activeBooking.quotedTotal = totalAmount;
-        return [
-          `Antes de reservarte: el precio cambió desde que te lo ofrecí, las promociones disponibles ya no son las mismas.`,
-          '',
-          ...this.promotionLines(price),
-          `El total de tu estadía (${nights} noches) ahora es de ${describeAmount(price)}, con una seña del 30% de $${depositAmount}.`,
-          '',
-          '¿Querés que te la reserve igual?',
-        ].join('\n');
-      }
-
-      const newReservation = this.reservationRepository.create({
-        room: roomToBook,
-        telegramUserId,
-        checkIn: checkInDate,
-        checkOut: checkOutDate,
-        guestCount: capacity,
-        totalAmount,
-        depositAmount,
-        guestFullName: guestData.fullName,
-        guestDni: guestData.dni,
-        promotion: toAppliedPromotion(price),
-      });
-
-      // Primero el link de pago: si Mercado Pago falla, la reserva no se guarda (ni la arrastra el
-      // flush que hace después el manejo de errores) y la búsqueda sigue esperando confirmación,
-      // así el huésped puede volver a intentar.
-      let preference: { preferenceId: string; initPoint: string };
-      try {
-        preference = await this.paymentService.createPreference(
-          newReservation,
-          guestData,
-        );
-      } catch (error) {
-        this.reservationRepository.discard(newReservation);
-        throw error;
-      }
-      newReservation.mpPreferenceId = preference.preferenceId;
-      newReservation.mpInitPoint = preference.initPoint;
-
-      this.reservationRepository.persist(newReservation);
-      this.bookingProcessService.markCompleted(activeBooking);
-
-      const paymentFormUrl = this.paymentFormUrl(newReservation.id);
-
-      const policySummary = await this.cancellationService.getPolicySummary();
-
-      botReply = [
-        `Te estoy guardando la ${escapeHtml(roomToBook.category.name)} del ${savedCheckIn} al ${savedCheckOut}, a nombre de ${escapeHtml(guestData.fullName)}.`,
-        '',
-        ...this.promotionLines(price),
-        `Total de la estadía: ${describeAmount(price)}`,
-        `Seña para reservarla: $${depositAmount}`,
-        '',
-        `<b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
-        '',
-        'Aboná la seña acá:',
-        htmlLink(paymentFormUrl, paymentFormUrl),
-        '',
-        'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
-        ...(policySummary ? ['', policySummary] : []),
-      ].join('\n');
-    } else {
-      botReply = `Uy, parece que alguien acaba de reservar la última habitación disponible para esas fechas mientras hablábamos. ¿Te gustaría buscar otra fecha?`;
+    if (!roomToBook) {
       this.bookingProcessService.markInProgress(activeBooking);
+      return `Uy, parece que alguien acaba de reservar la última habitación disponible para esas fechas mientras hablábamos. ¿Te gustaría buscar otra fecha?`;
     }
 
-    return botReply;
+    const nights = this.calculateNights(savedCheckIn, savedCheckOut);
+    const price = this.priceStay(
+      roomToBook,
+      nights,
+      await this.promotionService.listActive(),
+    );
+    const totalAmount = price.finalAmount;
+    const depositAmount = this.depositFor(totalAmount);
+
+    // La promoción pudo vencer o deshabilitarse desde la oferta: no se reserva a otro precio sin avisar.
+    if (
+      activeBooking.quotedTotal != null &&
+      Number(activeBooking.quotedTotal) !== totalAmount
+    ) {
+      activeBooking.quotedTotal = totalAmount;
+      return [
+        `Antes de reservarte: el precio cambió desde que te lo ofrecí, las promociones disponibles ya no son las mismas.`,
+        '',
+        ...this.promotionLines(price),
+        `El total de tu estadía (${nights} noches) ahora es de ${describeAmount(price)}, con una seña del 30% de $${depositAmount}.`,
+        '',
+        '¿Querés que te la reserve igual?',
+      ].join('\n');
+    }
+
+    const reply = await this.holdRoom(telegramUserId, {
+      room: roomToBook,
+      checkIn: parseDate(savedCheckIn),
+      checkOut: parseDate(savedCheckOut),
+      guestCount: capacity,
+      totalAmount,
+      depositAmount,
+      promotion: toAppliedPromotion(price),
+      priceLines: [
+        ...this.promotionLines(price),
+        `Total de la estadía: ${describeAmount(price)}`,
+      ],
+      guest: guestData,
+    });
+    this.bookingProcessService.markCompleted(activeBooking);
+    return reply;
+  }
+
+  async resumeExpiredReservation(
+    telegramUserId: string,
+    reservationId: string,
+    now: Date = new Date(),
+  ): Promise<ExpiredRecoveryResult> {
+    const reservation = await this.findOwnExpired(
+      telegramUserId,
+      reservationId,
+    );
+    if (!reservation) return { kind: 'reply', reply: CANNOT_RESUME };
+    if (
+      !(await this.reservationRepository.markRecoveryAnswered(
+        reservation.id,
+        telegramUserId,
+        now,
+      ))
+    ) {
+      return { kind: 'reply', reply: RECOVERY_ALREADY_ANSWERED };
+    }
+
+    if (toDayNumber(reservation.checkIn) < toDayNumber(startOfToday())) {
+      return {
+        kind: 'reply',
+        reply:
+          'Las fechas de esa reserva ya pasaron, así que no la puedo retomar. Si querés, buscamos disponibilidad de nuevo: decime las fechas de entrada y salida y para cuántas personas.',
+      };
+    }
+
+    const { room } = reservation;
+    const isStillFree =
+      room.status === RoomStatus.ACTIVE &&
+      !(await this.reservationRepository.isRoomOccupied(
+        room.id,
+        reservation.checkIn,
+        reservation.checkOut,
+      ));
+    if (!isStillFree) {
+      return {
+        kind: 'search',
+        search: {
+          checkIn: toChatDay(reservation.checkIn),
+          checkOut: toChatDay(reservation.checkOut),
+          capacity: room.category.capacity,
+        },
+      };
+    }
+
+    const totalAmount = Number(reservation.totalAmount);
+    const promotion: AppliedPromotion | null = reservation.promotionTitle
+      ? {
+          id: reservation.promotion?.id ?? null,
+          title: reservation.promotionTitle,
+          percentage: reservation.promotionPercentage ?? 0,
+          discountAmount: Number(reservation.discountAmount),
+        }
+      : null;
+    const reply = await this.holdRoom(telegramUserId, {
+      room,
+      checkIn: reservation.checkIn,
+      checkOut: reservation.checkOut,
+      guestCount: reservation.guestCount ?? room.category.capacity,
+      totalAmount,
+      depositAmount: Number(reservation.depositAmount),
+      promotion,
+      priceLines: [
+        promotion
+          ? `Total de la estadía: $${totalAmount} (con la promoción ${escapeHtml(promotion.title)})`
+          : `Total de la estadía: $${totalAmount}`,
+      ],
+      guest: { fullName: reservation.guestFullName, dni: reservation.guestDni },
+    });
+    return { kind: 'reply', reply };
+  }
+
+  /** caso "No, gracias": la reserva queda vencida y no se vuelve a ofrecer */
+  async declineExpiredRecovery(
+    telegramUserId: string,
+    reservationId: string,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const reservation = await this.findOwnExpired(
+      telegramUserId,
+      reservationId,
+    );
+    if (!reservation) return CANNOT_RESUME;
+    if (
+      !(await this.reservationRepository.markRecoveryAnswered(
+        reservation.id,
+        telegramUserId,
+        now,
+      ))
+    ) {
+      return RECOVERY_ALREADY_ANSWERED;
+    }
+    return 'Listo, no hay problema. Si más adelante querés reservar, escribime las fechas y te busco disponibilidad.';
   }
 
   async hasPendingPayment(
@@ -283,7 +372,7 @@ export class ReservationService {
     return reservations.length > 0;
   }
 
-  /** Respuesta fija con el link de pago de las reservas que todavía esperan la seña. */
+  /** Respuesta fija con el link de pago de las reservas que todavia esperan la seña */
   async buildPendingPaymentReply(
     telegramUserId: string,
     now: Date = new Date(),
@@ -293,19 +382,11 @@ export class ReservationService {
 
     const lines = reservations.map((reservation) => {
       const link = this.paymentFormUrl(reservation.id);
-      const minutesLeft = Math.max(
-        1,
-        Math.ceil(
-          (reservation.createdAt.getTime() +
-            RESERVATION_HOLD_MINUTES * 60 * 1000 -
-            now.getTime()) /
-            60000,
-        ),
-      );
+      const minutesLeft = minutesUntil(reservation.expiresAt!, now);
       return [
         `Reserva del ${toChatDay(reservation.checkIn)} al ${toChatDay(reservation.checkOut)}: seña de <b>$${Number(reservation.depositAmount)}</b>.`,
         `Aboná acá: ${htmlLink(link, link)}`,
-        `Te la guardo ${minutesLeft} ${minutesLeft === 1 ? 'minuto' : 'minutos'} más; si no entra el pago, se libera.`,
+        `Te la guardo ${describeMinutes(minutesLeft)} más; si no entra el pago, se libera.`,
       ].join('\n');
     });
 
@@ -316,13 +397,104 @@ export class ReservationService {
     ].join('\n');
   }
 
+  buildPaymentReminder(reservation: Reservation, now: Date): string {
+    const link = this.paymentFormUrl(reservation.id);
+    const minutesLeft = minutesUntil(reservation.expiresAt!, now);
+    return [
+      `⏳ Tu reserva del ${toChatDay(reservation.checkIn)} al ${toChatDay(reservation.checkOut)} todavía espera la seña de <b>$${Number(reservation.depositAmount)}</b>.`,
+      '',
+      `Te la guardo <b>${describeMinutes(minutesLeft)}</b> más; si no entra el pago, se libera para otro huésped.`,
+      '',
+      'Para confirmarla, aboná la seña acá:',
+      htmlLink(link, link),
+    ].join('\n');
+  }
+
+  buildExpirationNotice(reservation: Reservation): string {
+    return [
+      `⌛ Tu reserva del ${toChatDay(reservation.checkIn)} al ${toChatDay(reservation.checkOut)} venció porque no se acreditó la seña a tiempo, así que liberamos la habitación.`,
+      '',
+      'Como no se abonó nada, no hay ningún cobro ni devolución pendiente.',
+      '',
+      '¿Querés retomarla? Si la habitación sigue libre te la vuelvo a guardar con los mismos datos; si no, te paso otras opciones.',
+    ].join('\n');
+  }
+
+  private async holdRoom(
+    telegramUserId: string,
+    stay: HeldStay,
+    now: Date = new Date(),
+  ): Promise<string> {
+    const newReservation = this.reservationRepository.create({
+      room: stay.room,
+      telegramUserId,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      guestCount: stay.guestCount,
+      totalAmount: stay.totalAmount,
+      depositAmount: stay.depositAmount,
+      guestFullName: stay.guest.fullName,
+      guestDni: stay.guest.dni,
+      expiresAt: addMinutes(now, RESERVATION_HOLD_MINUTES),
+      promotion: stay.promotion,
+    });
+
+    let preference: { preferenceId: string; initPoint: string };
+    try {
+      preference = await this.paymentService.createPreference(
+        newReservation,
+        stay.guest,
+      );
+    } catch (error) {
+      this.reservationRepository.discard(newReservation);
+      throw error;
+    }
+    newReservation.mpPreferenceId = preference.preferenceId;
+    newReservation.mpInitPoint = preference.initPoint;
+
+    this.reservationRepository.persist(newReservation);
+
+    const paymentFormUrl = this.paymentFormUrl(newReservation.id);
+
+    const policySummary = await this.cancellationService.getPolicySummary();
+
+    return [
+      `Te estoy guardando la ${escapeHtml(stay.room.category.name)} del ${toChatDay(stay.checkIn)} al ${toChatDay(stay.checkOut)}, a nombre de ${escapeHtml(stay.guest.fullName)}.`,
+      '',
+      ...stay.priceLines,
+      `Seña para reservarla: $${stay.depositAmount}`,
+      '',
+      `<b>Todavía no está confirmada.</b> Te guardo la habitación ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no entra la seña, se libera para otro huésped.`,
+      '',
+      'Aboná la seña acá:',
+      htmlLink(paymentFormUrl, paymentFormUrl),
+      '',
+      'Apenas se acredite el pago te escribo por acá y ahí sí queda confirmada.',
+      ...(policySummary ? ['', policySummary] : []),
+    ].join('\n');
+  }
+
+  private async findOwnExpired(
+    telegramUserId: string,
+    reservationId: string,
+  ): Promise<Reservation | null> {
+    const reservation = await this.reservationRepository.findById(
+      reservationId,
+      { refresh: true },
+    );
+    return reservation?.telegramUserId === telegramUserId &&
+      reservation.status === ReservationStatus.EXPIRED
+      ? reservation
+      : null;
+  }
+
   private findAwaitingPayment(
     telegramUserId: string,
     now: Date,
   ): Promise<Reservation[]> {
     return this.reservationRepository.findAwaitingPaymentByTelegramUserId(
       telegramUserId,
-      new Date(now.getTime() - RESERVATION_HOLD_MINUTES * 60 * 1000),
+      now,
     );
   }
 

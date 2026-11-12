@@ -9,9 +9,6 @@ import { RoomService } from './room.service';
 import { Room } from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 
-// El CRUD (listar, crear con tipo nuevo, número repetido, editar número, precio compartido por
-// tipo, deshabilitar, baja lógica y 404) ya lo cubre test/room-admin.e2e-spec.ts. Acá queda cómo
-// el service resuelve el tipo de habitación por nombre.
 describe('RoomService (integración)', () => {
   let app: INestApplication;
   let orm: MikroORM;

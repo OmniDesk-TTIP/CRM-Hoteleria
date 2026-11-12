@@ -4,6 +4,7 @@ import {
   ReservationOrigin,
   ReservationStatus,
 } from '../../../infrastructure/database/entities/Reservation.entity';
+import { EXPIRED_REASON } from '../reservation.model';
 
 export class AdminReservationDto {
   id!: string;
@@ -24,6 +25,8 @@ export class AdminReservationDto {
     categoryName: string;
   };
   createdAt!: Date;
+  expiresAt!: Date | null;
+  closureReason!: string | null;
   cancelledAt!: Date | null;
   cancellationPolicyName!: string | null;
   refundPercentage!: number | null;
@@ -52,6 +55,9 @@ export class AdminReservationDto {
       categoryName: reservation.room.category?.name ?? '',
     };
     dto.createdAt = reservation.createdAt;
+    dto.expiresAt = reservation.expiresAt ?? null;
+    dto.closureReason =
+      reservation.status === ReservationStatus.EXPIRED ? EXPIRED_REASON : null;
     dto.cancelledAt = reservation.cancelledAt ?? null;
     dto.cancellationPolicyName = reservation.cancellationPolicyName ?? null;
     dto.refundPercentage =

@@ -1,10 +1,37 @@
 import {
+  addMinutes,
+  describeMinutes,
   findGapFreeVariants,
   fromDayNumber,
+  minutesUntil,
   pickRoomAvoidingGap,
   RoomSchedule,
   toDayNumber,
 } from './reservation.model';
+
+describe('vencimiento de reservas pendientes', () => {
+  const now = new Date('2026-10-28T15:00:00.000Z');
+
+  it('addMinutes suma minutos sin tocar la fecha original', () => {
+    expect(addMinutes(now, 30)).toEqual(new Date('2026-10-28T15:30:00.000Z'));
+    expect(now).toEqual(new Date('2026-10-28T15:00:00.000Z'));
+  });
+
+  it('minutesUntil redondea hacia arriba lo que falta para vencer', () => {
+    expect(minutesUntil(new Date('2026-10-28T15:09:01.000Z'), now)).toBe(10);
+    expect(minutesUntil(new Date('2026-10-28T15:10:00.000Z'), now)).toBe(10);
+  });
+
+  it('minutesUntil nunca dice menos de 1 minuto', () => {
+    expect(minutesUntil(new Date('2026-10-28T15:00:10.000Z'), now)).toBe(1);
+    expect(minutesUntil(new Date('2026-10-28T14:59:00.000Z'), now)).toBe(1);
+  });
+
+  it('describeMinutes usa singular y plural', () => {
+    expect(describeMinutes(1)).toBe('1 minuto');
+    expect(describeMinutes(10)).toBe('10 minutos');
+  });
+});
 
 const stay = (checkIn: number, checkOut: number) => ({ checkIn, checkOut });
 const schedule = (roomId: string, ...bookings: [number, number][]) =>

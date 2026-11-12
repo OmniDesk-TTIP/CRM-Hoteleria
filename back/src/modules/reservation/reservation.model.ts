@@ -1,4 +1,24 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_MINUTE = 60 * 1000;
+
+export const PAYMENT_REMINDER_MINUTES_BEFORE = 10;
+
+export const EXPIRED_REASON = 'Vencida por falta de pago';
+
+export function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * MS_PER_MINUTE);
+}
+
+export function minutesUntil(deadline: Date, now: Date): number {
+  return Math.max(
+    1,
+    Math.ceil((deadline.getTime() - now.getTime()) / MS_PER_MINUTE),
+  );
+}
+
+export function describeMinutes(minutes: number): string {
+  return `${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
+}
 
 export interface DayRange {
   checkIn: number;
