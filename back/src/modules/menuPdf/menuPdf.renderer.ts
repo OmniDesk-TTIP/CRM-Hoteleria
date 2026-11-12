@@ -8,11 +8,6 @@ import {
   MenuPdfSection,
 } from './menuPdf.model';
 
-// US-25 CA4: única pieza que conoce pdfkit. La identidad es la de la web del hotel: fondo oscuro,
-// texto crema, acento dorado, títulos con serif y el isotipo con la inicial dentro de un círculo.
-// Se usan las fuentes estándar del PDF (no hay que embeber archivos) y hoja A5, que se lee bien
-// en el celular sin hacer zoom y también en una computadora.
-
 type Doc = PDFKit.PDFDocument;
 
 const COLORS = {
@@ -36,7 +31,6 @@ const PRICE_GAP = 14;
 const ITEM_GAP = 10;
 const SECTION_HEADER_HEIGHT = 44;
 
-/** Las fuentes estándar solo cubren Latin-1: se descarta lo demás (emojis) para no dibujar basura. */
 const EXTRA_GLYPHS = '–—…•’‘“”';
 
 const isDrawable = (char: string): boolean => {
@@ -209,7 +203,6 @@ function drawItem(doc: Doc, item: MenuPdfItem): void {
   doc.y += ITEM_GAP;
 }
 
-/** Alto que va a ocupar el ítem, para no partirlo entre dos páginas. */
 function itemHeight(doc: Doc, item: MenuPdfItem): number {
   const price = formatPrice(item.price);
   const nameWidth =
@@ -238,14 +231,12 @@ function ensureSpace(doc: Doc, height: number): void {
   if (doc.y + height > bottom) doc.addPage();
 }
 
-/** Pie de cada página con el nombre del hotel y la fecha de actualización (CA5). */
 function drawFooters(doc: Doc, content: MenuPdfContent): void {
   const { count } = doc.bufferedPageRange();
   const base = `${clean(content.hotelName)} · Actualización: ${content.updatedOn}`;
 
   for (let page = 0; page < count; page++) {
     doc.switchToPage(page);
-    // Sin margen inferior: escribir en el pie no tiene que disparar una página nueva.
     doc.page.margins.bottom = 0;
     doc
       .font(FONTS.body)

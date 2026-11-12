@@ -2,8 +2,6 @@ import { groupMenu, MenuItemModel } from '../restaurant/model/restaurant.model';
 import { SpaServiceModel } from '../spa/model/spa.model';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 
-// US-25: contenido de las cartas en PDF. Es puro (sin DB, ORM ni pdfkit): el service lo arma con
-// lo cargado en el panel y el renderer solo lo dibuja.
 
 export enum MenuPdfKind {
   RESTAURANT = 'restaurant',
@@ -17,7 +15,6 @@ export const isMenuPdfKind = (value: unknown): value is MenuPdfKind =>
 interface MenuPdfTexts {
   title: string;
   filename: string;
-  /** Cómo se nombra la carta dentro de una oración ("Te envío ..."). */
   label: string;
   unavailable: string;
   notEligible: string;
@@ -74,11 +71,8 @@ export interface MenuPdfSection {
   items: MenuPdfItem[];
 }
 
-/** Lo que cambia de una carta a otra; el service lo lee del panel en cada pedido (CA3). */
 export interface MenuPdfSource {
-  /** El servicio está habilitado en el panel. */
   enabled: boolean;
-  /** Horario del servicio (CA5); null si no aplica. */
   schedule: string | null;
   note: string | null;
   sections: MenuPdfSection[];
@@ -88,7 +82,6 @@ export interface MenuPdfContent extends MenuPdfSource {
   kind: MenuPdfKind;
   title: string;
   hotelName: string;
-  /** Fecha de actualización DD/MM/YYYY (CA5). */
   updatedOn: string;
 }
 
@@ -97,7 +90,6 @@ export interface MenuPdfFile {
   filename: string;
 }
 
-/** Secciones por categoría de la carta (CA4). Recibe solo ítems habilitados (CA2). */
 export function menuSections(items: MenuItemModel[]): MenuPdfSection[] {
   return groupMenu(items).map(({ category, items: sectionItems }) => ({
     category,
@@ -109,7 +101,6 @@ export function menuSections(items: MenuItemModel[]): MenuPdfSection[] {
   }));
 }
 
-/** El spa no tiene categorías cargadas: todos los servicios habilitados van en una sección. */
 export function spaSections(services: SpaServiceModel[]): MenuPdfSection[] {
   if (services.length === 0) return [];
   return [
@@ -144,7 +135,6 @@ export function buildMenuPdfContent(
 export const hasItems = (content: MenuPdfSource): boolean =>
   content.sections.some((section) => section.items.length > 0);
 
-/** Los centavos se muestran solo si el precio los tiene. */
 export const formatPrice = (price: number): string =>
   `$ ${price.toLocaleString('es-AR', {
     minimumFractionDigits: Number.isInteger(price) ? 0 : 2,
@@ -156,7 +146,6 @@ export const capitalize = (text: string): string =>
 
 export const formatDuration = (minutes: number): string => `${minutes} min`;
 
-/** Respuesta conversacional que acompaña al PDF, con el link de la landing (CA1). */
 export function buildGuestReply(
   content: MenuPdfContent,
   landingUrl: string | null,

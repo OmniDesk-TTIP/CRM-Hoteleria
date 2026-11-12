@@ -27,8 +27,6 @@ export type GuestMenuPdfResult =
 
 const DEFAULT_HOTEL_NAME = 'Alma Hotel';
 
-// US-25. El PDF se genera en cada pedido con lo que hay cargado en el panel: no se guarda ni se
-// cachea, así los cambios se ven en el siguiente envío sin desplegar nada (CA3).
 @Injectable()
 export class MenuPdfService {
   constructor(
@@ -38,7 +36,6 @@ export class MenuPdfService {
     private readonly configService: ConfigService,
   ) {}
 
-  /** CA8: el administrador previsualiza la carta aunque el servicio todavía esté deshabilitado. */
   async buildForAdmin(
     kind: MenuPdfKind,
     now: Date = new Date(),
@@ -50,7 +47,6 @@ export class MenuPdfService {
     return this.toFile(content);
   }
 
-  /** CA1/CA6/CA7: el PDF para el huésped, o el motivo por el que no se le envía. */
   async buildForGuest(
     kind: MenuPdfKind,
     telegramUserId: string,
@@ -73,7 +69,6 @@ export class MenuPdfService {
     };
   }
 
-  /** CA6: room service solo para alojados; restó y spa también con reserva confirmada. */
   private async isEligible(
     kind: MenuPdfKind,
     telegramUserId: string,

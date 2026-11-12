@@ -36,8 +36,6 @@ import {
   SpaServiceStatus,
 } from '../../infrastructure/database/entities/SpaService.entity';
 
-// El dibujo del PDF se prueba en menuPdf.model.spec; acá se captura el contenido que llega al
-// renderer para verificar qué se lee de la base.
 jest.mock('./menuPdf.renderer', () => ({ renderMenuPdf: jest.fn() }));
 
 describe('MenuPdfService (integración)', () => {
@@ -138,7 +136,6 @@ describe('MenuPdfService (integración)', () => {
   const setRestaurant = (changes: Partial<RestaurantSettings>) =>
     em.nativeUpdate(RestaurantSettings, { id: settingsId }, changes);
 
-  /** Contenido de la última carta que se mandó a dibujar. */
   const adminContent = async (kind: MenuPdfKind): Promise<MenuPdfContent> => {
     await service.buildForAdmin(kind, NOW);
     return renderMock.mock.calls[renderMock.mock.calls.length - 1][0];
@@ -150,7 +147,6 @@ describe('MenuPdfService (integración)', () => {
   const namesOf = (content: MenuPdfContent) =>
     itemsOf(content).map((item) => item.name);
 
-  /** Deja la base sin nada habilitado mientras corre `work` y después lo restaura. */
   const withNothingEnabled = async (work: () => Promise<void>) => {
     const fork = em.fork();
     const dishes = await fork.find(RestaurantMenuItem, {

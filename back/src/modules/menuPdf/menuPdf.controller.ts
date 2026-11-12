@@ -12,7 +12,6 @@ import { UserRole } from '../../infrastructure/database/entities/User.entity';
 import { MenuPdfKind } from './menuPdf.model';
 import { MenuPdfService } from './menuPdf.service';
 
-// US-25 CA8: previsualización y descarga de las cartas desde el panel, solo para el administrador.
 @Roles(UserRole.ADMIN)
 @UseGuards(RolesGuard)
 @Controller('menu-pdfs')
