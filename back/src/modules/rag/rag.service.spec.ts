@@ -227,9 +227,11 @@ describe('RagService', () => {
         const { systemInstruction } = readChatConfig();
         expect(systemInstruction).toContain('id=spa-1 | Masaje');
         expect(systemInstruction).toContain('REGLA PARA EL SPA');
-        // la regla cubre a los dos tipos de cliente y manda pedir nombre y DNI al externo
+        // la regla cubre a los dos tipos de cliente; al externo se le piden nombre y DNI
+        // recién después de que el sistema verificó que hay lugar
         expect(systemInstruction).toContain('HUÉSPED');
         expect(systemInstruction).toContain('EXTERNO');
+        expect(systemInstruction).toContain('SIN pedir antes nombre ni DNI');
         expect(systemInstruction).toContain('nombre completo y su DNI');
         expect(systemInstruction).not.toContain('No tenés información del spa');
       });

@@ -384,8 +384,31 @@ describe('SpaReservationService (integración)', () => {
   });
 
   describe('turno de un cliente externo (cobro)', () => {
-    it('le pide nombre y DNI si faltan y no guarda nada', async () => {
-      const spa = await seedSpa();
+    it('si no hay lugar se lo dice sin pedirle nombre ni DNI', async () => {
+      const spa = await seedSpa({ capacity: 1 });
+      await createExternalTurn(spa);
+      const external = newExternal();
+
+      const result = await request(external, spa.id, '16-03-2099');
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.reason).toMatch(/Ya no quedan lugares/);
+      expect(!result.ok && result.reason).not.toMatch(/DNI/);
+      expect(await rowsOf(external)).toHaveLength(0);
+    });
+
+    it('valida el horario antes de pedirle nombre y DNI', async () => {
+      const spa = await seedSpa({ opensAt: '10:00', closesAt: '12:00' });
+
+      const result = await request(newExternal(), spa.id, '16-03-2099');
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.reason).toMatch(/se brinda/);
+      expect(!result.ok && result.reason).not.toMatch(/DNI/);
+    });
+
+    it('si hay lugar le avisa el precio y le pide nombre y DNI, sin guardar nada', async () => {
+      const spa = await seedSpa({ price: 23000 });
       const external = newExternal();
 
       const withoutData = await request(external, spa.id, '16-03-2099');
@@ -399,6 +422,8 @@ describe('SpaReservationService (integración)', () => {
       );
 
       expect(withoutData.ok).toBe(false);
+      expect(!withoutData.ok && withoutData.reason).toMatch(/Hay lugar/);
+      expect(!withoutData.ok && withoutData.reason).toContain('$23000');
       expect(!withoutData.ok && withoutData.reason).toMatch(
         /nombre completo y tu DNI/,
       );
