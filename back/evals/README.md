@@ -27,18 +27,21 @@ promptfoo ──> evals/chamberProvider.js ──HTTP──> POST /eval/conversa
 2. En `back/.env`:
    ```env
    EVAL_API_KEY=cualquier-clave-local
+   TELEGRAM_POLLING=false        # el back no recibe mensajes de Telegram (ver paso 3)
    GEMINI_API_KEY=...            # ya está: la usa el bot y también el juez de los llm-rubric
    # EVAL_BASE_URL=http://localhost:3000   # opcional, ese es el default
    # PROMPTFOO_DISABLE_TELEMETRY=1        # opcional
    ```
 3. Levantar el back: `npm run start:dev`.
-   ⚠️ El back también arranca el bot de Telegram con `TELEGRAM_BOT_TOKEN`. Si ese token es el
-   mismo que usa otra instancia (la deployada o la de un compañero), se pelean por los mensajes:
-   usá un bot propio de prueba (se crea con @BotFather).
+   Con `TELEGRAM_POLLING=false` el back no se conecta a Telegram para recibir mensajes, así que no
+   le roba los mensajes a otra instancia (la deployada o la de un compañero) que use el mismo token.
+   Si la base es vieja, primero `npx mikro-orm migration:up`.
 4. Correr las evals: `npm run eval`
 5. Ver los resultados en el navegador: `npm run eval:view`
 
 Para correr solo algunos casos (y gastar menos): `npm run eval -- --filter-pattern "Reserva"`.
+Para re-correr solo los que fallaron: `npm run eval -- --filter-failing <id de la corrida>`.
+Para medir casos inestables: `npm run eval -- --repeat 3` (gasta 3 veces más).
 
 ## Agregar un caso
 
