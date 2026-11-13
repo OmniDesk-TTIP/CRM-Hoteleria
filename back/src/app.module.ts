@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
@@ -26,6 +26,7 @@ import { ArrivalMessageModule } from './modules/arrivalMessage/arrivalMessage.mo
 import { PromotionModule } from './modules/promotion/promotion.module';
 import { GuestLanguageModule } from './modules/guestLanguage/guestLanguage.module';
 import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.service';
+import { EvalModule } from './modules/eval/eval.module';
 
 @Module({
   imports: [
@@ -63,6 +64,8 @@ import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.serv
       inject: [ConfigService, GuestLanguageService],
     }),
     ScheduleModule.forRoot(),
+    // Endpoint de evals del bot: solo existe si se configura una clave (nunca en producción).
+    ConditionalModule.registerWhen(EvalModule, 'EVAL_API_KEY'),
   ],
   controllers: [AppController],
   providers: [AppService],

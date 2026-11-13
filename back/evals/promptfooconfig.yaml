@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+#
+# Evals offline de Chamber (el bot de Telegram). Ver evals/README.md para cómo correrlas.
+# Cada caso llama a Gemini (el bot) y, si tiene llm-rubric, una vez más (el juez): gastan tokens.
+
+description: Chamber - evals offline
+
+# El "prompt" lo arma el bot por su cuenta (RAG + contexto); acá solo se muestra qué mandó el huésped.
+prompts:
+  - '{{ mensajes }}'
+
+providers:
+  - id: file://chamberProvider.js
+    label: chamber
+
+defaultTest:
+  options:
+    # Juez para los llm-rubric: un modelo barato alcanza para puntuar contra una rúbrica.
+    provider: google:gemini-2.5-flash
+  assert:
+    # Todo caso, además de lo suyo, tiene que contestar cada mensaje en menos de 10 s.
+    # Se mide por turno (lo informa el endpoint) para no castigar a las conversaciones largas.
+    - type: javascript
+      metric: latencia
+      value: context.metadata.turns.every((turn) => turn.latencyMs < 10000)
+
+evaluateOptions:
+  # Pocos en paralelo: cada caso escribe en la base y Gemini limita las requests por minuto.
+  maxConcurrency: 2
+
+tests:
+  - file://datasets/faq.yaml
+  - file://datasets/flujos.yaml

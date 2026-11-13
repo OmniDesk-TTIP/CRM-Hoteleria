@@ -1,4 +1,5 @@
 import { Markup } from 'telegraf';
+import type { AlternativeDates } from '../reservation/reservation.service';
 
 export const escapeHtml = (text: string): string =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -64,3 +65,23 @@ export const roomServiceCancelKeyboard = (orderId: string) =>
       `roomservice:keep:${orderId}`,
     ),
   ]);
+
+/** Lista de fechas alternativas cuando Gemini no pudo redactar la respuesta. */
+export const formatAlternativesFallback = (
+  alternatives: AlternativeDates[],
+  intro = 'Lamentablemente no tenemos lugar en esas fechas, pero encontré estas opciones cercanas:',
+): string => {
+  const options = alternatives.map(
+    ({
+      checkIn,
+      checkOut,
+      nights,
+      isShorterStay,
+      roomCategory,
+      totalAmount,
+      promotion,
+    }) =>
+      `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}${promotion ? ` con la promoción ${escapeHtml(promotion)}` : ''}`,
+  );
+  return [intro, ...options, '', '¿Te sirve alguna?'].join('\n');
+};
