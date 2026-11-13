@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { TelegramUpdate } from './telegram.update';
+import { BotService } from '../bot/bot.service';
 import { RagService, ChatAction } from '../rag/rag.service';
 import { ReservationService } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
@@ -56,6 +57,8 @@ describe('TelegramUpdate', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TelegramUpdate,
+        // Real: los tests cubren TelegramUpdate + BotService juntos, con los servicios mockeados.
+        BotService,
         {
           provide: RagService,
           useValue: {

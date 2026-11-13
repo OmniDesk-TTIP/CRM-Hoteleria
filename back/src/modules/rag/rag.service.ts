@@ -25,6 +25,14 @@ const CHAT_MODEL = 'gemini-flash-lite-latest';
  */
 export const KNOWLEDGE_CHUNKS = 6;
 
+/** Estado que se le pasa a Gemini cuando el huésped no tiene ninguna reserva a su nombre. */
+export const NO_RESERVATIONS_STATE =
+  '[ESTADO ACTUAL: El cliente no tiene reservas a su nombre: ninguna en curso, ninguna esperando el pago de la seña y ninguna para cancelar. ' +
+  'Si pregunta por su reserva, por un pago o link de pago, o quiere confirmar o cancelar una reserva, respondé en primera persona y tuteándolo ' +
+  'que no encontraste ninguna reserva a su nombre (por ejemplo: "No encontré ninguna reserva a tu nombre.") ' +
+  'y ofrecele buscar disponibilidad pidiéndole las fechas de entrada y salida y para cuántas personas. ' +
+  'En ese caso NO digas que no tenés esa información ni ofrezcas derivarlo a recepción.]';
+
 const HISTORY_SPEAKERS: Record<string, string> = {
   USER: 'Usuario',
   BOT: 'Chamber',
@@ -374,6 +382,15 @@ export class RagService {
       contextoReserva = `\n[ESTADO ACTUAL: Faltan datos. CheckIn=${reservaActiva.checkIn || 'No'}, CheckOut=${reservaActiva.checkOut || 'No'}, Capacidad=${reservaActiva.capacity || 'No'}]`;
     } else if (ultimaCompletada) {
       contextoReserva = `\n[ESTADO ACTUAL: La reserva del ${ultimaCompletada.checkIn} al ${ultimaCompletada.checkOut} ya fue tomada y está a la espera del pago de la seña. PROHIBIDO usar las herramientas para estos datos; no le digas al usuario que está confirmada hasta que le avisemos que se acreditó el pago.${hasPendingPayment ? " Si pregunta cómo o dónde pagar la seña, o pide el link, usá 'send_payment_link'." : ''}]`;
+    } else if (
+      !hasPendingPayment &&
+      cancellation &&
+      !cancellation.canCancel &&
+      !cancellation.canRegisterRefundAccount
+    ) {
+      // Sin esto el contexto queda vacío y Gemini contesta "no tengo esa información" cuando
+      // el huésped pregunta por su reserva, un pago o una cancelación (lo detectaron las evals).
+      contextoReserva = `\n${NO_RESERVATIONS_STATE}`;
     }
 
     const historyText = this.formatHistory(history);

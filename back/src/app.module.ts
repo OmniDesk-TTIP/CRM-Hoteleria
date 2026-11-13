@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConditionalModule, ConfigModule, ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { session } from 'telegraf';
@@ -26,6 +26,7 @@ import { ArrivalMessageModule } from './modules/arrivalMessage/arrivalMessage.mo
 import { PromotionModule } from './modules/promotion/promotion.module';
 import { GuestLanguageModule } from './modules/guestLanguage/guestLanguage.module';
 import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.service';
+import { EvalModule } from './modules/eval/eval.module';
 
 @Module({
   imports: [
@@ -59,10 +60,17 @@ import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.serv
         token: configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN'),
         // El middleware traduce las respuestas al idioma de cada huésped.
         middlewares: [session(), guestLanguage.middleware()],
+        // TELEGRAM_POLLING=false levanta el back sin recibir mensajes de Telegram (para evals o
+        // desarrollo con el mismo token que otra instancia, que si no se pelean por los updates).
+        ...(configService.get<string>('TELEGRAM_POLLING') === 'false' && {
+          launchOptions: false,
+        }),
       }),
       inject: [ConfigService, GuestLanguageService],
     }),
     ScheduleModule.forRoot(),
+    // Endpoint de evals del bot: solo existe si se configura una clave (nunca en producción).
+    ConditionalModule.registerWhen(EvalModule, 'EVAL_API_KEY'),
   ],
   controllers: [AppController],
   providers: [AppService],
