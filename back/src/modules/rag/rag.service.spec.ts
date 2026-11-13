@@ -1,11 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import {
-  RagService,
-  ChatAction,
-  NO_RESERVATIONS_STATE,
-} from './rag.service';
+import { RagService, ChatAction, NO_RESERVATIONS_STATE } from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
 import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
