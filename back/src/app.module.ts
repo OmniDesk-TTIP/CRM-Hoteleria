@@ -60,6 +60,11 @@ import { EvalModule } from './modules/eval/eval.module';
         token: configService.getOrThrow<string>('TELEGRAM_BOT_TOKEN'),
         // El middleware traduce las respuestas al idioma de cada huésped.
         middlewares: [session(), guestLanguage.middleware()],
+        // TELEGRAM_POLLING=false levanta el back sin recibir mensajes de Telegram (para evals o
+        // desarrollo con el mismo token que otra instancia, que si no se pelean por los updates).
+        ...(configService.get<string>('TELEGRAM_POLLING') === 'false' && {
+          launchOptions: false,
+        }),
       }),
       inject: [ConfigService, GuestLanguageService],
     }),

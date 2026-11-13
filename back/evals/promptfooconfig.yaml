@@ -16,7 +16,8 @@ providers:
 defaultTest:
   options:
     # Juez para los llm-rubric: un modelo barato alcanza para puntuar contra una rúbrica.
-    provider: google:gemini-2.5-flash
+    # Alias "-latest" (como el bot): Google retira los modelos con versión fija.
+    provider: google:gemini-flash-lite-latest
   assert:
     # Todo caso, además de lo suyo, tiene que contestar cada mensaje en menos de 10 s.
     # Se mide por turno (lo informa el endpoint) para no castigar a las conversaciones largas.
@@ -25,8 +26,11 @@ defaultTest:
       value: context.metadata.turns.every((turn) => turn.latencyMs < 10000)
 
 evaluateOptions:
-  # Pocos en paralelo: cada caso escribe en la base y Gemini limita las requests por minuto.
-  maxConcurrency: 2
+  # De a uno y con pausa: el plan gratuito de Gemini permite 15 requests por minuto por modelo,
+  # y el bot y el juez comparten esa cuota. Si igual aparecen errores 429, re-correr solo esos
+  # casos con: npm run eval -- --filter-errors-only <id de la corrida>
+  maxConcurrency: 1
+  delay: 4000
 
 tests:
   - file://datasets/faq.yaml

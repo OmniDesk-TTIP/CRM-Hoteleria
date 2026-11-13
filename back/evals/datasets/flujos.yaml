@@ -133,10 +133,15 @@
 
 # ---------- Cartas en PDF ----------
 
-- description: 'Cartas: pedir la carta del restaurante manda el PDF'
+# El huésped de la eval nunca tiene estadía, y la carta es solo para huéspedes: se chequea el
+# resultado (no manda el PDF y explica por qué), no qué acción eligió Gemini para llegar ahí.
+- description: 'Cartas: sin estadía no manda la carta y explica que es para huéspedes'
   vars:
     mensajes: Me mandás la carta del restaurante?
   assert:
     - type: javascript
-      value: context.metadata.final.action === 'SEND_MENU_PDF'
+      value: context.metadata.final.document === null
       metric: accion
+    - type: icontains
+      value: huésped
+      metric: correctitud

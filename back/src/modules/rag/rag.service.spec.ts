@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { RagService, ChatAction } from './rag.service';
+import {
+  RagService,
+  ChatAction,
+  NO_RESERVATIONS_STATE,
+} from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
 import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
@@ -158,6 +162,62 @@ describe('RagService', () => {
       );
 
       jest.useRealTimers();
+    });
+
+    describe('huésped sin reservas', () => {
+      const noReservations = { block: '[POLÍTICA]', canCancel: false };
+      const sentPrompt = (): string =>
+        chatModelMock.generateContent.mock.calls[0][0] as string;
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('le avisa a Gemini que no tiene reservas cuando no hay nada a su nombre', async () => {
+        await service.askQuestion(
+          'Quiero cancelar mi reserva',
+          null,
+          [],
+          null,
+          null,
+          noReservations,
+          false,
+        );
+
+        expect(sentPrompt()).toContain(NO_RESERVATIONS_STATE);
+      });
+
+      it.each([
+        ['tiene una seña pendiente', noReservations, true],
+        [
+          'tiene reservas cancelables',
+          { ...noReservations, canCancel: true },
+          false,
+        ],
+        [
+          'tiene una devolución pendiente',
+          { ...noReservations, canRegisterRefundAccount: true },
+          false,
+        ],
+        ['no se pudo armar el contexto de cancelación', null, false],
+      ])(
+        'no lo dice cuando %s',
+        async (_caso, cancellation, hasPendingPayment) => {
+          await service.askQuestion(
+            'Quiero cancelar mi reserva',
+            null,
+            [],
+            null,
+            null,
+            cancellation,
+            hasPendingPayment,
+          );
+
+          expect(sentPrompt()).not.toContain(NO_RESERVATIONS_STATE);
+        },
+      );
     });
 
     describe('promociones (US-21 CA4)', () => {
