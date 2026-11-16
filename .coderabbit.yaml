@@ -1,0 +1,151 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Configuración de CodeRabbit para OmniDesk. Las reglas generales del proyecto están en AGENTS.md
+# (CodeRabbit lo lee solo como guía de código); acá van solo los ajustes del bot y las reglas por carpeta.
+
+language: es-AR
+tone_instructions: >-
+  Revisá como un dev senior del equipo: directo, concreto y en español rioplatense.
+  Priorizá bugs, seguridad y reglas de negocio por sobre el estilo; el formato ya lo cubren Prettier, ESLint y oxlint.
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_prs: true
+  suggested_labels: true
+  poem: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # La rama por defecto (main) se revisa siempre; además, los PR que van a dev.
+    base_branches:
+      - dev
+    ignore_title_keywords:
+      - WIP
+      - "[skip review]"
+
+  path_filters:
+    - "!**/package-lock.json"
+    - "!**/*.tsbuildinfo"
+    - "!**/dist/**"
+    - "!**/coverage/**"
+    - "!back/src/infrastructure/database/migrations/.snapshot.json"
+    - "!**/*.png"
+    - "!**/*.webp"
+    - "!**/*.svg"
+
+  path_instructions:
+    - path: "{back,front}/src/**/*.{ts,tsx}"
+      instructions: |
+        - Marcar loops imperativos que se resuelven con métodos de array: un `for`/`forEach` con `if` + `continue` y `push` a un array auxiliar debe ser `filter`/`map`/`flatMap`; uno que busca un elemento o corta con `break` debe ser `find`/`some`/`every`. Sugerir el reemplazo concreto.
+        - No marcarlo cuando el `for...of` hace `await` en secuencia a propósito, o tiene efectos secundarios que no construyen un array nuevo.
+    - path: "back/src/modules/**/*.controller.ts"
+      instructions: |
+        - Los controllers son finos: reciben DTOs validados, llaman al service y devuelven DTOs. Nada de lógica de negocio ni acceso al EntityManager.
+        - Todo endpoint es privado por defecto (guard global). Si se agrega `@Public()`, verificar que realmente deba ser público y que no exponga datos de huéspedes o reservas.
+        - Endpoints de administración: `@Roles(UserRole.ADMIN)` + `@UseGuards(RolesGuard)`.
+        - Params de id con `ParseUUIDPipe`; queries y bodies tipados con un DTO de class-validator.
+    - path: "back/src/modules/**/*.service.ts"
+      instructions: |
+        - Orquesta: carga modelos desde el repository, aplica reglas del modelo y persiste. Las reglas de negocio puras viven en `*.model.ts`.
+        - Errores de dominio con excepciones de Nest (`BadRequestException`, `NotFoundException`, `ConflictException`) y mensajes en español para el usuario final.
+        - Los métodos que dependen de la fecha reciben `now: Date = new Date()` para poder testearse; marcar usos directos de `new Date()` en lógica de negocio.
+        - Cuidado con operaciones de pago (Mercado Pago), cupos y disponibilidad: buscar condiciones de carrera y dobles reservas.
+    - path: "back/src/modules/**/*.model.ts"
+      instructions: |
+        - Los modelos son puros: sin decorators de Nest ni MikroORM, sin I/O. El repository los convierte desde y hacia la entidad.
+        - Toda regla nueva debe tener test en el `*.model.spec.ts` correspondiente.
+    - path: "back/src/modules/**/*.repository.ts"
+      instructions: |
+        - Único lugar donde se usa el `EntityManager`. Devuelve modelos de dominio, no entidades.
+        - Revisar paginación (limit/offset con orden estable), N+1 y filtros que tengan que reflejar exactamente la regla del modelo.
+    - path: "back/src/modules/**/dto/*.ts"
+      instructions: |
+        - Validar con class-validator con mensajes en español; strings con `@Transform(trimString)`.
+        - Los límites (largos, máximos) se importan de constantes del modelo, no se duplican números mágicos.
+        - Los DTOs de respuesta no deben exponer campos sensibles (hash de contraseña, tokens, secretos).
+    - path: "back/src/infrastructure/database/entities/*.ts"
+      instructions: |
+        - Todo cambio de entidad necesita su migración en `back/src/infrastructure/database/migrations/`. Si el PR cambia una entidad y no trae migración, marcarlo.
+    - path: "back/src/infrastructure/database/migrations/*.ts"
+      instructions: |
+        - Las migraciones ya mergeadas no se editan: cualquier corrección va en una migración nueva.
+        - Revisar que `down()` revierta lo que hace `up()` y que no se pierdan datos existentes (columnas NOT NULL sin default, renombres hechos como drop + add, etc.).
+    - path: "back/src/modules/{bot,chat,rag,telegram,guestLanguage}/**/*.ts"
+      instructions: |
+        - Es el bot conversacional (Chamber) sobre Gemini. Revisar inyección de prompt: texto del huésped o de documentos nunca debe poder cambiar instrucciones del sistema ni disparar acciones sin validar.
+        - Cambios en el prompt, en el RAG o en los flujos deberían venir acompañados de casos en `back/evals/datasets/`; sugerirlo si faltan.
+        - Texto enviado por Telegram en HTML debe escaparse (`escapeHtml`).
+    - path: "back/src/modules/payment/**/*.ts"
+      instructions: |
+        - Webhooks de Mercado Pago: verificar la firma antes de procesar, ser idempotente ante notificaciones repetidas y no confiar en montos que vengan del cliente.
+    - path: "back/src/modules/auth/**/*.ts"
+      instructions: |
+        - Revisar con lupa: rotación de refresh tokens, cookies httpOnly, expiraciones, comparación de hashes y que no se logueen credenciales ni tokens.
+    - path: "back/**/*.spec.ts"
+      instructions: |
+        - `*.spec.ts` son unitarios sin base de datos; `*.integration-spec.ts` usan la base de test; `test/*.e2e-spec.ts` pasan por HTTP.
+        - Preferir tests de comportamiento sobre tests que solo verifican que se llamó a un mock. Fechas fijas, nunca dependientes del día en que se corre el test.
+    - path: "back/evals/**"
+      instructions: |
+        - Evals de promptfoo: cada caso debe tener asserts verificables (acción elegida, contenido) y no solo `llm-rubric` genéricos.
+    - path: "front/src/**/*.{ts,tsx}"
+      instructions: |
+        - React 19 + TypeScript estricto. Sin `any`; los tipos compartidos con la API van en `src/config/types.ts`.
+        - Las llamadas HTTP van solo en `src/services/*.service.ts` usando `apiClient` de `@/config/api`; los componentes no importan axios.
+        - El access token vive en memoria (`setAccessToken`), nunca en localStorage/sessionStorage.
+        - Revisar reglas de hooks, dependencias de `useEffect`, limpieza de suscripciones de socket.io y estados de carga/error visibles para el usuario.
+        - Textos de la UI en español; estilos con Tailwind.
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        - El CI tiene que fallar, no autocorregir (sin `--fix`). Acciones con versión fija y sin secretos expuestos en logs.
+
+  tools:
+    eslint:
+      enabled: true
+    oxc:
+      enabled: true
+    gitleaks:
+      enabled: true
+    dotenvLint:
+      enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 120000
+    languagetool:
+      enabled: false
+    biome:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        Formato Conventional Commits en inglés: `tipo(scope): descripción` con tipo en
+        feat, fix, refactor, test, docs, chore o ci. Ejemplo: `feat(chat): reply in English to English-speaking guests`.
+    description:
+      mode: warning
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
