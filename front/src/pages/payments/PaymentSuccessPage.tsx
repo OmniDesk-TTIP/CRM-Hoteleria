@@ -82,6 +82,15 @@ export default function PaymentSuccessPage() {
     );
   }
 
+  if (summary.status === 'EXPIRED') {
+    return (
+      <StatusScreen
+        title="Esta reserva venció antes de que se acreditara el pago"
+        detail="Si pagaste igual, escribinos por Telegram con el código de reserva y lo resolvemos."
+      />
+    );
+  }
+
   if (summary.status === 'CANCELLED') {
     return (
       <StatusScreen

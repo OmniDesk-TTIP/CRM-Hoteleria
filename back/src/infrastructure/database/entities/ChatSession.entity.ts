@@ -29,6 +29,12 @@ export enum HandoverReason {
   OUT_OF_HOURS = 'OUT_OF_HOURS',
 }
 
+/** Idioma en que Chamber le habla al huésped. Se detecta por lo que escribe. */
+export enum GuestLanguage {
+  ES = 'es',
+  EN = 'en',
+}
+
 /**
  * La conversación de un huésped, que hasta ahora no existía como entidad: el chat vivía
  * desperdigado en filas de `chat_messages` identificadas solo por telegramUserId.
@@ -73,6 +79,10 @@ export class ChatSession extends CustomBaseEntity {
 
   @Property({ type: 'integer' })
   unreadCount: number & Opt = 0;
+
+  /** Las respuestas y los avisos que salen por Telegram se traducen a este idioma. */
+  @Enum(() => GuestLanguage)
+  language: GuestLanguage & Opt = GuestLanguage.ES;
 
   @Property({ type: 'integer' })
   consecutiveBotFailures: number & Opt = 0;

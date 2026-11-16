@@ -12,10 +12,26 @@ import {
   BookingProcessStep,
 } from '../../infrastructure/database/entities/BookingProcess.entity';
 import { ChatMessage } from '../../infrastructure/database/entities/ChatMessage.entity';
+import { GuestLanguage } from '../../infrastructure/database/entities/ChatSession.entity';
 import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
 import type { AlternativeDates } from '../reservation/reservation.service';
 
 const CHAT_MODEL = 'gemini-flash-lite-latest';
+
+/**
+ * Chunks de la base de conocimiento que se le pasan a Gemini en cada consulta. Con faltas de
+ * ortografía ("guardaequipage") el chunk correcto puede no salir primero, así que se trae un
+ * margen: la base es chica y unos chunks de más no pesan en el prompt.
+ */
+export const KNOWLEDGE_CHUNKS = 6;
+
+/** Estado que se le pasa a Gemini cuando el huésped no tiene ninguna reserva a su nombre. */
+export const NO_RESERVATIONS_STATE =
+  '[ESTADO ACTUAL: El cliente no tiene reservas a su nombre: ninguna en curso, ninguna esperando el pago de la seña y ninguna para cancelar. ' +
+  'Si pregunta por su reserva, por un pago o link de pago, o quiere confirmar o cancelar una reserva, respondé en primera persona y tuteándolo ' +
+  'que no encontraste ninguna reserva a su nombre (por ejemplo: "No encontré ninguna reserva a tu nombre.") ' +
+  'y ofrecele buscar disponibilidad pidiéndole las fechas de entrada y salida y para cuántas personas. ' +
+  'En ese caso NO digas que no tenés esa información ni ofrezcas derivarlo a recepción.]';
 
 const HISTORY_SPEAKERS: Record<string, string> = {
   USER: 'Usuario',
@@ -25,6 +41,8 @@ const HISTORY_SPEAKERS: Record<string, string> = {
 };
 
 export enum ChatAction {
+  PREPARE_ROOM_SERVICE_ORDER = 'PREPARE_ROOM_SERVICE_ORDER',
+  CANCEL_ROOM_SERVICE_ORDER = 'CANCEL_ROOM_SERVICE_ORDER',
   SEARCH_AVAILABILITY = 'SEARCH_AVAILABILITY',
   CONFIRM_RESERVATION = 'CONFIRM_RESERVATION',
   REQUEST_HUMAN = 'REQUEST_HUMAN',
@@ -33,6 +51,7 @@ export enum ChatAction {
   CANCEL_RESERVATION = 'CANCEL_RESERVATION',
   REGISTER_REFUND_ACCOUNT = 'REGISTER_REFUND_ACCOUNT',
   SEND_PAYMENT_LINK = 'SEND_PAYMENT_LINK',
+  SEND_MENU_PDF = 'SEND_MENU_PDF',
   REPLY = 'REPLY',
 }
 
@@ -41,8 +60,9 @@ const REQUEST_SPA_BOOKING_DECLARATION: FunctionDeclaration = {
   description:
     'Llama a esta función cuando el cliente quiera un turno de spa y ya te haya indicado qué servicio, ' +
     'qué día y a qué hora. Si falta alguno de esos datos, preguntáselo antes. Usá el id del servicio tal ' +
-    'cual figura en [SERVICIOS DEL HOTEL]. Si la sección indica que el cliente es EXTERNO, pedile antes su ' +
-    'nombre completo y su DNI y enviálos también; si es HUÉSPED no hace falta.',
+    'cual figura en [SERVICIOS DEL HOTEL]. NO pidas nombre ni DNI antes de llamarla: el sistema primero se fija ' +
+    'si hay lugar y, si el cliente es EXTERNO y hay lugar, le pide él mismo el nombre completo y el DNI. Cuando el ' +
+    'cliente EXTERNO te los dé, volvé a llamarla con el mismo servicio, día y hora y agregá fullName y dni.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -166,6 +186,91 @@ const SEND_PAYMENT_LINK_DECLARATION: FunctionDeclaration = {
   },
 };
 
+const PREPARE_ROOM_SERVICE_ORDER_DECLARATION: FunctionDeclaration = {
+  name: 'prepare_room_service_order',
+  description:
+    'Llama a esta función cuando un HUÉSPED ALOJADO quiera pedir room service y ya sepas qué platos y cuántos de ' +
+    'cada uno. Usá los id tal cual figuran en la CARTA DE ROOM SERVICE. El sistema arma el resumen y le muestra los ' +
+    'botones para confirmar: no le digas que el pedido quedó registrado.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      items: {
+        type: SchemaType.ARRAY,
+        description: 'Los platos pedidos.',
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            menuItemId: {
+              type: SchemaType.STRING,
+              description: 'El id (uuid) del plato en la carta.',
+            },
+            quantity: {
+              type: SchemaType.INTEGER,
+              description: 'Cuántas unidades de ese plato.',
+            },
+            notes: {
+              type: SchemaType.STRING,
+              description:
+                'Aclaración para ese plato, si la dio (por ejemplo "sin sal").',
+            },
+          },
+          required: ['menuItemId', 'quantity'],
+        },
+      },
+      notes: {
+        type: SchemaType.STRING,
+        description: 'Aclaración general del pedido, si la dio.',
+      },
+    },
+    required: ['items'],
+  },
+};
+
+const CANCEL_ROOM_SERVICE_ORDER_DECLARATION: FunctionDeclaration = {
+  name: 'cancel_room_service_order',
+  description:
+    'Llama a esta función cuando el huésped pida cancelar su PEDIDO EN CURSO de room service. El sistema le pide ' +
+    'la confirmación con botones o le explica por qué ya no se puede cancelar.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      reason: {
+        type: SchemaType.STRING,
+        description: 'En pocas palabras, qué pidió el huésped.',
+      },
+    },
+  },
+};
+
+const SEND_MENU_PDF_DECLARATION: FunctionDeclaration = {
+  name: 'send_menu_pdf',
+  description:
+    'Llama a esta función cuando el cliente pida ver la carta del restaurante, la carta de room service o la lista ' +
+    'de servicios del spa (la carta, el menú, qué hay para comer, qué servicios o tratamientos hay, los precios, o ' +
+    'el PDF). El sistema le responde, le envía la carta en PDF y le comparte el link de la web, o le explica por ' +
+    'qué no puede enviársela.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      menu: {
+        type: SchemaType.STRING,
+        format: 'enum',
+        enum: ['restaurant', 'room-service', 'spa'],
+        description:
+          "Qué carta pidió: 'restaurant' (restó), 'room-service' o 'spa'.",
+      },
+    },
+    required: ['menu'],
+  },
+};
+
+export interface RoomServiceContext {
+  block: string;
+  canOrder: boolean;
+  hasOpenOrder: boolean;
+}
+
 export interface CancellationContext {
   block: string;
   canCancel: boolean;
@@ -243,6 +348,9 @@ export class RagService {
     cancellation: CancellationContext | null = null,
     hasPendingPayment = false,
     restaurant: RestaurantContext | null = null,
+    roomService: RoomServiceContext | null = null,
+    promotionsBlock: string | null = null,
+    language: GuestLanguage = GuestLanguage.ES,
   ): Promise<AiResponse> {
     const embeddingModel = this.genAI.getGenerativeModel({
       model: 'gemini-embedding-2',
@@ -251,15 +359,17 @@ export class RagService {
 
     const similarDocs = await this.ragRepository.findSimilar(
       result.embedding.values,
-      3,
+      KNOWLEDGE_CHUNKS,
     );
     const knowledgeText = similarDocs
       .map((doc) => doc.content)
       .join('\n\n---\n\n');
     const contextText = [
       knowledgeText,
+      promotionsBlock,
       servicesBlock,
       restaurant?.block,
+      roomService?.block,
       cancellation?.block,
     ]
       .filter((section): section is string => !!section)
@@ -272,9 +382,20 @@ export class RagService {
       contextoReserva = `\n[ESTADO ACTUAL: Faltan datos. CheckIn=${reservaActiva.checkIn || 'No'}, CheckOut=${reservaActiva.checkOut || 'No'}, Capacidad=${reservaActiva.capacity || 'No'}]`;
     } else if (ultimaCompletada) {
       contextoReserva = `\n[ESTADO ACTUAL: La reserva del ${ultimaCompletada.checkIn} al ${ultimaCompletada.checkOut} ya fue tomada y está a la espera del pago de la seña. PROHIBIDO usar las herramientas para estos datos; no le digas al usuario que está confirmada hasta que le avisemos que se acreditó el pago.${hasPendingPayment ? " Si pregunta cómo o dónde pagar la seña, o pide el link, usá 'send_payment_link'." : ''}]`;
+    } else if (
+      !hasPendingPayment &&
+      cancellation &&
+      !cancellation.canCancel &&
+      !cancellation.canRegisterRefundAccount
+    ) {
+      // Sin esto el contexto queda vacío y Gemini contesta "no tengo esa información" cuando
+      // el huésped pregunta por su reserva, un pago o una cancelación (lo detectaron las evals).
+      contextoReserva = `\n${NO_RESERVATIONS_STATE}`;
     }
 
     const historyText = this.formatHistory(history);
+    const hasMenuContext =
+      servicesBlock !== null || restaurant !== null || roomService !== null;
 
     const chatModel = this.genAI.getGenerativeModel({
       model: CHAT_MODEL,
@@ -283,6 +404,10 @@ export class RagService {
         servicesBlock !== null,
         cancellation !== null,
         restaurant !== null,
+        roomService !== null,
+        promotionsBlock !== null,
+        hasMenuContext,
+        language,
       ),
       tools: [
         {
@@ -350,6 +475,12 @@ export class RagService {
               ? [REQUEST_SPA_BOOKING_DECLARATION]
               : []),
             ...(restaurant?.canBook ? [REQUEST_TABLE_BOOKING_DECLARATION] : []),
+            ...(roomService?.canOrder
+              ? [PREPARE_ROOM_SERVICE_ORDER_DECLARATION]
+              : []),
+            ...(roomService?.hasOpenOrder
+              ? [CANCEL_ROOM_SERVICE_ORDER_DECLARATION]
+              : []),
             ...(cancellation?.canCancel
               ? [CANCEL_RESERVATION_DECLARATION]
               : []),
@@ -357,6 +488,7 @@ export class RagService {
               ? [REGISTER_REFUND_ACCOUNT_DECLARATION]
               : []),
             ...(hasPendingPayment ? [SEND_PAYMENT_LINK_DECLARATION] : []),
+            ...(hasMenuContext ? [SEND_MENU_PDF_DECLARATION] : []),
           ],
         },
       ],
@@ -394,6 +526,9 @@ export class RagService {
       if (name === 'send_payment_link' && hasPendingPayment) {
         return { action: ChatAction.SEND_PAYMENT_LINK, datos: args };
       }
+      if (name === 'send_menu_pdf' && hasMenuContext) {
+        return { action: ChatAction.SEND_MENU_PDF, datos: args };
+      }
       if (name === 'request_spa_booking' && servicesBlock !== null) {
         return {
           action: ChatAction.REQUEST_SPA_BOOKING,
@@ -403,6 +538,12 @@ export class RagService {
       }
       if (name === 'request_table_booking' && restaurant?.canBook) {
         return { action: ChatAction.REQUEST_TABLE_BOOKING, datos: args };
+      }
+      if (name === 'prepare_room_service_order' && roomService?.canOrder) {
+        return { action: ChatAction.PREPARE_ROOM_SERVICE_ORDER, datos: args };
+      }
+      if (name === 'cancel_room_service_order' && roomService?.hasOpenOrder) {
+        return { action: ChatAction.CANCEL_ROOM_SERVICE_ORDER, datos: args };
       }
     }
 
@@ -449,7 +590,27 @@ export class RagService {
     hasSpaContext = false,
     hasCancellationContext = false,
     hasRestaurantContext = false,
+    hasRoomServiceContext = false,
+    hasPromotionContext = false,
+    hasMenuContext = false,
+    language: GuestLanguage = GuestLanguage.ES,
   ): string {
+    const menuPdfRule = hasMenuContext
+      ? `REGLA PARA LAS CARTAS EN PDF: Si el cliente pide ver la carta del restaurante, la carta de room service o la lista de servicios del spa (o pide el PDF, el menú o los precios en general), usa 'send_menu_pdf' con la carta que corresponda: el sistema le responde, le envía el PDF y le comparte el link de la web. Si no queda claro cuál quiere, preguntáselo antes. No la uses para una consulta puntual sobre un plato, un servicio o un horario: eso respondelo con el contexto. Nunca digas que enviaste un PDF ni escribas links a un PDF por tu cuenta.\n\n`
+      : '';
+    const languageRule =
+      language === GuestLanguage.EN
+        ? `REGLA DE IDIOMA: El cliente escribe en INGLÉS. Respondé SIEMPRE en inglés, aunque el contexto, las reglas y el historial estén en español. Traducí los datos del contexto al responder, pero no cambies montos, fechas, horarios, links ni nombres propios. Los datos que envíes a las funciones siguen el formato indicado en cada una (fechas DD-MM-YYYY, horas HH:mm).`
+        : `REGLA DE IDIOMA: Respondé en el mismo idioma en que te escribe el cliente (por defecto, español).`;
+
+    const promotionRule = hasPromotionContext
+      ? `REGLA PARA PROMOCIONES: Si el cliente pregunta por promociones, ofertas o descuentos, informá ÚNICAMENTE las de la sección [PROMOCIONES VIGENTES] del contexto (título, beneficio, a qué aplica, vigencia y condiciones); si no hay ninguna, decilo. No inventes promociones, descuentos ni condiciones, y no prometas una que no figure ahí aunque aparezca en el historial. Las promociones no se acumulan: si le corresponden varias, se aplica la de mayor beneficio. No calcules vos el precio con descuento de una estadía: pedile las fechas y la cantidad de personas y usa 'search_availability', que el sistema le muestra el precio final y las condiciones.`
+      : `REGLA PARA PROMOCIONES: No tenés información de promociones en este momento. No prometas descuentos; ofrecele derivarlo a recepción.`;
+
+    const roomServiceRule = hasRoomServiceContext
+      ? `REGLA PARA ROOM SERVICE: Usá ÚNICAMENTE la sección [ROOM SERVICE] del contexto (carta, precios y horario) y no inventes platos, precios ni horarios; si un plato no figura en la CARTA DE ROOM SERVICE, no está disponible. El room service es solo para huéspedes alojados: si la sección dice que el cliente NO es huésped alojado, explicale con amabilidad que es un servicio para quienes están alojados en el hotel y no le tomes pedidos. Si es HUÉSPED ALOJADO podés ofrecerle el room service por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Si quiere ver la carta, contale los platos. Si el ESTADO dice CERRADO, informale el horario y no tomes el pedido. Para pedir necesitás qué platos y cuántos de cada uno (y las aclaraciones, si las da, por ejemplo "sin sal"); recién entonces usa 'prepare_room_service_order' con los id de la carta. El pedido se confirma SIEMPRE con los botones que le muestra el sistema: si responde "sí" o "dale" por escrito, pedile que toque el botón "Confirmar pedido" del resumen. Si quiere cancelar su PEDIDO EN CURSO, usa 'cancel_room_service_order'. Nunca le digas que el pedido quedó registrado, cancelado o en preparación: eso lo informa el sistema.`
+      : `REGLA PARA ROOM SERVICE: No tenés información del room service en este momento. No inventes platos, precios ni horarios; ofrecele derivarlo a recepción.`;
+
     const restaurantRule = hasRestaurantContext
       ? `REGLA PARA EL RESTAURANTE: Informá sobre el restaurante del hotel usando ÚNICAMENTE la sección [RESTAURANTE] del contexto (carta, precios y horarios) y no inventes platos, precios ni horarios; si un plato no figura en la carta, no está disponible. El restaurante es exclusivo para huéspedes: si la sección dice que el cliente NO es huésped, explicale con amabilidad que es un servicio para huéspedes con reserva confirmada y no le compartas la carta ni le tomes mesa. Si es HUÉSPED, podés ofrecerle el restaurante por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Si quiere ver el lugar o fotos, compartile el link de FOTOS DEL ESPACIO tal cual figura; si no hay fotos publicadas, decilo. Para pedir mesa necesitás el día (DD-MM-YYYY), la hora (HH:mm) y la cantidad de personas; recién cuando tengas los tres usa 'request_table_booking'. Nunca le digas que la mesa quedó confirmada: la confirma recepción y el sistema le avisa.`
       : `REGLA PARA EL RESTAURANTE: No tenés información del restaurante en este momento. No inventes platos, precios ni horarios; ofrecele derivarlo a recepción.`;
@@ -459,10 +620,10 @@ export class RagService {
       : `REGLA PARA CANCELACIONES: No tenés información de la política de cancelación en este momento. No prometas devoluciones ni montos; ofrecele derivarlo a recepción.`;
 
     const servicesRule = hasSpaContext
-      ? `REGLA PARA EL SPA: Podés informar y ofrecer el spa a cualquier cliente usando ÚNICAMENTE la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). Esa sección te dice si el cliente es HUÉSPED (el spa es SIN CARGO) o EXTERNO (paga el servicio): respetalo y no inventes precios, descuentos ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecer el spa por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Para reservar necesitás el servicio, el día (DD-MM-YYYY) y la hora (HH:mm). Si el cliente es EXTERNO, además pedile su nombre completo y su DNI antes de reservar y avisale que el turno se confirma cuando pague el link de pago que vas a enviarle. Recién cuando tengas todos los datos usa 'request_spa_booking' con el id del servicio. Nunca le digas que el turno quedó confirmado: eso lo informa el sistema (a los huéspedes los confirma recepción y a los externos se confirma al acreditarse el pago).`
+      ? `REGLA PARA EL SPA: Podés informar y ofrecer el spa a cualquier cliente usando ÚNICAMENTE la sección [SERVICIOS DEL HOTEL] del contexto (nombre, duración, precio, días y horarios). Esa sección te dice si el cliente es HUÉSPED (el spa es SIN CARGO) o EXTERNO (paga el servicio): respetalo y no inventes precios, descuentos ni horarios; si no hay servicios de spa disponibles, decilo. Podés ofrecer el spa por tu cuenta una sola vez (si en el historial ya lo ofreciste, no insistas), sin interrumpir lo que esté resolviendo. Para reservar necesitás el servicio, el día (DD-MM-YYYY) y la hora (HH:mm); en cuanto tengas esos tres usa 'request_spa_booking' con el id del servicio, SIN pedir antes nombre ni DNI: el sistema primero verifica si hay lugar. Nunca digas que un horario tiene o no tiene lugar sin haber usado 'request_spa_booking'. Si el cliente es EXTERNO y el sistema le avisó que hay lugar y le pidió nombre y DNI, cuando te los dé volvé a usar 'request_spa_booking' con el mismo servicio, día y hora más su nombre completo y su DNI; el turno se confirma cuando pague el link de pago que le envía el sistema. Nunca le digas que el turno quedó confirmado: eso lo informa el sistema (a los huéspedes los confirma recepción y a los externos se confirma al acreditarse el pago).`
       : `REGLA PARA EL SPA: No tenés información del spa en este momento. No inventes servicios, precios ni horarios; ofrecele derivarlo a recepción.`;
 
-    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Nunca digas que unas fechas están disponibles u ocupadas sin haber usado 'search_availability' con esas fechas en este mismo mensaje: si el usuario pregunta por unas fechas (aunque ya las hayas mencionado antes o le hayas ofrecido otras opciones), volvé a usar 'search_availability' con esas fechas y la cantidad de personas de la conversación. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${servicesRule}\n\n${restaurantRule}\n\n${cancellationRule}\n\nREGLA SOBRE EL HISTORIAL: Para datos generales del hotel (servicios, horarios, precios, políticas, requisitos), el CONTEXTO es la única fuente de verdad. Si en el historial figura un dato del hotel que no está en el CONTEXTO, o que lo contradice, no lo repitas: respondé según el CONTEXTO o, si no está ahí, decí que no tenés esa información. Esto no aplica a lo que el huésped te contó ni a los datos de su reserva en curso.\n\nCONTEXTO:\n${contextText}`;
+    return `Eres Chamber, el asistente virtual del hotel. Estás a entera disposición de los clientes para ayudarles de forma amable, servicial y profesional, manteniendo una charla natural y NO robótica. Responde a la pregunta del usuario utilizando ÚNICAMENTE la siguiente información provista en el contexto. Si la respuesta a una pregunta no está en el contexto, di "Lamentablemente no tengo esa información en este momento, pero puedo derivarte a la recepción"...\n\nREGLA PARA MENSAJES CON ERRORES: Los clientes suelen escribir con faltas de ortografía, sin tildes, con abreviaturas (q, xq, k, tmb, x) o con palabras mal tipeadas (por ejemplo "abitasion", "cekin", "guardaequipage", "reserba"). Interpretá siempre lo que quiso decir y respondé eso con naturalidad, sin corregirlo ni mencionar sus errores. Antes de decir que no tenés una información, fijate si en el CONTEXTO hay algo que corresponda a lo que escribió, aunque use una palabra parecida, un sinónimo o lo describa con sus palabras (por ejemplo "el bus que sale los sábados" puede ser una excursión de los sábados). Si hay algo que encaja con claridad, respondé con eso. Si hay algo que podría ser pero no estás seguro, NO digas que no tenés la información ni ofrezcas derivarlo a recepción: preguntale si se refiere a eso con una pregunta concreta (por ejemplo "¿Te referís a la excursión a la Laguna Azul de los sábados?") y seguí la conversación. Si no queda claro qué quiso decir, hacele una pregunta concreta para aclararlo. La frase de "no tengo esa información" es solo para cuando entendiste la consulta y la respuesta no está en el CONTEXTO.\n\n${languageRule}\n\nFECHA ACTUAL: ${formatDate(new Date())}.\n\nREGLA PARA RESERVAS: Si faltan datos, pregúntalos. Las fechas siempre deben pedirse y enviarse en formato DD-MM-YYYY. Si el usuario no menciona el año, asumí que es el año actual (según la FECHA ACTUAL); si la fecha resultante ya pasó este año, asumí el año siguiente. Cuando tengas los 3 (entrada, salida, capacidad), usa 'search_availability'. Nunca digas que unas fechas están disponibles u ocupadas sin haber usado 'search_availability' con esas fechas en este mismo mensaje: si el usuario pregunta por unas fechas (aunque ya las hayas mencionado antes o le hayas ofrecido otras opciones), volvé a usar 'search_availability' con esas fechas y la cantidad de personas de la conversación. Si ya le ofreciste una habitación y el usuario acepta o confirma explícitamente que quiere reservarla, pedile (si todavía no los tenés) el nombre completo y el DNI del huésped que se aloja antes de confirmar nada; recién cuando tengas esos dos datos usa 'confirm_reservation'. No pidas nombre ni DNI antes de que el usuario haya confirmado que quiere reservar.\n\nREGLA PARA FECHAS ALTERNATIVAS: Si el resultado de 'search_availability' llega con "disponibilidad: false" y un array de "alternativas", cambiá a un tono empático: lamentá que esas fechas no estén disponibles y ofrecé las alternativas con sus fechas exactas (DD-MM-YYYY), la categoría de la habitación y el total de la estadía, sin inventar ni modificar ninguna. Si una alternativa tiene "isShorterStay: true", aclará que es una estadía más corta e indicá cuántas noches son de las pedidas. Si tiene "promotion", aclará que el total ya incluye esa promoción. Cerrá preguntando cuál prefiere. Si en la conversación ya le ofreciste alternativas y el usuario elige una (por ejemplo "la primera" o "la del 12"), usa 'search_availability' con las fechas exactas de esa alternativa y la misma cantidad de personas.\n\nREGLA PARA DERIVAR A UN HUMANO: Si el usuario pide hablar con una persona, un recepcionista, un operador o "alguien de verdad", o se muestra frustrado con vos por ser un asistente automático, usa 'request_human' en vez de contestarle. No la uses si solo está preguntando por el horario o la ubicación de la recepción: eso se responde con el contexto. Tampoco anuncies la derivación por tu cuenta: la función se encarga del mensaje.\n\n${promotionRule}\n\n${servicesRule}\n\n${restaurantRule}\n\n${roomServiceRule}\n\n${menuPdfRule}${cancellationRule}\n\nREGLA SOBRE EL HISTORIAL: Para datos generales del hotel (servicios, horarios, precios, políticas, requisitos), el CONTEXTO es la única fuente de verdad. Si en el historial figura un dato del hotel que no está en el CONTEXTO, o que lo contradice, no lo repitas: respondé según el CONTEXTO o, si no está ahí, decí que no tenés esa información. Esto no aplica a lo que el huésped te contó ni a los datos de su reserva en curso.\n\nCONTEXTO:\n${contextText}`;
   }
 
   private chunkText(

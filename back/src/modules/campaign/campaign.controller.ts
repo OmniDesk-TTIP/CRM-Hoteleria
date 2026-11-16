@@ -65,7 +65,7 @@ export class CampaignController {
   countRecipients(
     @Query() query: RecipientsCountQueryDto,
   ): Promise<RecipientsCountDto> {
-    return this.campaignService.countRecipients(query.audience);
+    return this.campaignService.countRecipients(query);
   }
 
   @Post()

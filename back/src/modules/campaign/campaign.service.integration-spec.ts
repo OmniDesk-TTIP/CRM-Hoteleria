@@ -6,11 +6,15 @@ import { AppModule } from '../../app.module';
 import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
 import { CampaignService } from './campaign.service';
+import { RecipientFilter } from './campaign.model';
 import { AuthUser } from '../auth/auth.types';
+import { SupportHoursService } from '../supportHours/supportHours.service';
+import { addDays, keyToUtc, zonedDateKey } from '../../common/date.util';
 import {
   Campaign,
   CampaignAudience,
   CampaignStatus,
+  CampaignStayFilter,
 } from '../../infrastructure/database/entities/Campaign.entity';
 import {
   Reservation,
@@ -26,6 +30,10 @@ import {
   MessageRole,
 } from '../../infrastructure/database/entities/ChatMessage.entity';
 import { ChatSession } from '../../infrastructure/database/entities/ChatSession.entity';
+import {
+  BookingProcess,
+  BookingProcessStep,
+} from '../../infrastructure/database/entities/BookingProcess.entity';
 import {
   User,
   UserRole,
@@ -52,13 +60,13 @@ describe('CampaignService (integración)', () => {
     noReservation: `${PREFIX}-none`,
   };
 
+  const count = async (filter: RecipientFilter) =>
+    (await service.countRecipients(filter)).count;
+
   const counts = async () => ({
-    all: (await service.countRecipients(CampaignAudience.ALL)).count,
-    confirmed: (await service.countRecipients(CampaignAudience.CONFIRMED))
-      .count,
-    noReservation: (
-      await service.countRecipients(CampaignAudience.NO_RESERVATION)
-    ).count,
+    all: await count({ audience: CampaignAudience.ALL }),
+    confirmed: await count({ audience: CampaignAudience.CONFIRMED }),
+    noReservation: await count({ audience: CampaignAudience.NO_RESERVATION }),
   });
 
   let before: Awaited<ReturnType<typeof counts>>;
@@ -103,6 +111,7 @@ describe('CampaignService (integración)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
         telegram: { sendMessage, sendPhoto },
       })
       .compile();
@@ -171,6 +180,10 @@ describe('CampaignService (integración)', () => {
       () => (roomId ? em.nativeDelete(Room, { id: roomId }) : 0),
       () =>
         categoryId ? em.nativeDelete(RoomCategory, { id: categoryId }) : 0,
+      () =>
+        em.nativeDelete(BookingProcess, {
+          telegramUserId: { $like: `${PREFIX}%` },
+        }),
       () =>
         em.nativeDelete(ChatMessage, {
           telegramUserId: { $like: `${PREFIX}%` },
@@ -370,6 +383,308 @@ describe('CampaignService (integración)', () => {
         'Promo <invierno>',
       ]);
       expect(page.total).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('filtros por estadía', () => {
+    const stay = {
+      inHouse: `${PREFIX}-in-house`,
+      upcoming: `${PREFIX}-upcoming`,
+      finished: `${PREFIX}-finished`,
+      unpaidPending: `${PREFIX}-unpaid-pending`,
+      unpaidExpired: `${PREFIX}-unpaid-expired`,
+      cancelledByGuest: `${PREFIX}-cancelled-by-guest`,
+      /** Una estadía finalizada de 1 persona y un pedido sin pagar de 4. */
+      mixed: `${PREFIX}-mixed`,
+      /** Estadía finalizada sin guest_count: cuenta la capacidad de la habitación (2). */
+      legacy: `${PREFIX}-legacy`,
+      /** Consultó para 3 personas y nunca reservó. */
+      quoted: `${PREFIX}-quoted`,
+      /** Consultó para 1 persona, más adelante, y nunca reservó. */
+      quotedSmall: `${PREFIX}-quoted-small`,
+    };
+    let today: string;
+
+    const filters = {
+      inHouse: {
+        audience: CampaignAudience.ALL,
+        stayFilter: CampaignStayFilter.IN_HOUSE,
+      },
+      upcoming: {
+        audience: CampaignAudience.ALL,
+        stayFilter: CampaignStayFilter.UPCOMING,
+      },
+      finished: {
+        audience: CampaignAudience.ALL,
+        stayFilter: CampaignStayFilter.FINISHED,
+      },
+      unpaid: {
+        audience: CampaignAudience.ALL,
+        stayFilter: CampaignStayFilter.UNPAID,
+      },
+      quoted: {
+        audience: CampaignAudience.ALL,
+        stayFilter: CampaignStayFilter.QUOTED,
+      },
+    } satisfies Record<string, RecipientFilter>;
+
+    const range = (from: number, to: number) => ({
+      stayFrom: addDays(today, from),
+      stayTo: addDays(today, to),
+    });
+
+    // La base puede tener otros contactos: cada filtro se mide antes y después de sembrar los de acá.
+    const measured = () => [
+      ...Object.values(filters),
+      { ...filters.upcoming, ...range(9, 11) },
+      { ...filters.upcoming, ...range(20, 30) },
+      { ...filters.finished, ...range(-8, -6) },
+      { ...filters.finished, minGuests: 3 },
+      { ...filters.finished, maxGuests: 2 },
+      { ...filters.finished, minGuests: 2, maxGuests: 2 },
+      { ...filters.unpaid, minGuests: 4 },
+      { ...filters.unpaid, audience: CampaignAudience.NO_RESERVATION },
+      { ...filters.inHouse, audience: CampaignAudience.NO_RESERVATION },
+      { audience: CampaignAudience.ALL, minGuests: 4, maxGuests: 4 },
+      { ...filters.quoted, minGuests: 2 },
+      { ...filters.quoted, ...range(10, 20) },
+      { ...filters.quoted, ...range(10, 20), maxGuests: 2 },
+      { ...filters.quoted, audience: CampaignAudience.CONFIRMED },
+    ];
+    const baseline = new Map<string, number>();
+
+    /** Cuántos contactos de este bloque suma el filtro. */
+    const added = async (filter: RecipientFilter) => {
+      const previous = baseline.get(JSON.stringify(filter));
+      if (previous === undefined)
+        throw new Error(`Falta medir ${JSON.stringify(filter)} antes`);
+      return (await count(filter)) - previous;
+    };
+
+    const stayReservation = (
+      telegramUserId: string,
+      status: ReservationStatus,
+      [checkInOffset, checkOutOffset]: [number, number],
+      guestCount: number | null,
+      extra: Partial<Pick<Reservation, 'cancelledAt' | 'mpPaymentId'>> = {},
+    ) =>
+      em.create(Reservation, {
+        room: em.getReference(Room, roomId),
+        telegramUserId,
+        checkIn: keyToUtc(addDays(today, checkInOffset)),
+        checkOut: keyToUtc(addDays(today, checkOutOffset)),
+        status,
+        guestCount,
+        totalAmount: 100000,
+        depositAmount: 30000,
+        guestFullName: 'Huésped Filtros',
+        guestDni: '30111222',
+        ...extra,
+      });
+
+    /** Búsqueda del bot: guarda las fechas como DD-MM-YYYY. */
+    const search = (
+      telegramUserId: string,
+      [checkInOffset, checkOutOffset]: [number, number],
+      capacity: number,
+    ) =>
+      em.create(BookingProcess, {
+        telegramUserId,
+        step: BookingProcessStep.PENDING_CONFIRMATION,
+        checkIn: addDays(today, checkInOffset).split('-').reverse().join('-'),
+        checkOut: addDays(today, checkOutOffset).split('-').reverse().join('-'),
+        capacity,
+      });
+
+    beforeAll(async () => {
+      today = zonedDateKey(
+        new Date(),
+        app.get(SupportHoursService).getTimeZone(),
+      );
+      for (const filter of measured())
+        baseline.set(JSON.stringify(filter), await count(filter));
+
+      const { CONFIRMED, PENDING_PAYMENT, CANCELLED } = ReservationStatus;
+      em.persist([
+        ...Object.values(stay).map((telegramUserId) =>
+          em.create(ChatSession, { telegramUserId }),
+        ),
+        stayReservation(stay.inHouse, CONFIRMED, [-1, 2], 2),
+        stayReservation(stay.upcoming, CONFIRMED, [10, 12], 4),
+        stayReservation(stay.finished, CONFIRMED, [-10, -7], 2),
+        stayReservation(stay.unpaidPending, PENDING_PAYMENT, [30, 32], 2),
+        // Vencida sin pago: el cron la cancela sin cancelledAt.
+        stayReservation(stay.unpaidExpired, CANCELLED, [40, 42], 3),
+        stayReservation(stay.cancelledByGuest, CANCELLED, [50, 52], 2, {
+          cancelledAt: new Date(),
+          mpPaymentId: 'mp-campaign-filters',
+        }),
+        stayReservation(stay.mixed, CONFIRMED, [-20, -18], 1),
+        stayReservation(stay.mixed, CANCELLED, [60, 62], 4),
+        stayReservation(stay.legacy, CONFIRMED, [-30, -28], null),
+        search(stay.quoted, [15, 17], 3),
+        search(stay.quotedSmall, [40, 41], 1),
+        // Consultó y después reservó: no es "consultó y no reservó".
+        search(stay.upcoming, [10, 12], 3),
+      ]);
+      await em.flush();
+    });
+
+    it('alojados actualmente: confirmada con check-in hasta hoy y check-out posterior', async () => {
+      expect(await added(filters.inHouse)).toBe(1);
+    });
+
+    it('check-in próximo: confirmadas que todavía no llegaron (las pendientes no cuentan)', async () => {
+      expect(await added(filters.upcoming)).toBe(1);
+    });
+
+    it('estadía finalizada: confirmadas con check-out hasta hoy', async () => {
+      expect(await added(filters.finished)).toBe(3);
+    });
+
+    it('sin pagar: pendientes de pago y vencidas sin pago, no las que canceló el huésped', async () => {
+      expect(await added(filters.unpaid)).toBe(3);
+    });
+
+    it('el rango acota el check-in de las próximas y el check-out de las finalizadas (CA2)', async () => {
+      expect(await added({ ...filters.upcoming, ...range(9, 11) })).toBe(1);
+      expect(await added({ ...filters.upcoming, ...range(20, 30) })).toBe(0);
+      expect(await added({ ...filters.finished, ...range(-8, -6) })).toBe(1);
+    });
+
+    it('la cantidad de personas se mide sobre la misma reserva que cumple el estado', async () => {
+      // "mixed" pidió para 4 sin pagar, pero su estadía finalizada fue de 1 persona.
+      expect(await added({ ...filters.finished, minGuests: 3 })).toBe(0);
+      expect(await added({ ...filters.finished, maxGuests: 2 })).toBe(3);
+      expect(await added({ ...filters.unpaid, minGuests: 4 })).toBe(1);
+    });
+
+    it('si la reserva no tiene la cantidad de personas, usa la capacidad de la habitación', async () => {
+      // "finished" pidió para 2 y "legacy" no tiene el dato pero su habitación es para 2.
+      expect(
+        await added({ ...filters.finished, minGuests: 2, maxGuests: 2 }),
+      ).toBe(2);
+    });
+
+    it('consultaron y no reservaron: tienen una búsqueda del bot y ninguna reserva', async () => {
+      expect(await added(filters.quoted)).toBe(2);
+      expect(
+        await added({
+          ...filters.quoted,
+          audience: CampaignAudience.CONFIRMED,
+        }),
+      ).toBe(0);
+    });
+
+    it('en las consultas, personas y fechas se miden sobre lo que pidieron', async () => {
+      expect(await added({ ...filters.quoted, minGuests: 2 })).toBe(1);
+      expect(await added({ ...filters.quoted, ...range(10, 20) })).toBe(1);
+      expect(
+        await added({ ...filters.quoted, ...range(10, 20), maxGuests: 2 }),
+      ).toBe(0);
+    });
+
+    it('sin estado, la cantidad de personas mira cualquier reserva', async () => {
+      expect(
+        await added({
+          audience: CampaignAudience.ALL,
+          minGuests: 4,
+          maxGuests: 4,
+        }),
+      ).toBe(2);
+    });
+
+    it('se combina con los destinatarios existentes (CA3)', async () => {
+      // "mixed" tiene una reserva confirmada, así que no está entre los "sin reserva".
+      expect(
+        await added({
+          ...filters.unpaid,
+          audience: CampaignAudience.NO_RESERVATION,
+        }),
+      ).toBe(2);
+      expect(
+        await added({
+          ...filters.inHouse,
+          audience: CampaignAudience.NO_RESERVATION,
+        }),
+      ).toBe(0);
+    });
+
+    it.each<[string, RecipientFilter, RegExp]>([
+      [
+        'fechas con un estado que no las admite',
+        { ...filters.inHouse, stayFrom: '2026-01-01' },
+        /rango de fechas/,
+      ],
+      [
+        'fechas sin estado',
+        { audience: CampaignAudience.ALL, stayTo: '2026-01-01' },
+        /rango de fechas/,
+      ],
+      [
+        '"desde" posterior a "hasta"',
+        { ...filters.finished, stayFrom: '2026-02-01', stayTo: '2026-01-01' },
+        /posterior/,
+      ],
+      [
+        'un mínimo de personas mayor al máximo',
+        { ...filters.finished, minGuests: 4, maxGuests: 2 },
+        /mínima/,
+      ],
+    ])('rechaza %s', async (_case, filter, message) => {
+      await expect(service.countRecipients(filter)).rejects.toThrow(message);
+    });
+
+    it('envía solo a quienes cumplen los filtros y los deja en el historial (CA5)', async () => {
+      const filter = {
+        audience: CampaignAudience.NO_RESERVATION,
+        stayFilter: CampaignStayFilter.UNPAID,
+        minGuests: 3,
+      };
+      const expected = await count(filter);
+
+      const created = await service.create(
+        { title: 'Volvé', message: 'Te guardamos el precio', ...filter },
+        undefined,
+        admin,
+      );
+      await service.whenIdle();
+
+      expect(created).toMatchObject({
+        audience: CampaignAudience.NO_RESERVATION,
+        stayFilter: CampaignStayFilter.UNPAID,
+        stayFrom: null,
+        stayTo: null,
+        minGuests: 3,
+        maxGuests: null,
+        totalRecipients: expected,
+      });
+      const recipients = sendMessage.mock.calls.map(([chatId]) => chatId);
+      expect(recipients).toContain(stay.unpaidExpired);
+      expect(recipients).not.toContain(stay.unpaidPending);
+      expect(recipients).not.toContain(stay.mixed);
+
+      const [latest] = (await service.list({ page: 1, pageSize: 1 })).data;
+      expect(latest).toMatchObject({
+        id: created.id,
+        stayFilter: CampaignStayFilter.UNPAID,
+        minGuests: 3,
+      });
+    });
+
+    it('no crea la campaña si ningún contacto cumple los filtros (CA4)', async () => {
+      await expect(
+        service.create(
+          {
+            title: 'Nadie',
+            message: 'x',
+            audience: CampaignAudience.NO_RESERVATION,
+            stayFilter: CampaignStayFilter.IN_HOUSE,
+          },
+          undefined,
+          admin,
+        ),
+      ).rejects.toThrow(/Ningún contacto/);
     });
   });
 });

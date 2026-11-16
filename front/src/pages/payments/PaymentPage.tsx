@@ -83,11 +83,20 @@ export default function PaymentPage() {
     );
   }
 
+  if (summary.status === 'EXPIRED') {
+    return (
+      <PostPayment
+        title="Esta reserva venció"
+        detail="El tiempo para abonar la seña terminó y la habitación se liberó. Escribinos por Telegram para retomarla o reservar de nuevo."
+      />
+    );
+  }
+
   if (summary.status === 'CANCELLED') {
     return (
       <PostPayment
         title="Esta reserva fue cancelada"
-        detail="El tiempo para abonar la seña venció. Escribinos por Telegram para reservar de nuevo."
+        detail="Escribinos por Telegram si querés reservar de nuevo."
       />
     );
   }

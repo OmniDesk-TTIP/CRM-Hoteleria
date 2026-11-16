@@ -2,11 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { RestaurantPhoto } from '../../infrastructure/database/entities/RestaurantPhoto.entity';
 import { RestaurantPhotoModel } from './model/restaurantPhoto.model';
-
-export interface PhotoContent {
-  data: Buffer;
-  mimeType: string;
-}
+import { PhotoContent } from '../../common/photo.util';
 
 @Injectable()
 export class RestaurantPhotoRepository {

@@ -44,7 +44,13 @@ export class SaveReservationDto {
   )
   checkOut!: string;
 
-  @IsIn(Object.values(ReservationStatus), { message: 'Estado inválido' })
+  // Vencida no se elige a mano: solo la pone el vencimiento automático.
+  @IsIn(
+    Object.values(ReservationStatus).filter(
+      (status) => status !== ReservationStatus.EXPIRED,
+    ),
+    { message: 'Estado inválido' },
+  )
   status!: ReservationStatus;
 
   @IsNumber({}, { message: 'totalAmount debe ser un número' })

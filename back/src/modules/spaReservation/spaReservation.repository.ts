@@ -6,6 +6,7 @@ import {
 } from '../../infrastructure/database/entities/SpaReservation.entity';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import { SpaService } from '../../infrastructure/database/entities/SpaService.entity';
+import { Promotion } from '../../infrastructure/database/entities/Promotion.entity';
 import { hasFreeCapacity } from '../spa/model/spa.model';
 import {
   OCCUPYING_STATUSES,
@@ -72,6 +73,46 @@ export class SpaReservationRepository {
   }
 
   /**
+   * ¿Queda lugar en ese servicio, día y hora? Es solo una consulta previa (sin lock) para avisarle
+   * al cliente antes de pedirle sus datos: el lugar se reserva recién con `insertIfCapacity`.
+   */
+  async hasCapacity(
+    spaServiceId: string,
+    requestedDate: string,
+    requestedTime: string,
+    spa: { capacity: number; durationMinutes: number },
+  ): Promise<boolean> {
+    return this.hasFreeSlot(
+      this.em,
+      spaServiceId,
+      requestedDate,
+      requestedTime,
+      spa,
+    );
+  }
+
+  private async hasFreeSlot(
+    em: EntityManager,
+    spaServiceId: string,
+    requestedDate: string,
+    requestedTime: string,
+    spa: { capacity: number; durationMinutes: number },
+  ): Promise<boolean> {
+    const booked = await em.find(SpaReservation, {
+      spaService: spaServiceId,
+      requestedDate,
+      status: { $in: OCCUPYING_STATUSES },
+    });
+
+    return hasFreeCapacity(
+      booked.map((reservation) => reservation.requestedTime),
+      requestedTime,
+      spa.durationMinutes,
+      spa.capacity,
+    );
+  }
+
+  /**
    * Guarda el turno solo si todavía hay lugar. Chequear y guardar tiene que ser una sola
    * operación: sin el lock, dos pedidos simultáneos para el último lugar lo verían libre los dos.
    * Se bloquea la fila del servicio, así los pedidos de un mismo servicio se atienden en fila
@@ -88,17 +129,12 @@ export class SpaReservationRepository {
         { lockMode: LockMode.PESSIMISTIC_WRITE },
       );
 
-      const booked = await em.find(SpaReservation, {
-        spaService: model.spaServiceId,
-        requestedDate: model.requestedDate,
-        status: { $in: OCCUPYING_STATUSES },
-      });
-
-      const hasRoom = hasFreeCapacity(
-        booked.map((reservation) => reservation.requestedTime),
+      const hasRoom = await this.hasFreeSlot(
+        em,
+        model.spaServiceId,
+        model.requestedDate,
         model.requestedTime,
-        spa.durationMinutes,
-        spa.capacity,
+        spa,
       );
       if (!hasRoom) return false;
 
@@ -118,6 +154,16 @@ export class SpaReservationRepository {
           requestedDate: model.requestedDate,
           requestedTime: model.requestedTime,
           amount: model.amount,
+          ...(model.promotion
+            ? {
+                promotion: model.promotion.id
+                  ? em.getReference(Promotion, model.promotion.id)
+                  : null,
+                promotionTitle: model.promotion.title,
+                promotionPercentage: model.promotion.percentage,
+                discountAmount: model.promotion.discountAmount,
+              }
+            : {}),
         }),
       );
       return true;
@@ -188,6 +234,14 @@ export class SpaReservationRepository {
       requestedTime: entity.requestedTime,
       // decimal llega como string desde pg.
       amount: Number(entity.amount),
+      promotion: entity.promotionTitle
+        ? {
+            id: entity.promotion?.id ?? null,
+            title: entity.promotionTitle,
+            percentage: entity.promotionPercentage ?? 0,
+            discountAmount: Number(entity.discountAmount),
+          }
+        : null,
       createdAt: entity.createdAt,
     });
   }

@@ -11,6 +11,7 @@ const STATUS_OPTIONS: { value: ReservationStatus | 'ALL'; label: string }[] = [
   { value: 'PENDING_PAYMENT', label: 'Pendiente' },
   { value: 'CONFIRMED', label: 'Confirmada' },
   { value: 'CANCELLED', label: 'Cancelada' },
+  { value: 'EXPIRED', label: 'Vencida' },
 ];
 
 const inputClasses =

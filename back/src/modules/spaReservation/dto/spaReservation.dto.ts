@@ -13,8 +13,11 @@ export class SpaReservationDto {
   guestFullName: string;
   requestedDate: string;
   requestedTime: string;
-  /** Lo que se cobra: 0 para huéspedes. */
+  /** Lo que se cobra, con el descuento aplicado: 0 para huéspedes. */
   amount: number;
+  promotionTitle: string | null;
+  promotionPercentage: number | null;
+  discountAmount: number;
   createdAt: string | null;
 
   static fromModel(model: SpaReservationModel): SpaReservationDto {
@@ -27,6 +30,9 @@ export class SpaReservationDto {
     dto.requestedDate = model.requestedDate;
     dto.requestedTime = model.requestedTime;
     dto.amount = model.amount;
+    dto.promotionTitle = model.promotion?.title ?? null;
+    dto.promotionPercentage = model.promotion?.percentage ?? null;
+    dto.discountAmount = model.promotion?.discountAmount ?? 0;
     dto.createdAt = model.createdAt ? model.createdAt.toISOString() : null;
     return dto;
   }

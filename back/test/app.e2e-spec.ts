@@ -17,9 +17,9 @@ describe('AppModule (e2e)', () => {
         stop: jest.fn(),
         on: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
         start: jest.fn(),
         hears: jest.fn(),
-        action: jest.fn(),
         command: jest.fn(),
       })
       .compile();

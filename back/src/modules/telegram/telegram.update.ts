@@ -1,72 +1,46 @@
-import { Update, Ctx, Start, On, Message } from 'nestjs-telegraf';
+import { Update, Ctx, Start, On, Message, Action } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
-import { EntityManager, MikroORM, RequestContext } from '@mikro-orm/core';
+import { MikroORM, RequestContext } from '@mikro-orm/core';
 import { Logger } from '@nestjs/common';
-import { plainToInstance } from 'class-transformer';
-import { isUUID, validate } from 'class-validator';
-import { RagService, ChatAction, AiResponse } from '../rag/rag.service';
 import {
   ReservationService,
-  AlternativeDates,
   ALTERNATIVE_DATES_WINDOW_DAYS,
 } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
-import { SpaService } from '../spa/spa.service';
-import { CancellationService } from '../cancellation/cancellation.service';
-import { SpaReservationService } from '../spaReservation/spaReservation.service';
-import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dto';
-import { RestaurantService } from '../restaurant/restaurant.service';
-import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
-import { RequestTableBookingDto } from '../restaurantReservation/dto/restaurantReservation.dto';
 import {
-  detectHumanRequest,
-  isUnresolvedReply,
-} from '../chat/handover.detector';
-import { SearchAvailabilityDto } from '../bookingProcess/dto/searchAvailability.dto';
-import { ConfirmReservationDto } from '../reservation/dto/confirmReservation.dto';
-import { ChatMessage } from '../../infrastructure/database/entities/ChatMessage.entity';
-import {
-  ChatSession,
-  HandoverReason,
-} from '../../infrastructure/database/entities/ChatSession.entity';
-import {
-  BookingProcess,
-  BookingProcessStep,
-} from '../../infrastructure/database/entities/BookingProcess.entity';
+  RoomServiceChatResult,
+  RoomServiceService,
+} from '../roomService/roomService.service';
+import { BotService, TECHNICAL_ERROR_REPLY } from '../bot/bot.service';
+import { ChatSession } from '../../infrastructure/database/entities/ChatSession.entity';
 import { TelegramProfile } from '../chat/chat.repository';
-import { escapeHtml } from './telegram.format';
+import {
+  escapeHtml,
+  EXPIRED_DECLINE_LABEL,
+  EXPIRED_RECOVERY_CALLBACK,
+  EXPIRED_RESUME_LABEL,
+  formatAlternativesFallback,
+  ROOM_SERVICE_BUTTON_LABELS,
+  ROOM_SERVICE_CALLBACK,
+  RoomServiceButton,
+} from './telegram.format';
 
-const HISTORY_SIZE = 6;
-
-const GENERIC_FALLBACK =
-  'Disculpá, no pude procesar tu mensaje. ¿Podés reformularlo?';
-
+/**
+ * Adaptador de Telegram: recibe los mensajes y botones, le pasa el texto al BotService
+ * y entrega su respuesta en el chat. La lógica de qué contestar vive en el BotService.
+ */
 @Update()
 export class TelegramUpdate {
   private readonly logger = new Logger(TelegramUpdate.name);
 
-  private static readonly ASK_GUEST_DATA =
-    'Genial, te la reservo. Para tomarla necesito el nombre completo y el DNI del huésped que se aloja.';
-
-  private static readonly NO_PENDING_PAYMENT =
-    'No tenés ninguna reserva esperando el pago de la seña. Si querés, buscamos disponibilidad: decime las fechas de entrada y salida y para cuántas personas.';
-
-  private static readonly ASK_WHICH_OPTION =
-    'Antes de tomar la reserva necesito que me confirmes cuál de las opciones que te pasé preferís (fechas de entrada y salida).';
-
   constructor(
-    private readonly ragService: RagService,
+    private readonly botService: BotService,
     private readonly reservationService: ReservationService,
     private readonly bookingProcessService: BookingProcessService,
     private readonly chatService: ChatService,
-    private readonly spaService: SpaService,
-    private readonly spaReservationService: SpaReservationService,
-    private readonly restaurantService: RestaurantService,
-    private readonly restaurantReservationService: RestaurantReservationService,
-    private readonly cancellationService: CancellationService,
+    private readonly roomServiceService: RoomServiceService,
     private readonly orm: MikroORM,
-    private readonly em: EntityManager,
   ) {}
 
   @Start()
@@ -101,132 +75,215 @@ export class TelegramUpdate {
     ctx: Context,
     telegramUserId: string,
   ): Promise<void> {
-    let session: ChatSession | undefined;
+    const result = await this.botService.handleGuestMessage({
+      telegramUserId,
+      text,
+      profile: this.readProfile(ctx),
+      onProcessingStart: () => ctx.sendChatAction('typing'),
+    });
 
+    try {
+      switch (result.kind) {
+        case 'muted':
+        case 'discarded':
+          return;
+        case 'handover':
+        case 'error':
+          await ctx.reply(result.text);
+          return;
+        case 'reply':
+          await ctx.reply(result.text, {
+            parse_mode: 'HTML',
+            ...result.keyboard,
+          });
+          if (result.document) await ctx.replyWithDocument(result.document);
+      }
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error enviando la respuesta a ${telegramUserId}: ${String(error)}`,
+      );
+      await ctx.reply(TECHNICAL_ERROR_REPLY).catch(() => undefined);
+    }
+  }
+
+  @Action(ROOM_SERVICE_CALLBACK)
+  async onRoomServiceAction(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    const data =
+      ctx.callbackQuery && 'data' in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : '';
+    const match = ROOM_SERVICE_CALLBACK.exec(data);
+    if (!ctx.from || !match) return;
+
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+
+    const [, button, orderId] = match;
+    await this.withRequestContext(() =>
+      this.handleRoomServiceAction(
+        ctx,
+        ctx.from!.id.toString(),
+        button as RoomServiceButton,
+        orderId,
+      ),
+    );
+  }
+
+  private async handleRoomServiceAction(
+    ctx: Context,
+    telegramUserId: string,
+    button: RoomServiceButton,
+    orderId: string,
+  ): Promise<void> {
+    let session: ChatSession | undefined;
     try {
       session = await this.chatService.getOrCreateSession(
         telegramUserId,
         this.readProfile(ctx),
       );
-
-      const incoming = await this.chatService.recordIncomingMessage(
+      await this.chatService.recordIncomingMessage(
         session,
-        text,
+        ROOM_SERVICE_BUTTON_LABELS[button],
       );
-
-      if (this.chatService.isMuted(session)) {
-        this.logger.log(
-          `Chat ${session.id} en modo humano: el mensaje de ${telegramUserId} no se procesa`,
-        );
-        return;
-      }
-
       await ctx.sendChatAction('typing');
 
-      if (detectHumanRequest(text)) {
-        await this.handleHandover(ctx, session, HandoverReason.GUEST_REQUEST);
-        return;
-      }
-
-      const activeBooking =
-        await this.bookingProcessService.getActive(telegramUserId);
-      const lastCompletedBooking =
-        await this.bookingProcessService.getLastCompleted(telegramUserId);
-
-      const previousMessages = await this.em.find(
-        ChatMessage,
-        { telegramUserId, id: { $ne: incoming.id } },
-        { orderBy: { createdAt: 'DESC' }, limit: HISTORY_SIZE },
+      const botReply = await this.resolveRoomServiceButton(
+        telegramUserId,
+        button,
+        orderId,
       );
-
-      const history = previousMessages.reverse();
-      const servicesBlock =
-        await this.spaService.getSpaContextBlock(telegramUserId);
-      const restaurant =
-        await this.restaurantService.getChatContext(telegramUserId);
-      const cancellation =
-        await this.cancellationService.getGuestContextBlock(telegramUserId);
-      const hasPendingPayment =
-        await this.reservationService.hasPendingPayment(telegramUserId);
-      const aiResponse = await this.ragService.askQuestion(
-        text,
-        activeBooking,
-        history,
-        lastCompletedBooking,
-        servicesBlock,
-        cancellation,
-        hasPendingPayment,
-        restaurant,
-      );
-
-      if (aiResponse.action === ChatAction.REQUEST_HUMAN) {
-        await this.handleHandover(ctx, session, HandoverReason.GUEST_REQUEST);
-        return;
-      }
-
-      const botReply =
-        (await this.resolveBotReply(
-          aiResponse,
-          telegramUserId,
-          activeBooking,
-          text,
-          history,
-        )) || GENERIC_FALLBACK;
-
-      if (await this.chatService.wasTakenOverMeanwhile(session)) {
-        this.logger.log(
-          `Se descarta la respuesta del bot para ${telegramUserId}: un operador tomó el control`,
-        );
-        return;
-      }
 
       await this.chatService.recordBotMessage(session, botReply);
-
       await ctx.reply(botReply, { parse_mode: 'HTML' });
-
-      if (isUnresolvedReply(botReply))
-        await this.chatService.registerBotFailure(session);
-      else await this.chatService.resetBotFailures(session);
     } catch (error: unknown) {
-      this.logger.error(`Error procesando el mensaje: ${String(error)}`);
-
-      if (session) await this.registerFailureSafely(session);
-
-      if ((error as { status?: number } | null)?.status === 503) {
-        await ctx.reply(
-          'El sistema está experimentando alta demanda en este segundo. Dame un minutito y volvé a escribirme.',
-        );
-      } else {
-        await ctx.reply(
-          'Hubo un error técnico al procesar tu consulta. Por favor, intentá nuevamente.',
-        );
-      }
-    }
-  }
-
-  private async handleHandover(
-    ctx: Context,
-    session: ChatSession,
-    reason: HandoverReason,
-  ): Promise<void> {
-    const { replyText, muted } = await this.chatService.requestHandover(
-      session,
-      reason,
-    );
-    this.logger.log(
-      `Handover de ${session.telegramUserId} (${reason}); bot silenciado: ${muted}`,
-    );
-    await ctx.reply(replyText);
-  }
-
-  private async registerFailureSafely(session: ChatSession): Promise<void> {
-    try {
-      await this.chatService.registerBotFailure(session);
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo registrar el fallo del bot para ${session.telegramUserId}: ${error}`,
+      this.logger.error(
+        `Error procesando el botón de room service ${button} del pedido ${orderId}: ${String(error)}`,
+      );
+      if (session) await this.botService.registerFailureSafely(session);
+      await ctx.reply(
+        'Hubo un error técnico con tu pedido de room service. Por favor, intentá nuevamente en unos minutos.',
       );
     }
+  }
+
+  private async resolveRoomServiceButton(
+    telegramUserId: string,
+    button: RoomServiceButton,
+    orderId: string,
+  ): Promise<string> {
+    let result: RoomServiceChatResult;
+    switch (button) {
+      case 'confirm':
+        result = await this.roomServiceService.confirmOrder(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'discard':
+        result = await this.roomServiceService.discardDraft(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'cancel':
+        result = await this.roomServiceService.cancelOrder(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'keep':
+        return 'Perfecto, tu pedido sigue en curso.';
+    }
+    return result.ok ? result.reply : escapeHtml(result.reason);
+  }
+
+  @Action(EXPIRED_RECOVERY_CALLBACK)
+  async onExpiredRecovery(@Ctx() ctx: Context) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    const data =
+      ctx.callbackQuery && 'data' in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : '';
+    const match = EXPIRED_RECOVERY_CALLBACK.exec(data);
+    if (!ctx.from || !match) return;
+
+    await ctx.editMessageReplyMarkup(undefined).catch(() => undefined);
+
+    const [, answer, reservationId] = match;
+    await this.withRequestContext(() =>
+      this.handleExpiredRecovery(
+        ctx,
+        ctx.from!.id.toString(),
+        reservationId,
+        answer === 'resume',
+      ),
+    );
+  }
+
+  private async handleExpiredRecovery(
+    ctx: Context,
+    telegramUserId: string,
+    reservationId: string,
+    wantsToResume: boolean,
+  ): Promise<void> {
+    let session: ChatSession | undefined;
+    try {
+      session = await this.chatService.getOrCreateSession(
+        telegramUserId,
+        this.readProfile(ctx),
+      );
+      await this.chatService.recordIncomingMessage(
+        session,
+        wantsToResume ? EXPIRED_RESUME_LABEL : EXPIRED_DECLINE_LABEL,
+      );
+      await ctx.sendChatAction('typing');
+
+      const botReply = wantsToResume
+        ? await this.resolveResumeExpired(telegramUserId, reservationId)
+        : await this.reservationService.declineExpiredRecovery(
+            telegramUserId,
+            reservationId,
+          );
+
+      await this.chatService.recordBotMessage(session, botReply);
+      await ctx.reply(botReply, { parse_mode: 'HTML' });
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error retomando la reserva vencida ${reservationId}: ${String(error)}`,
+      );
+      if (session) await this.botService.registerFailureSafely(session);
+      await ctx.reply(
+        'Hubo un error técnico al retomar tu reserva. Escribime las fechas y para cuántas personas y la buscamos de nuevo.',
+      );
+    }
+  }
+
+  private async resolveResumeExpired(
+    telegramUserId: string,
+    reservationId: string,
+  ): Promise<string> {
+    const result = await this.reservationService.resumeExpiredReservation(
+      telegramUserId,
+      reservationId,
+    );
+    if (result.kind === 'reply') return result.reply;
+
+    const activeBooking =
+      await this.bookingProcessService.getActive(telegramUserId);
+    const search = await this.reservationService.searchAvailability(
+      telegramUserId,
+      activeBooking,
+      result.search,
+    );
+    const intro = 'La habitación que tenías ya no está libre para esas fechas.';
+    if (search.available) return `${intro}\n\n${search.reply}`;
+    if (search.alternatives.length === 0) {
+      return `${intro} Tampoco nos quedan lugares en esas fechas ni en los ${ALTERNATIVE_DATES_WINDOW_DAYS} días cercanos. ¿Probamos con otras fechas?`;
+    }
+    return formatAlternativesFallback(
+      search.alternatives,
+      `${intro} Te paso estas opciones cercanas:`,
+    );
   }
 
   private withRequestContext<T>(work: () => Promise<T>): Promise<T> {
@@ -239,264 +296,7 @@ export class TelegramUpdate {
       firstName: ctx.from.first_name,
       lastName: ctx.from.last_name,
       username: ctx.from.username,
+      languageCode: ctx.from.language_code,
     };
-  }
-
-  private async resolveBotReply(
-    aiResponse: AiResponse,
-    telegramUserId: string,
-    activeBooking: BookingProcess | null,
-    userText: string,
-    history: ChatMessage[],
-  ): Promise<string> {
-    switch (aiResponse.action) {
-      case ChatAction.SEARCH_AVAILABILITY:
-        return this.resolveSearchAvailability(
-          aiResponse.datos,
-          telegramUserId,
-          activeBooking,
-          userText,
-          history,
-        );
-      case ChatAction.CONFIRM_RESERVATION:
-        return this.resolveConfirmReservation(
-          aiResponse.datos,
-          telegramUserId,
-          activeBooking,
-        );
-      case ChatAction.SEND_PAYMENT_LINK:
-        return (
-          (await this.reservationService.buildPendingPaymentReply(
-            telegramUserId,
-          )) ?? TelegramUpdate.NO_PENDING_PAYMENT
-        );
-      case ChatAction.REQUEST_SPA_BOOKING:
-        return this.resolveSpaBooking(aiResponse.datos, telegramUserId);
-      case ChatAction.REQUEST_TABLE_BOOKING:
-        return this.resolveTableBooking(aiResponse.datos, telegramUserId);
-      case ChatAction.CANCEL_RESERVATION:
-        return this.resolveCancelReservation(aiResponse.datos, telegramUserId);
-      case ChatAction.REGISTER_REFUND_ACCOUNT:
-        return this.resolveRegisterRefundAccount(
-          aiResponse.datos,
-          telegramUserId,
-        );
-      default:
-        return (
-          escapeHtml(aiResponse.texto || '') ||
-          'Disculpá, no entendí bien eso. ¿Podés reformularlo?'
-        );
-    }
-  }
-
-  private async resolveCancelReservation(
-    datos: unknown,
-    telegramUserId: string,
-  ): Promise<string> {
-    const reservationId = (datos as { reservationId?: unknown } | null)
-      ?.reservationId;
-    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
-      return '¿Me confirmás cuál de tus reservas querés cancelar (fechas de entrada y salida)?';
-    }
-
-    const result = await this.cancellationService.cancelForGuest(
-      telegramUserId,
-      reservationId,
-    );
-    return result.ok ? result.reply : escapeHtml(result.reason);
-  }
-
-  private async resolveRegisterRefundAccount(
-    datos: unknown,
-    telegramUserId: string,
-  ): Promise<string> {
-    const { reservationId, alias, holderName } = (datos ?? {}) as {
-      reservationId?: unknown;
-      alias?: unknown;
-      holderName?: unknown;
-    };
-    if (typeof reservationId !== 'string' || !isUUID(reservationId)) {
-      return '¿Me confirmás de qué reserva es la devolución (fechas de entrada y salida)?';
-    }
-
-    const result = await this.cancellationService.registerRefundAccountForGuest(
-      telegramUserId,
-      reservationId,
-      alias,
-      holderName,
-    );
-    return result.ok ? result.reply : escapeHtml(result.reason);
-  }
-
-  private async resolveSpaBooking(
-    datos: unknown,
-    telegramUserId: string,
-  ): Promise<string> {
-    const bookingDto = plainToInstance(RequestSpaBookingDto, datos);
-    const validationErrors = await validate(bookingDto);
-    if (validationErrors.length > 0) {
-      const invalidFields = validationErrors.map((error) => error.property);
-      this.logger.warn(
-        `Pedido de turno incompleto de ${telegramUserId}; inválidos: ${invalidFields.join(', ')}`,
-      );
-      if (invalidFields.includes('fullName') || invalidFields.includes('dni')) {
-        return '¿Me pasás tu nombre completo y tu DNI (solo los números, sin puntos)?';
-      }
-      return '¿Me confirmás qué servicio querés, qué día (DD-MM-YYYY) y a qué hora?';
-    }
-
-    const result = await this.spaReservationService.requestSpa(
-      telegramUserId,
-      bookingDto,
-    );
-    return result.ok ? result.reply : escapeHtml(result.reason);
-  }
-
-  private async resolveTableBooking(
-    datos: unknown,
-    telegramUserId: string,
-  ): Promise<string> {
-    const bookingDto = plainToInstance(RequestTableBookingDto, datos);
-    const validationErrors = await validate(bookingDto);
-    if (validationErrors.length > 0) {
-      this.logger.warn(
-        `Pedido de mesa incompleto de ${telegramUserId}; inválidos: ${validationErrors.map((error) => error.property).join(', ')}`,
-      );
-      return '¿Me confirmás para qué día (DD-MM-YYYY), a qué hora y para cuántas personas querés la mesa?';
-    }
-
-    const result = await this.restaurantReservationService.requestTable(
-      telegramUserId,
-      bookingDto,
-    );
-    return result.ok ? result.reply : escapeHtml(result.reason);
-  }
-
-  private async resolveSearchAvailability(
-    datos: unknown,
-    telegramUserId: string,
-    activeBooking: BookingProcess | null,
-    userText: string,
-    history: ChatMessage[],
-  ): Promise<string> {
-    const searchDto = plainToInstance(SearchAvailabilityDto, datos);
-    const validationErrors = await validate(searchDto);
-    if (validationErrors.length > 0) {
-      const [firstError] = validationErrors;
-      throw new Error(
-        Object.values(firstError.constraints || {})[0] ||
-          'Datos de búsqueda de disponibilidad inválidos',
-      );
-    }
-
-    if (this.isOfferAlreadyPending(activeBooking, searchDto)) {
-      this.logger.log(
-        `Se ignora una búsqueda repetida de ${telegramUserId}: ya hay una oferta esperando confirmación`,
-      );
-      return TelegramUpdate.ASK_GUEST_DATA;
-    }
-
-    const result = await this.reservationService.searchAvailability(
-      telegramUserId,
-      activeBooking,
-      searchDto,
-    );
-    if (result.available) return result.reply;
-
-    if (result.alternatives.length === 0) {
-      return `Lamentablemente no nos quedan habitaciones para ${searchDto.capacity} personas en esas fechas ni en los ${ALTERNATIVE_DATES_WINDOW_DAYS} días cercanos. ¿Probamos con otras fechas?`;
-    }
-
-    const aiReply = await this.ragService.composeUnavailableReply(
-      userText,
-      history,
-      searchDto,
-      result.alternatives,
-    );
-    return (
-      escapeHtml(aiReply || '') ||
-      this.formatAlternativesFallback(result.alternatives)
-    );
-  }
-
-  private formatAlternativesFallback(alternatives: AlternativeDates[]): string {
-    const options = alternatives.map(
-      ({
-        checkIn,
-        checkOut,
-        nights,
-        isShorterStay,
-        roomCategory,
-        totalAmount,
-      }) =>
-        `• Del ${checkIn} al ${checkOut} (${nights} noches${isShorterStay ? ', estadía más corta' : ''}) – ${escapeHtml(roomCategory)}, total $${totalAmount}`,
-    );
-    return [
-      'Lamentablemente no tenemos lugar en esas fechas, pero encontré estas opciones cercanas:',
-      ...options,
-      '',
-      '¿Te sirve alguna?',
-    ].join('\n');
-  }
-
-  private isOfferAlreadyPending(
-    activeBooking: BookingProcess | null,
-    searchDto: SearchAvailabilityDto,
-  ): boolean {
-    return (
-      !!activeBooking &&
-      activeBooking.step === BookingProcessStep.PENDING_CONFIRMATION &&
-      activeBooking.checkIn === searchDto.checkIn &&
-      activeBooking.checkOut === searchDto.checkOut &&
-      activeBooking.capacity === searchDto.capacity
-    );
-  }
-
-  private async resolveConfirmReservation(
-    datos: unknown,
-    telegramUserId: string,
-    activeBooking: BookingProcess | null,
-  ): Promise<string> {
-    // Nunca se responde con el texto del modelo: si no hay nada que confirmar, Gemini suele
-    // contestar como si hubiera reservado ("ya registré tus datos") sin que exista la reserva.
-    if (activeBooking?.step === BookingProcessStep.IN_PROGRESS) {
-      return activeBooking.checkIn &&
-        activeBooking.checkOut &&
-        activeBooking.capacity
-        ? TelegramUpdate.ASK_WHICH_OPTION
-        : '¿Para qué fechas de entrada y salida, y para cuántas personas, buscamos la habitación?';
-    }
-    if (
-      !activeBooking ||
-      activeBooking.step !== BookingProcessStep.PENDING_CONFIRMATION
-    ) {
-      return (
-        (await this.reservationService.buildPendingPaymentReply(
-          telegramUserId,
-        )) ??
-        'Para tomar una reserva primero necesito las fechas de entrada y salida y para cuántas personas es.'
-      );
-    }
-
-    const confirmDto = plainToInstance(ConfirmReservationDto, datos);
-    const validationErrors = await validate(confirmDto);
-    if (validationErrors.length > 0) {
-      const invalidFields = validationErrors.map((error) => error.property);
-      this.logger.warn(
-        `Confirmación incompleta de ${telegramUserId}; faltan o son inválidos: ${invalidFields.join(', ')}`,
-      );
-
-      if (!invalidFields.includes('fullName'))
-        return '¿Me pasás el DNI del huésped que se aloja? Solo los números, sin puntos.';
-      if (!invalidFields.includes('dni'))
-        return '¿Me pasás el nombre completo del huésped que se aloja?';
-      return TelegramUpdate.ASK_GUEST_DATA;
-    }
-
-    return this.reservationService.confirmReservation(
-      telegramUserId,
-      activeBooking,
-      confirmDto,
-    );
   }
 }

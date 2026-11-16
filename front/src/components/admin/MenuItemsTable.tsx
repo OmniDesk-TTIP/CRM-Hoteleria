@@ -86,6 +86,7 @@ export default function MenuItemsTable({
                 <td className="max-w-xs px-4 py-3 sm:px-5">
                   <p className="font-medium text-text">{item.name}</p>
                   {item.description && <p className="line-clamp-2 text-xs text-textMuted">{item.description}</p>}
+                  {item.availableForRoomService && <p className="text-xs text-goldLight">Room service</p>}
                 </td>
                 <td className="px-4 py-3 text-textMuted sm:px-5">{item.category}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-text sm:px-5">{formatCurrency(item.price)}</td>
@@ -118,6 +119,7 @@ export default function MenuItemsTable({
                       {item.category} · <span className="text-text">{formatCurrency(item.price)}</span>
                     </p>
                     {item.description && <p className="line-clamp-2 text-sm text-textMuted">{item.description}</p>}
+                    {item.availableForRoomService && <p className="text-xs text-goldLight">Room service</p>}
                   </div>
                   <MenuItemStatusBadge status={item.status} />
                 </div>

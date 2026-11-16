@@ -8,11 +8,10 @@ import {
 import { MikroORM, RequestContext } from '@mikro-orm/core';
 import { InjectBot } from 'nestjs-telegraf';
 import { Context, Telegraf } from 'telegraf';
-import {
-  CampaignAudience,
-  CampaignStatus,
-} from '../../infrastructure/database/entities/Campaign.entity';
+import { CampaignStatus } from '../../infrastructure/database/entities/Campaign.entity';
+import { zonedDateKey } from '../../common/date.util';
 import { ChatService } from '../chat/chat.service';
+import { SupportHoursService } from '../supportHours/supportHours.service';
 import { AuthUser } from '../auth/auth.types';
 import { PaginatedResultDto } from '../reservation/dto/adminReservation.dto';
 import { CampaignRepository } from './campaign.repository';
@@ -25,7 +24,10 @@ import {
   buildCampaignText,
   buildChatNotice,
   detectImageType,
+  normalizeRecipientFilter,
+  RecipientFilter,
   validateCampaignLength,
+  validateRecipientFilter,
 } from './campaign.model';
 import {
   CampaignDto,
@@ -42,6 +44,7 @@ export class CampaignService implements OnApplicationBootstrap {
   constructor(
     private readonly campaignRepository: CampaignRepository,
     private readonly chatService: ChatService,
+    private readonly supportHoursService: SupportHoursService,
     private readonly orm: MikroORM,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
@@ -56,12 +59,14 @@ export class CampaignService implements OnApplicationBootstrap {
       );
   }
 
-  async countRecipients(
-    audience: CampaignAudience,
-  ): Promise<RecipientsCountDto> {
+  async countRecipients(filter: RecipientFilter): Promise<RecipientsCountDto> {
+    const normalized = this.checkedFilter(filter);
     return {
-      audience,
-      count: await this.campaignRepository.countRecipients(audience),
+      audience: normalized.audience,
+      count: await this.campaignRepository.countRecipients(
+        normalized,
+        this.today(),
+      ),
     };
   }
 
@@ -96,21 +101,26 @@ export class CampaignService implements OnApplicationBootstrap {
     );
     if (lengthError) throw new BadRequestException(lengthError);
 
+    const filter = this.checkedFilter(dto);
+
     if (await this.campaignRepository.hasCampaignInProgress())
       throw new ConflictException(
         'Ya hay una campaña enviándose. Esperá a que termine para mandar otra.',
       );
 
     const recipients = await this.campaignRepository.findRecipients(
-      dto.audience,
+      filter,
+      this.today(),
     );
     if (recipients.length === 0)
-      throw new BadRequestException('No hay contactos para esos destinatarios');
+      throw new BadRequestException(
+        'Ningún contacto cumple los filtros elegidos',
+      );
 
     const campaign = await this.campaignRepository.insert({
       title: dto.title,
       message: dto.message,
-      audience: dto.audience,
+      filter,
       hasImage: !!imageBuffer,
       totalRecipients: recipients.length,
       createdById: user.id,
@@ -127,6 +137,17 @@ export class CampaignService implements OnApplicationBootstrap {
     this.inFlight = this.dispatch(campaign.id, recipients, content, notice);
 
     return CampaignDto.fromEntity(campaign);
+  }
+
+  private checkedFilter(filter: RecipientFilter): Required<RecipientFilter> {
+    const error = validateRecipientFilter(filter);
+    if (error) throw new BadRequestException(error);
+    return normalizeRecipientFilter(filter);
+  }
+
+  /** "Alojados", "próximo" y "finalizada" se miden contra el día del hotel, no el del servidor. */
+  private today(): string {
+    return zonedDateKey(new Date(), this.supportHoursService.getTimeZone());
   }
 
   async whenIdle(): Promise<void> {

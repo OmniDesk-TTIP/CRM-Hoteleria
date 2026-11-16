@@ -30,6 +30,9 @@ export class StatisticsRevenueDto {
   cancellationRetained!: number;
   refundsPending!: number;
   refundsCompleted!: number;
+  /** Descuento otorgado por promociones en reservas y turnos de spa confirmados. */
+  promotionDiscounts!: number;
+  promotionSales!: number;
 }
 
 export class StatisticsHandoverDto {

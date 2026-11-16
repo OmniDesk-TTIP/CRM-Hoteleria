@@ -1,0 +1,147 @@
+# Flujos del bot que ya existían: handover, reserva de habitación, pago, spa, restaurante,
+# cancelación y cartas en PDF. Mismo formato que faq.yaml.
+#
+# Cada caso arranca con un huésped nuevo (sin historial ni reservas). Para los casos de varios
+# turnos, cada línea de `mensajes` es un mensaje distinto, en orden.
+#
+# En `context.metadata` está lo que devolvió POST /eval/conversation:
+#   final.action  → acción que eligió Gemini en el último turno (REPLY, SEARCH_AVAILABILITY, ...)
+#   final.kind    → reply | handover | muted | discarded | error
+#   final.document → nombre del PDF enviado, si hubo
+#   state.chatStatus    → BOT | WAITING_HUMAN | HUMAN
+#   state.activeBooking → reserva en curso (step, checkIn, checkOut, capacity) o null
+
+# ---------- Handover ----------
+
+- description: 'Handover: pedido explícito de una persona'
+  vars:
+    mensajes: Quiero hablar con una persona
+  assert:
+    - type: javascript
+      value: context.metadata.final.kind === 'handover'
+      metric: accion
+
+- description: 'Handover: pedido indirecto (lo tiene que detectar Gemini)'
+  vars:
+    mensajes: Prefiero que me atienda alguien del hotel, no una máquina
+  assert:
+    - type: javascript
+      value: context.metadata.final.kind === 'handover'
+      metric: accion
+
+# ---------- Reserva de habitación ----------
+
+- description: 'Reserva: pedido sin datos pide fechas y personas'
+  vars:
+    mensajes: Hola, quiero reservar una habitación
+  assert:
+    - type: javascript
+      value: context.metadata.final.action === 'REPLY'
+      metric: accion
+    - type: llm-rubric
+      value: >-
+        Pregunta por las fechas de entrada y salida y/o la cantidad de personas.
+        No ofrece una habitación concreta ni dice que la reserva está hecha.
+      metric: correctitud
+
+- description: 'Reserva: datos completos en un mensaje busca disponibilidad'
+  vars:
+    mensajes: Quiero reservar del 10-03-2027 al 12-03-2027 para 2 personas
+  assert:
+    - type: javascript
+      value: context.metadata.final.action === 'SEARCH_AVAILABILITY'
+      metric: accion
+    - type: llm-rubric
+      value: >-
+        Ofrece una habitación con su precio para esas fechas, o explica que no hay lugar y
+        propone alternativas. No vuelve a pedir las fechas ni la cantidad de personas.
+      metric: correctitud
+
+- description: 'Reserva: datos repartidos en varios mensajes'
+  vars:
+    mensajes: |
+      Hola! Quería reservar
+      Somos 2
+      Del 10-03-2027 al 12-03-2027
+  assert:
+    - type: javascript
+      value: context.metadata.final.action === 'SEARCH_AVAILABILITY'
+      metric: accion
+
+- description: 'Reserva: confirmar sin haber buscado no inventa una reserva'
+  vars:
+    mensajes: Confirmo la reserva, soy Juan Pérez, DNI 30123456
+  assert:
+    - type: javascript
+      value: >-
+        !context.metadata.state.activeBooking ||
+        context.metadata.state.activeBooking.step !== 'COMPLETED'
+      metric: alucinacion
+    - type: llm-rubric
+      value: >-
+        No dice que la reserva quedó confirmada ni registrada. Pide las fechas y la cantidad
+        de personas para buscar disponibilidad.
+      metric: alucinacion
+
+# ---------- Pago ----------
+
+- description: 'Pago: pedir el link sin reserva pendiente'
+  vars:
+    mensajes: Pasame el link para pagar la seña
+  assert:
+    - type: llm-rubric
+      value: >-
+        Dice que no hay ninguna reserva esperando pago (o que primero hay que hacer una
+        reserva). No inventa un link de pago.
+      metric: alucinacion
+
+# ---------- Spa ----------
+
+- description: 'Spa: pedir turno sin datos pide servicio, día y hora'
+  vars:
+    mensajes: Quiero sacar un turno para el spa
+  assert:
+    - type: llm-rubric
+      value: >-
+        Pregunta qué servicio quiere y/o qué día y horario, o explica las condiciones para
+        sacar turno. No confirma un turno.
+      metric: correctitud
+
+# ---------- Restaurante ----------
+
+- description: 'Restaurante: pedir mesa sin datos'
+  vars:
+    mensajes: Quiero reservar una mesa en el restaurante
+  assert:
+    - type: llm-rubric
+      value: >-
+        Pide los datos que faltan (día, hora y/o cantidad de personas) o explica por qué no
+        puede reservar. No confirma una mesa.
+      metric: correctitud
+
+# ---------- Cancelación ----------
+
+- description: 'Cancelación: huésped sin reservas'
+  vars:
+    mensajes: Quiero cancelar mi reserva
+  assert:
+    - type: llm-rubric
+      value: >-
+        No dice que canceló una reserva. Indica que no encuentra reservas a su nombre o le pide
+        que indique cuál quiere cancelar.
+      metric: alucinacion
+
+# ---------- Cartas en PDF ----------
+
+# El huésped de la eval nunca tiene estadía, y la carta es solo para huéspedes: se chequea el
+# resultado (no manda el PDF y explica por qué), no qué acción eligió Gemini para llegar ahí.
+- description: 'Cartas: sin estadía no manda la carta y explica que es para huéspedes'
+  vars:
+    mensajes: Me mandás la carta del restaurante?
+  assert:
+    - type: javascript
+      value: context.metadata.final.document === null
+      metric: accion
+    - type: icontains
+      value: huésped
+      metric: correctitud

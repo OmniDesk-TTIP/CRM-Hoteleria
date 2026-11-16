@@ -8,7 +8,7 @@ import Pagination from '@/components/admin/Pagination';
 import ReservationFormModal from '@/components/admin/ReservationFormModal';
 import ConfirmCancelModal from '@/components/admin/ConfirmCancelModal';
 
-const RESERVATION_STATUSES: ReservationStatus[] = ['PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED'];
+const RESERVATION_STATUSES: ReservationStatus[] = ['PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'];
 const SORT_COLUMNS: ReservationSortBy[] = ['checkIn', 'createdAt', 'status'];
 
 const filtersFromParams = (params: URLSearchParams): ReservationListFilters => {

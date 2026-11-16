@@ -7,7 +7,7 @@ import {
   MenuItemModel,
   RestaurantSettingsModel,
 } from './restaurant.model';
-import { detectImageType, isSamePhotoSet } from './restaurantPhoto.model';
+import { detectImageType, isSamePhotoSet } from '../../../common/photo.util';
 
 const buildSettings = (
   overrides: Partial<

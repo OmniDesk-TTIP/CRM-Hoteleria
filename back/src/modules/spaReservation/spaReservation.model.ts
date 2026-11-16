@@ -1,6 +1,7 @@
 import { v4 } from 'uuid';
 import { StayWindow } from '../spa/model/spa.model';
 import { toMinutes } from '../supportHours/supportHours.util';
+import { AppliedPromotion } from '../promotion/promotion.model';
 import {
   SpaReservationClientType,
   SpaReservationStatus,
@@ -25,8 +26,9 @@ export interface SpaReservationProps {
   requestedDate: string;
   /** HH:mm */
   requestedTime: string;
-  /** 0 para huéspedes, el precio del servicio para externos. */
+  /** 0 para huéspedes; para externos, el precio del servicio con el descuento aplicado. */
   amount: number;
+  promotion?: AppliedPromotion | null;
   createdAt?: Date;
 }
 
@@ -88,6 +90,7 @@ export class SpaReservationModel {
   readonly requestedDate: string;
   readonly requestedTime: string;
   readonly amount: number;
+  readonly promotion: AppliedPromotion | null;
   readonly createdAt?: Date;
 
   constructor(props: SpaReservationProps) {
@@ -103,6 +106,7 @@ export class SpaReservationModel {
     this.requestedDate = props.requestedDate;
     this.requestedTime = props.requestedTime;
     this.amount = props.amount;
+    this.promotion = props.promotion ?? null;
     this.createdAt = props.createdAt;
   }
 

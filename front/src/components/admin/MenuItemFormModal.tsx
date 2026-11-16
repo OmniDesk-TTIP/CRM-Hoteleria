@@ -31,6 +31,7 @@ export default function MenuItemFormModal({ item, categories, onClose, onSuccess
     category: item?.category ?? '',
     price: item?.price ?? 0,
     status: item?.status ?? 'ACTIVE',
+    availableForRoomService: item?.availableForRoomService ?? false,
   });
 
   const suggestions = Array.from(new Set([...categories, ...SUGGESTED_CATEGORIES]));
@@ -146,6 +147,20 @@ export default function MenuItemFormModal({ item, categories, onClose, onSuccess
           </label>
           <p className="-mt-2 text-xs text-textMuted">
             Un plato deshabilitado deja de ofrecerse por el chat y de verse en la web, sin borrarse.
+          </p>
+
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              name="availableForRoomService"
+              checked={formData.availableForRoomService}
+              onChange={(e) => setFormData((prev) => ({ ...prev, availableForRoomService: e.target.checked }))}
+              className="h-4 w-4 accent-gold"
+            />
+            Disponible en room service
+          </label>
+          <p className="-mt-2 text-xs text-textMuted">
+            Chamber lo ofrece a los huéspedes alojados para pedir a la habitación.
           </p>
 
           <div className="mt-6 flex justify-end gap-3 border-t border-goldLight/10 pt-4">

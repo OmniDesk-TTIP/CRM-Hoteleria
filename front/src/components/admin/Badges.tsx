@@ -1,9 +1,12 @@
 import type {
   AdminReservation,
   ChatSessionStatus,
+  PromotionStatus,
   ReservationOrigin,
   ReservationStatus,
   RestaurantReservationStatus,
+  RoomServiceOrderStatus,
+  RoomServicePaymentStatus,
   RoomStatus,
   SpaReservationStatus,
   SpaServiceStatus,
@@ -13,12 +16,14 @@ const STATUS_LABEL: Record<ReservationStatus, string> = {
   PENDING_PAYMENT: 'Pendiente',
   CONFIRMED: 'Confirmada',
   CANCELLED: 'Cancelada',
+  EXPIRED: 'Vencida',
 };
 
 const STATUS_CLASSES: Record<ReservationStatus, string> = {
   PENDING_PAYMENT: 'bg-gold/15 text-goldLight',
   CONFIRMED: 'bg-success/20 text-successText',
   CANCELLED: 'bg-danger/15 text-dangerText',
+  EXPIRED: 'bg-surface text-textMuted',
 };
 
 export function StatusBadge({ status }: { status: ReservationStatus }) {
@@ -28,6 +33,51 @@ export function StatusBadge({ status }: { status: ReservationStatus }) {
     >
       {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+const expirationFormat = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+export function ExpirationNote({ reservation }: { reservation: AdminReservation }) {
+  if (!reservation.expiresAt) return null;
+  const when = expirationFormat.format(new Date(reservation.expiresAt));
+
+  if (reservation.status === 'PENDING_PAYMENT') {
+    return <p className="mt-1 text-xs text-textMuted">Vence {when}</p>;
+  }
+  if (reservation.status !== 'EXPIRED') return null;
+
+  return (
+    <p className="mt-1 text-xs text-textMuted">
+      {reservation.closureReason}
+      <span className="block">Venció {when} · Sin devolución</span>
+    </p>
+  );
+}
+
+/** US-21: promoción aplicada a una reserva o turno, con lo que el huésped se ahorró. */
+export function PromotionNote({
+  title,
+  percentage,
+  discountAmount,
+}: {
+  title: string | null;
+  percentage: number | null;
+  discountAmount: number;
+}) {
+  if (!title) return null;
+
+  const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+  return (
+    <p className="mt-1 whitespace-normal text-xs text-goldLight">
+      {title} · {percentage}% (−{money.format(Number(discountAmount))})
+    </p>
   );
 }
 
@@ -181,6 +231,66 @@ export function SpaReservationStatusBadge({ status }: { status: SpaReservationSt
 
 export function RestaurantReservationStatusBadge({ status }: { status: RestaurantReservationStatus }) {
   return <SpaReservationStatusBadge status={status} />;
+}
+
+const PROMOTION_STATUS_LABEL: Record<PromotionStatus, string> = {
+  SCHEDULED: 'Programada',
+  ACTIVE: 'Vigente',
+  EXPIRED: 'Vencida',
+  DISABLED: 'Deshabilitada',
+};
+
+const PROMOTION_STATUS_CLASSES: Record<PromotionStatus, string> = {
+  SCHEDULED: 'bg-gold/15 text-goldLight',
+  ACTIVE: 'bg-success/20 text-successText',
+  EXPIRED: 'bg-surface text-textMuted',
+  DISABLED: 'bg-danger/15 text-dangerText',
+};
+
+export function PromotionStatusBadge({ status }: { status: PromotionStatus }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${PROMOTION_STATUS_CLASSES[status]}`}
+    >
+      {PROMOTION_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+const ROOM_SERVICE_STATUS_LABEL: Record<RoomServiceOrderStatus, string> = {
+  RECEIVED: 'Recibido',
+  IN_PREPARATION: 'En preparación',
+  DELIVERED: 'Entregado',
+  CANCELLED: 'Cancelado',
+};
+
+const ROOM_SERVICE_STATUS_CLASSES: Record<RoomServiceOrderStatus, string> = {
+  RECEIVED: 'bg-gold/15 text-goldLight',
+  IN_PREPARATION: 'bg-goldLight/10 text-text ring-1 ring-inset ring-goldLight/30',
+  DELIVERED: 'bg-success/20 text-successText',
+  CANCELLED: 'bg-danger/15 text-dangerText',
+};
+
+export function RoomServiceOrderStatusBadge({ status }: { status: RoomServiceOrderStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${ROOM_SERVICE_STATUS_CLASSES[status]}`}
+    >
+      {ROOM_SERVICE_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+export function RoomServicePaymentBadge({ status }: { status: RoomServicePaymentStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
+        status === 'PAID' ? 'bg-success/20 text-successText' : 'bg-surface text-textMuted'
+      }`}
+    >
+      {status === 'PAID' ? 'Pagado' : 'Pago pendiente'}
+    </span>
+  );
 }
 type ReviewPublicationState = 'PUBLISHED' | 'CAN_PUBLISH' | 'NO_CONSENT';
 

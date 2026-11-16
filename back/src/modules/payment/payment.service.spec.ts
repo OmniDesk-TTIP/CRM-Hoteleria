@@ -32,8 +32,6 @@ describe('PaymentService', () => {
   let paymentRepositoryMock: {
     findReservationById: jest.Mock;
     confirmIfPending: jest.Mock;
-    findExpiredPendingReservations: jest.Mock;
-    cancelExpiredReservations: jest.Mock;
   };
 
   const configValues: Record<string, string | undefined> = {
@@ -80,8 +78,6 @@ describe('PaymentService', () => {
     paymentRepositoryMock = {
       findReservationById: jest.fn(),
       confirmIfPending: jest.fn(),
-      findExpiredPendingReservations: jest.fn().mockResolvedValue([]),
-      cancelExpiredReservations: jest.fn(),
     };
   });
 
@@ -136,6 +132,28 @@ describe('PaymentService', () => {
             }),
             external_reference: 'reservation-1',
             notification_url: 'https://example.com/payment/webhook',
+          }),
+        }),
+      );
+    });
+
+    it('hace vencer el link de pago junto con la reserva', async () => {
+      createMock.mockResolvedValue({
+        id: 'pref-1',
+        init_point: 'https://mp.example/pref-1',
+      });
+      const expiresAt = new Date('2026-10-28T15:30:00.000Z');
+
+      const module = await buildModule();
+      service = module.get<PaymentService>(PaymentService);
+
+      await service.createPreference({ ...reservation, expiresAt }, guestData);
+
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            expires: true,
+            expiration_date_to: '2026-10-28T15:30:00.000Z',
           }),
         }),
       );

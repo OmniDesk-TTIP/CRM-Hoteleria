@@ -10,6 +10,10 @@ const ITEMS = [
     text: 'La seña que cobró Mercado Pago en las reservas del bot. El valor total de esas reservas incluye además el saldo que se paga en el hotel.',
   },
   {
+    term: 'Descuentos por promociones',
+    text: 'La diferencia entre el precio de lista y el precio final de las reservas y los turnos de spa confirmados con una promoción. Los ingresos de arriba ya están calculados con el descuento aplicado.',
+  },
+  {
     term: 'Chats derivados',
     text: 'Conversaciones iniciadas en el período en las que el huésped pidió hablar con una persona o un operador tomó el control. Sirve para ver cuánto resuelve el bot por su cuenta.',
   },

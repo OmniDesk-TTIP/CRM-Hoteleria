@@ -5,6 +5,8 @@ import type { SpaService } from '@/config/types';
 import SpaServicesTable from '@/components/admin/SpaServicesTable';
 import SpaServiceFormModal from '@/components/admin/SpaServiceFormModal';
 import ConfirmDisableSpaServiceModal from '@/components/admin/ConfirmDisableSpaServiceModal';
+import SpaGallery from '@/components/admin/SpaGallery';
+import MenuPdfActions from '@/components/admin/MenuPdfActions';
 
 const errorMessage = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
 
@@ -90,6 +92,8 @@ export default function SpaPage() {
         )}
       </div>
 
+      {isAdmin && <MenuPdfActions kind="spa" label="los servicios del spa" filename="servicios-spa.pdf" />}
+
       {actionError && (
         <div role="alert" className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">
           {actionError}
@@ -107,6 +111,8 @@ export default function SpaPage() {
           onReactivate={handleReactivate}
         />
       </div>
+
+      <SpaGallery isAdmin={isAdmin} />
 
       {formModalOpen && (
         <SpaServiceFormModal

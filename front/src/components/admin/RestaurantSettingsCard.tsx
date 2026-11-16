@@ -25,6 +25,9 @@ const toFormData = (settings: RestaurantSettings): RestaurantSettingsFormData =>
   availableWeekdays: settings.availableWeekdays,
   shifts: settings.shifts,
   maxPartySize: settings.maxPartySize,
+  roomServiceEnabled: settings.roomServiceEnabled,
+  roomServiceOpensAt: settings.roomServiceOpensAt,
+  roomServiceClosesAt: settings.roomServiceClosesAt,
 });
 
 export default function RestaurantSettingsCard({ settings, isAdmin, onSaved }: RestaurantSettingsCardProps) {
@@ -74,6 +77,9 @@ export default function RestaurantSettingsCard({ settings, isAdmin, onSaved }: R
       return 'Las franjas horarias no pueden superponerse.';
     }
     if (formData.maxPartySize < 1) return 'La mesa tiene que ser de al menos 1 persona.';
+    if (formData.roomServiceOpensAt === formData.roomServiceClosesAt) {
+      return 'En room service la hora de cierre tiene que ser distinta a la de apertura.';
+    }
     return null;
   };
 
@@ -241,6 +247,45 @@ export default function RestaurantSettingsCard({ settings, isAdmin, onSaved }: R
             + Agregar franja
           </button>
         )}
+      </fieldset>
+
+      <fieldset className="space-y-2 border-t border-goldLight/10 pt-4" disabled={disabled}>
+        <legend className="sr-only">Room service</legend>
+        <label className="flex items-center gap-2 text-sm font-medium text-text">
+          <input
+            type="checkbox"
+            checked={formData.roomServiceEnabled}
+            onChange={(e) => setFormData((prev) => ({ ...prev, roomServiceEnabled: e.target.checked }))}
+            className="h-4 w-4 accent-gold"
+          />
+          Room service activo
+        </label>
+        <p className="text-xs text-textMuted">
+          Chamber toma pedidos a la habitación de los huéspedes alojados, con los platos marcados como “Disponible en
+          room service”. La franja puede cruzar la medianoche (por ejemplo, de 20:00 a 02:00).
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-1 flex-col gap-1 text-xs text-textMuted">
+            Desde
+            <input
+              required
+              type="time"
+              value={formData.roomServiceOpensAt}
+              onChange={(e) => setFormData((prev) => ({ ...prev, roomServiceOpensAt: e.target.value }))}
+              className={inputClasses}
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1 text-xs text-textMuted">
+            Hasta
+            <input
+              required
+              type="time"
+              value={formData.roomServiceClosesAt}
+              onChange={(e) => setFormData((prev) => ({ ...prev, roomServiceClosesAt: e.target.value }))}
+              className={inputClasses}
+            />
+          </label>
+        </div>
       </fieldset>
 
       {isAdmin && (

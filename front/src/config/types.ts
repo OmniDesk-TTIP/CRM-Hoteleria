@@ -1,5 +1,5 @@
 /** Estados de la reserva, espejo de `ReservationStatus` del back. */
-export type ReservationStatus = 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED';
+export type ReservationStatus = 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
 
 export interface ReservationSummary {
   id: string;
@@ -47,6 +47,8 @@ export interface RoomOption {
   basePrice: number;
 }
 
+export type RoomPhoto = GalleryPhoto;
+
 export interface RoomFormData {
   roomNumber: string;
   categoryName: string;
@@ -67,12 +69,18 @@ export interface AdminReservation {
   origin: ReservationOrigin;
   totalAmount: number;
   depositAmount: number;
+  /** US-21: promoción aplicada. `totalAmount` y `depositAmount` ya tienen el descuento. */
+  promotionTitle: string | null;
+  promotionPercentage: number | null;
+  discountAmount: number;
   room: {
     id: string;
     roomNumber: string;
     categoryName: string;
   };
   createdAt: string;
+  expiresAt: string | null;
+  closureReason: string | null;
   /** US-14: lo que quedó registrado al cancelar. Todo null si la reserva no se canceló. */
   cancelledAt: string | null;
   cancellationPolicyName: string | null;
@@ -466,6 +474,9 @@ export interface BotStatistics {
     refundsPending: number;
     /** US-14: devoluciones ya realizadas. */
     refundsCompleted: number;
+    /** US-21: descuento otorgado en reservas y turnos de spa confirmados. */
+    promotionDiscounts: number;
+    promotionSales: number;
   };
   handover: { totalSessions: number; handedOver: number; ratePct: number };
 }
@@ -578,8 +589,11 @@ export interface SpaReservation {
   requestedDate: string;
   /** HH:mm */
   requestedTime: string;
-  /** Lo que se cobra: 0 para huéspedes. */
+  /** Lo que se cobra, con el descuento aplicado: 0 para huéspedes. */
   amount: number;
+  promotionTitle: string | null;
+  promotionPercentage: number | null;
+  discountAmount: number;
   createdAt: string | null;
 }
 
@@ -612,6 +626,9 @@ export interface RestaurantSettings {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 }
 
 export interface RestaurantSettingsFormData {
@@ -620,6 +637,9 @@ export interface RestaurantSettingsFormData {
   availableWeekdays: number[];
   shifts: RestaurantShift[];
   maxPartySize: number;
+  roomServiceEnabled: boolean;
+  roomServiceOpensAt: string;
+  roomServiceClosesAt: string;
 }
 
 export type MenuItemStatus = 'ACTIVE' | 'INACTIVE';
@@ -631,6 +651,7 @@ export interface MenuItem {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 }
 
 export interface MenuItemFormData {
@@ -639,15 +660,21 @@ export interface MenuItemFormData {
   category: string;
   price: number;
   status: MenuItemStatus;
+  availableForRoomService: boolean;
 }
 
-export interface RestaurantPhoto {
+/** Foto de una galería del panel. `url` es relativa al backend (`/public/...`). */
+export interface GalleryPhoto {
   id: string;
   url: string;
   mimeType: string;
   sizeBytes: number;
   position: number;
 }
+
+export type RestaurantPhoto = GalleryPhoto;
+
+export type SpaPhoto = GalleryPhoto;
 
 export type RestaurantReservationStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED';
 
@@ -670,6 +697,43 @@ export interface RestaurantReservationListFilters {
 
 export interface PaginatedRestaurantReservations {
   items: RestaurantReservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type RoomServiceOrderStatus = 'RECEIVED' | 'IN_PREPARATION' | 'DELIVERED' | 'CANCELLED';
+export type RoomServicePaymentStatus = 'PENDING' | 'PAID';
+
+export interface RoomServiceOrderItem {
+  menuItemId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  notes: string | null;
+}
+
+export interface RoomServiceOrder {
+  id: string;
+  status: RoomServiceOrderStatus;
+  paymentStatus: RoomServicePaymentStatus;
+  guestFullName: string;
+  roomNumber: string;
+  roomReservationId: string;
+  items: RoomServiceOrderItem[];
+  notes: string | null;
+  total: number;
+  confirmedAt: string | null;
+}
+
+export interface RoomServiceOrderListFilters {
+  status: RoomServiceOrderStatus | 'ALL';
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedRoomServiceOrders {
+  items: RoomServiceOrder[];
   total: number;
   page: number;
   pageSize: number;
@@ -699,12 +763,25 @@ export type CampaignAudience = 'ALL' | 'CONFIRMED' | 'NO_RESERVATION';
 
 export type CampaignStatus = 'SENDING' | 'COMPLETED' | 'INTERRUPTED';
 
-/** Una campaña del historial, con el progreso del envío (CA5). */
-export interface Campaign {
+/** Filtro opcional por la estadía, que se suma a los destinatarios base. */
+export type CampaignStayFilter = 'IN_HOUSE' | 'UPCOMING' | 'FINISHED' | 'UNPAID' | 'QUOTED';
+
+/** A quién va la campaña. Todo lo que no es `audience` es opcional (null = sin filtrar). */
+export interface CampaignRecipientFilter {
+  audience: CampaignAudience;
+  stayFilter: CampaignStayFilter | null;
+  /** YYYY-MM-DD. Con UPCOMING y QUOTED acota el check-in (reservado o consultado); con FINISHED, el check-out. */
+  stayFrom: string | null;
+  stayTo: string | null;
+  minGuests: number | null;
+  maxGuests: number | null;
+}
+
+/** Una campaña del historial, con los filtros aplicados y el progreso del envío (CA5). */
+export interface Campaign extends CampaignRecipientFilter {
   id: string;
   title: string;
   message: string;
-  audience: CampaignAudience;
   hasImage: boolean;
   status: CampaignStatus;
   totalRecipients: number;
@@ -718,9 +795,41 @@ export interface Campaign {
   finishedAt: string | null;
 }
 
-export interface CampaignFormData {
+export interface CampaignFormData extends CampaignRecipientFilter {
   title: string;
   message: string;
-  audience: CampaignAudience;
   image: File | null;
+}
+
+/* ───────── Promociones (US-21) ───────── */
+
+export type PromotionStatus = 'SCHEDULED' | 'ACTIVE' | 'EXPIRED' | 'DISABLED';
+
+export type PromotionTarget = 'ROOMS' | 'SPA';
+
+export interface PromotionFormData {
+  title: string;
+  description: string;
+  discountPercentage: number;
+  /** YYYY-MM-DD */
+  startDate: string;
+  /** YYYY-MM-DD */
+  endDate: string;
+  target: PromotionTarget;
+  /** Solo para habitaciones. */
+  minNights: number | null;
+}
+
+export interface Promotion extends PromotionFormData {
+  id: string;
+  enabled: boolean;
+  /** Lo calcula el back con `enabled` y las fechas, en el día del hotel. */
+  status: PromotionStatus;
+  createdAt: string | null;
+}
+
+export interface PromotionListFilters {
+  status: PromotionStatus | 'ALL';
+  page: number;
+  pageSize: number;
 }

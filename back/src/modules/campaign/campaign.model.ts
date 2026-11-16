@@ -1,3 +1,7 @@
+import {
+  CampaignAudience,
+  CampaignStayFilter,
+} from '../../infrastructure/database/entities/Campaign.entity';
 import { escapeHtml } from '../telegram/telegram.format';
 
 export const MAX_TITLE_LENGTH = 100;
@@ -11,6 +15,64 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const BATCH_SIZE = 20;
 export const BATCH_INTERVAL_MS = 1000;
 export const MAX_ATTEMPTS = 3;
+
+export const MAX_GUESTS_FILTER = 20;
+
+/** Destinatarios de una campaña: el grupo base y, opcionalmente, el filtro por estadía (US-13 + filtros). */
+export interface RecipientFilter {
+  audience: CampaignAudience;
+  stayFilter?: CampaignStayFilter | null;
+  /** YYYY-MM-DD. Con UPCOMING y QUOTED acota el check-in (reservado o consultado); con FINISHED, el check-out. */
+  stayFrom?: string | null;
+  stayTo?: string | null;
+  minGuests?: number | null;
+  maxGuests?: number | null;
+}
+
+/** Estados de estadía que admiten rango de fechas (CA2). */
+export const STAY_FILTERS_WITH_DATES: readonly CampaignStayFilter[] = [
+  CampaignStayFilter.UPCOMING,
+  CampaignStayFilter.FINISHED,
+  CampaignStayFilter.QUOTED,
+];
+
+/** Reglas que cruzan campos y no se pueden expresar con decoradores. Devuelve el error o null. */
+export function validateRecipientFilter(
+  filter: RecipientFilter,
+): string | null {
+  const hasDates = !!filter.stayFrom || !!filter.stayTo;
+  if (
+    hasDates &&
+    (!filter.stayFilter || !STAY_FILTERS_WITH_DATES.includes(filter.stayFilter))
+  )
+    return 'El rango de fechas solo se puede usar con check-in próximo, estadía finalizada o consultas sin reserva';
+
+  if (filter.stayFrom && filter.stayTo && filter.stayFrom > filter.stayTo)
+    return 'La fecha "desde" no puede ser posterior a la fecha "hasta"';
+
+  if (
+    filter.minGuests != null &&
+    filter.maxGuests != null &&
+    filter.minGuests > filter.maxGuests
+  )
+    return 'La cantidad mínima de personas no puede superar a la máxima';
+
+  return null;
+}
+
+/** Deja en null lo que no se usa, para que el historial guarde exactamente lo que se aplicó. */
+export function normalizeRecipientFilter(
+  filter: RecipientFilter,
+): Required<RecipientFilter> {
+  return {
+    audience: filter.audience,
+    stayFilter: filter.stayFilter ?? null,
+    stayFrom: filter.stayFrom || null,
+    stayTo: filter.stayTo || null,
+    minGuests: filter.minGuests ?? null,
+    maxGuests: filter.maxGuests ?? null,
+  };
+}
 
 export type ImageType = 'jpeg' | 'png' | 'webp';
 

@@ -52,7 +52,15 @@ export default function StatisticsDashboard({ stats }: { stats: BotStatistics })
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="Descuentos por promociones"
+          value={formatCurrency(revenue.promotionDiscounts)}
+          icon={WalletIcon}
+          hint={`Lo que el hotel resignó en ${revenue.promotionSales} ${
+            revenue.promotionSales === 1 ? 'venta confirmada' : 'ventas confirmadas'
+          } con promoción.`}
+        />
         <KpiCard
           label="Retenido por cancelaciones"
           value={formatCurrency(revenue.cancellationRetained)}

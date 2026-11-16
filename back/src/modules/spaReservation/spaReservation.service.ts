@@ -18,6 +18,15 @@ import {
   RESERVATION_HOLD_MINUTES,
 } from '../payment/payment.service';
 import { SpaService } from '../spa/spa.service';
+import { PromotionTarget } from '../../infrastructure/database/entities/Promotion.entity';
+import { PromotionService } from '../promotion/promotion.service';
+import {
+  buildPromotionLine,
+  describeAmount,
+  priceWithPromotions,
+  PromotionPrice,
+  toAppliedPromotion,
+} from '../promotion/promotion.model';
 import { escapeHtml, htmlLink } from '../telegram/telegram.format';
 import { describeWeekdays, toCalendarDayString } from '../spa/model/spa.model';
 import { SpaReservationModel } from './spaReservation.model';
@@ -46,6 +55,7 @@ export class SpaReservationService {
     private readonly spaService: SpaService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaymentService,
+    private readonly promotionService: PromotionService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
@@ -71,15 +81,6 @@ export class SpaReservationService {
       telegramUserId,
       now,
     );
-
-    // Mercado Pago necesita nombre y DNI del que paga; el huésped ya los tiene cargados.
-    if (!eligible && (!dto.fullName || !dto.dni)) {
-      return {
-        ok: false,
-        reason:
-          'Para reservarte el turno necesito tu nombre completo y tu DNI (solo números).',
-      };
-    }
 
     const requestedDay = parseDate(dto.date);
     const requestedDate = toCalendarDayString(requestedDay);
@@ -116,6 +117,36 @@ export class SpaReservationService {
     }
 
     const isGuest = eligible !== null;
+    // El huésped no paga el spa, así que no hay nada a qué aplicarle un descuento.
+    const price = isGuest
+      ? null
+      : priceWithPromotions(
+          spa.price,
+          await this.promotionService.listActive(now),
+          { target: PromotionTarget.SPA },
+        );
+
+    // Mercado Pago necesita nombre y DNI del que paga (el huésped ya los tiene cargados). Se piden
+    // recién después de confirmar que hay lugar, para no hacerle cargar datos y después decirle
+    // que el horario está completo.
+    if (price && (!dto.fullName || !dto.dni)) {
+      const hasRoom = await this.spaReservationRepository.hasCapacity(
+        spa.id,
+        requestedDate,
+        dto.time,
+        spa,
+      );
+      if (!hasRoom) return this.noRoomLeft(spa.name, dto);
+
+      const promotion = price.promotion
+        ? ` con la promoción ${price.promotion.title}`
+        : '';
+      return {
+        ok: false,
+        reason: `¡Hay lugar! ${spa.name} el ${formatDate(requestedDay)} a las ${dto.time} sale $${price.finalAmount}${promotion}. Para guardarte el turno necesito tu nombre completo y tu DNI (solo números).`,
+      };
+    }
+
     const request = SpaReservationModel.create({
       clientType: isGuest
         ? SpaReservationClientType.GUEST
@@ -128,35 +159,42 @@ export class SpaReservationService {
       guestDni: isGuest ? null : (dto.dni ?? null),
       requestedDate,
       requestedTime: dto.time,
-      amount: isGuest ? 0 : spa.price,
+      amount: price?.finalAmount ?? 0,
+      promotion: price && toAppliedPromotion(price),
     });
 
     const saved = await this.spaReservationRepository.insertIfCapacity(
       request,
       spa,
     );
-    if (!saved) {
-      return {
-        ok: false,
-        reason: `Ya no quedan lugares para ${spa.name} el ${dto.date} a las ${dto.time}. ¿Probamos con otro horario?`,
-      };
-    }
+    if (!saved) return this.noRoomLeft(spa.name, dto);
 
     const when = `el ${formatDate(requestedDay)} a las ${dto.time}`;
-    if (isGuest) {
+    if (!price) {
       return {
         ok: true,
         request,
         reply: `Listo, registré tu solicitud de ${escapeHtml(spa.name)} para ${when}. Recepción te va a confirmar el turno.`,
       };
     }
-    return this.startPayment(request, when);
+    return this.startPayment(request, when, price);
+  }
+
+  private noRoomLeft(
+    serviceName: string,
+    dto: RequestSpaBookingDto,
+  ): RequestSpaResult {
+    return {
+      ok: false,
+      reason: `Ya no quedan lugares para ${serviceName} el ${dto.date} a las ${dto.time}. ¿Probamos con otro horario?`,
+    };
   }
 
   /** Genera el link de Mercado Pago de un turno externo y arma la respuesta con el link. */
   private async startPayment(
     request: SpaReservationModel,
     when: string,
+    price: PromotionPrice,
   ): Promise<RequestSpaResult> {
     try {
       const { preferenceId, initPoint } =
@@ -176,7 +214,8 @@ export class SpaReservationService {
       const reply = [
         `Te estoy guardando el turno de ${escapeHtml(request.serviceName)} ${when}, a nombre de ${escapeHtml(request.guestFullName)}.`,
         '',
-        `Total: $${request.amount}`,
+        ...(price.promotion ? [buildPromotionLine(price.promotion), ''] : []),
+        `Total: ${describeAmount(price)}`,
         '',
         `⏳ <b>Todavía no está confirmado.</b> Te guardo el lugar ${RESERVATION_HOLD_MINUTES} minutos; si en ese rato no se acredita el pago, se libera para otra persona.`,
         '',

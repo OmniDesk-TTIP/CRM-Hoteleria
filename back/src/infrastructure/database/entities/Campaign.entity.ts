@@ -21,6 +21,27 @@ export enum CampaignAudience {
   NO_RESERVATION = 'NO_RESERVATION',
 }
 
+/**
+ * Filtro opcional por la estadía, que se suma (AND) a `CampaignAudience`. Para entrar, el contacto
+ * tiene que tener al menos una reserva (o búsqueda, en QUOTED) que cumpla el estado, el rango de
+ * fechas y la cantidad de personas a la vez: no vale que cada condición la cumpla una distinta.
+ */
+export enum CampaignStayFilter {
+  /** Reserva confirmada con check-in hoy o antes y check-out después de hoy. */
+  IN_HOUSE = 'IN_HOUSE',
+  /** Reserva confirmada con check-in después de hoy. El rango de fechas acota el check-in. */
+  UPCOMING = 'UPCOMING',
+  /** Reserva confirmada con check-out hoy o antes. El rango de fechas acota el check-out. */
+  FINISHED = 'FINISHED',
+  /** Pidieron la reserva por el bot y nunca pagaron la seña: sigue pendiente o venció sin pago. */
+  UNPAID = 'UNPAID',
+  /**
+   * Le pidieron disponibilidad a Chamber (fechas y personas) y nunca hicieron una reserva. No mira
+   * reservas sino búsquedas del bot: personas y rango de fechas se miden sobre la búsqueda.
+   */
+  QUOTED = 'QUOTED',
+}
+
 export enum CampaignStatus {
   SENDING = 'SENDING',
   COMPLETED = 'COMPLETED',
@@ -46,6 +67,22 @@ export class Campaign extends CustomBaseEntity {
 
   @Enum(() => CampaignAudience)
   audience!: CampaignAudience;
+
+  @Enum({ items: () => CampaignStayFilter, nullable: true })
+  stayFilter?: CampaignStayFilter | null;
+
+  // YYYY-MM-DD, como las fechas de las promociones: son días de calendario del hotel, sin hora.
+  @Property({ type: 'varchar', length: 10, nullable: true })
+  stayFrom?: string | null;
+
+  @Property({ type: 'varchar', length: 10, nullable: true })
+  stayTo?: string | null;
+
+  @Property({ type: 'integer', nullable: true })
+  minGuests?: number | null;
+
+  @Property({ type: 'integer', nullable: true })
+  maxGuests?: number | null;
 
   @Property({ type: 'boolean' })
   hasImage: boolean & Opt = false;

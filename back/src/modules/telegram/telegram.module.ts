@@ -1,27 +1,23 @@
 import { Module } from '@nestjs/common';
 import { TelegramUpdate } from './telegram.update';
-import { RagModule } from '../rag/rag.module';
+import { BotModule } from '../bot/bot.module';
 import { ReservationModule } from '../reservation/reservation.module';
 import { BookingProcessModule } from '../bookingProcess/bookingProcess.module';
 import { ChatModule } from '../chat/chat.module';
-import { SpaModule } from '../spa/spa.module';
-import { SpaReservationModule } from '../spaReservation/spaReservation.module';
-import { CancellationModule } from '../cancellation/cancellation.module';
-import { RestaurantModule } from '../restaurant/restaurant.module';
-import { RestaurantReservationModule } from '../restaurantReservation/restaurantReservation.module';
+import { RoomServiceModule } from '../roomService/roomService.module';
+import { GuestLanguageModule } from '../guestLanguage/guestLanguage.module';
+import { TelegramLanguageHook } from './telegramLanguage.hook';
 
 @Module({
   imports: [
-    RagModule,
+    BotModule,
+    // Los botones (room service, reserva vencida) no pasan por el bot: usan estos servicios directo.
     ReservationModule,
     BookingProcessModule,
     ChatModule,
-    SpaModule,
-    SpaReservationModule,
-    RestaurantModule,
-    RestaurantReservationModule,
-    CancellationModule,
+    RoomServiceModule,
+    GuestLanguageModule,
   ],
-  providers: [TelegramUpdate],
+  providers: [TelegramUpdate, TelegramLanguageHook],
 })
 export class TelegramModule {}

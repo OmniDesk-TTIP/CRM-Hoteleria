@@ -1,10 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { RagService, ChatAction } from './rag.service';
+import { RagService, ChatAction, NO_RESERVATIONS_STATE } from './rag.service';
 import { RagRepository } from './rag.repository';
 import { formatDate } from '../bookingProcess/date.util';
 import { BookingProcess } from '../../infrastructure/database/entities/BookingProcess.entity';
+import { GuestLanguage } from '../../infrastructure/database/entities/ChatSession.entity';
 
 jest.mock('@google/generative-ai', () => {
   const actual = jest.requireActual('@google/generative-ai');
@@ -159,6 +160,108 @@ describe('RagService', () => {
       jest.useRealTimers();
     });
 
+    describe('huésped sin reservas', () => {
+      const noReservations = { block: '[POLÍTICA]', canCancel: false };
+      const sentPrompt = (): string =>
+        chatModelMock.generateContent.mock.calls[0][0] as string;
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('le avisa a Gemini que no tiene reservas cuando no hay nada a su nombre', async () => {
+        await service.askQuestion(
+          'Quiero cancelar mi reserva',
+          null,
+          [],
+          null,
+          null,
+          noReservations,
+          false,
+        );
+
+        expect(sentPrompt()).toContain(NO_RESERVATIONS_STATE);
+      });
+
+      it.each([
+        ['tiene una seña pendiente', noReservations, true],
+        [
+          'tiene reservas cancelables',
+          { ...noReservations, canCancel: true },
+          false,
+        ],
+        [
+          'tiene una devolución pendiente',
+          { ...noReservations, canRegisterRefundAccount: true },
+          false,
+        ],
+        ['no se pudo armar el contexto de cancelación', null, false],
+      ])(
+        'no lo dice cuando %s',
+        async (_caso, cancellation, hasPendingPayment) => {
+          await service.askQuestion(
+            'Quiero cancelar mi reserva',
+            null,
+            [],
+            null,
+            null,
+            cancellation,
+            hasPendingPayment,
+          );
+
+          expect(sentPrompt()).not.toContain(NO_RESERVATIONS_STATE);
+        },
+      );
+    });
+
+    describe('promociones (US-21 CA4)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+
+      it('agrega las promociones vigentes y le prohíbe inventar descuentos', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion(
+          '¿Tienen promociones?',
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          null,
+          null,
+          '[PROMOCIONES VIGENTES]\n- Escapada | 20% de descuento',
+        );
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- Escapada | 20% de descuento');
+        expect(systemInstruction).toContain('REGLA PARA PROMOCIONES');
+        expect(systemInstruction).toContain('No inventes promociones');
+        expect(systemInstruction).not.toContain(
+          'No tenés información de promociones',
+        );
+      });
+
+      it('sin información de promociones no promete descuentos', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await service.askQuestion('¿Tienen promociones?');
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información de promociones',
+        );
+      });
+    });
+
     describe('spa (CA3)', () => {
       const readChatConfig = () =>
         getGenerativeModelMock.mock.calls.find(
@@ -181,9 +284,11 @@ describe('RagService', () => {
         const { systemInstruction } = readChatConfig();
         expect(systemInstruction).toContain('id=spa-1 | Masaje');
         expect(systemInstruction).toContain('REGLA PARA EL SPA');
-        // la regla cubre a los dos tipos de cliente y manda pedir nombre y DNI al externo
+        // la regla cubre a los dos tipos de cliente; al externo se le piden nombre y DNI
+        // recién después de que el sistema verificó que hay lugar
         expect(systemInstruction).toContain('HUÉSPED');
         expect(systemInstruction).toContain('EXTERNO');
+        expect(systemInstruction).toContain('SIN pedir antes nombre ni DNI');
         expect(systemInstruction).toContain('nombre completo y su DNI');
         expect(systemInstruction).not.toContain('No tenés información del spa');
       });
@@ -355,6 +460,185 @@ describe('RagService', () => {
 
         expect(readChatConfig().systemInstruction).toContain(
           'No tenés información del restaurante',
+        );
+      });
+    });
+
+    describe('cartas en PDF (US-25)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const askWithRestaurant = (text: string) =>
+        service.askQuestion(text, null, [], null, null, null, false, {
+          block: '[RESTAURANTE]',
+          canBook: true,
+        });
+
+      it('ofrece send_menu_pdf y su regla cuando hay contexto de restó, room service o spa (CA1)', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+
+        await askWithRestaurant('¿Me pasás la carta?');
+
+        expect(toolNames()).toContain('send_menu_pdf');
+        expect(readChatConfig().systemInstruction).toContain(
+          'REGLA PARA LAS CARTAS EN PDF',
+        );
+      });
+
+      it('sin ese contexto no la ofrece ni la acepta', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse(
+            [{ name: 'send_menu_pdf', args: { menu: 'spa' } }],
+            'No tengo esa información',
+          ),
+        );
+
+        const result = await service.askQuestion('¿Me pasás la carta?');
+
+        expect(toolNames()).not.toContain('send_menu_pdf');
+        expect(readChatConfig().systemInstruction).not.toContain(
+          'REGLA PARA LAS CARTAS EN PDF',
+        );
+        expect(result.action).toBe(ChatAction.REPLY);
+      });
+
+      it('devuelve SEND_MENU_PDF con la carta pedida', async () => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([
+            { name: 'send_menu_pdf', args: { menu: 'restaurant' } },
+          ]),
+        );
+
+        expect(await askWithRestaurant('¿Me pasás la carta?')).toEqual({
+          action: ChatAction.SEND_MENU_PDF,
+          datos: { menu: 'restaurant' },
+        });
+      });
+    });
+
+    describe('room service (US-24)', () => {
+      const readChatConfig = () =>
+        getGenerativeModelMock.mock.calls.find(
+          ([config]) => config.model !== 'gemini-embedding-2',
+        )[0];
+      const toolNames = () =>
+        readChatConfig().tools[0].functionDeclarations.map(
+          (declaration: { name: string }) => declaration.name,
+        );
+      const ask = (
+        text: string,
+        roomService: {
+          block: string;
+          canOrder: boolean;
+          hasOpenOrder: boolean;
+        } | null,
+      ) =>
+        service.askQuestion(
+          text,
+          null,
+          [],
+          null,
+          null,
+          null,
+          false,
+          null,
+          roomService,
+        );
+
+      beforeEach(() => {
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([], 'ok'),
+        );
+      });
+
+      it('agrega el bloque de room service y su regla (CA1/CA2)', async () => {
+        await ask('¿Tienen room service?', {
+          block:
+            '[ROOM SERVICE]\nCARTA DE ROOM SERVICE:\n- id=1 | Café | $1500',
+          canOrder: true,
+          hasOpenOrder: false,
+        });
+
+        const { systemInstruction } = readChatConfig();
+        expect(systemInstruction).toContain('- id=1 | Café | $1500');
+        expect(systemInstruction).toContain('REGLA PARA ROOM SERVICE');
+        expect(systemInstruction).toContain('Confirmar pedido');
+      });
+
+      it('declara cada tool solo cuando corresponde (CA1/CA5/CA8)', async () => {
+        await ask('Hola', {
+          block: '[ROOM SERVICE]',
+          canOrder: true,
+          hasOpenOrder: true,
+        });
+        expect(toolNames()).toEqual(
+          expect.arrayContaining([
+            'prepare_room_service_order',
+            'cancel_room_service_order',
+          ]),
+        );
+
+        getGenerativeModelMock.mockClear();
+        await ask('Hola', {
+          block: '[ROOM SERVICE]',
+          canOrder: false,
+          hasOpenOrder: false,
+        });
+        expect(toolNames()).not.toContain('prepare_room_service_order');
+        expect(toolNames()).not.toContain('cancel_room_service_order');
+      });
+
+      it('devuelve PREPARE_ROOM_SERVICE_ORDER con los datos de la function call', async () => {
+        const datos = { items: [{ menuItemId: 'x', quantity: 2 }] };
+        chatModelMock.generateContent.mockResolvedValue(
+          mockChatResponse([
+            { name: 'prepare_room_service_order', args: datos },
+          ]),
+        );
+
+        const result = await ask('Dos cafés', {
+          block: '[ROOM SERVICE]',
+          canOrder: true,
+          hasOpenOrder: false,
+        });
+
+        expect(result).toEqual({
+          action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+          datos,
+        });
+      });
+
+      it('ignora las tools si el cliente no puede usarlas (defensa en profundidad)', async () => {
+        for (const name of [
+          'prepare_room_service_order',
+          'cancel_room_service_order',
+        ]) {
+          chatModelMock.generateContent.mockResolvedValue(
+            mockChatResponse([{ name, args: {} }], 'texto'),
+          );
+
+          const result = await ask('Dos cafés', {
+            block: '[ROOM SERVICE]',
+            canOrder: false,
+            hasOpenOrder: false,
+          });
+
+          expect(result).toEqual({ action: ChatAction.REPLY, texto: 'texto' });
+        }
+      });
+
+      it('sin contexto de room service no deja que invente la carta', async () => {
+        await ask('¿Tienen room service?', null);
+
+        expect(readChatConfig().systemInstruction).toContain(
+          'No tenés información del room service',
         );
       });
     });
@@ -610,10 +894,40 @@ describe('RagService', () => {
       expect(segunda).not.toContain('El spa abre de 9 a 21 hs.');
     });
 
-    it('busca solo con los 3 chunks más cercanos a la pregunta', async () => {
+    it('busca con los 6 chunks más cercanos a la pregunta, con margen para las faltas de ortografía', async () => {
       await service.askQuestion('¿Aceptan mascotas?');
 
-      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 3);
+      expect(ragRepository.findSimilar).toHaveBeenCalledWith([0.1, 0.2], 6);
+    });
+
+    it('le pide a Chamber que interprete las faltas de ortografía y repregunte en vez de derivar', async () => {
+      await service.askQuestion('tienen guardaequipage?');
+
+      const [instruction] = chatInstructions();
+      expect(instruction).toContain('REGLA PARA MENSAJES CON ERRORES');
+      expect(instruction).toContain('hacele una pregunta concreta');
+    });
+
+    it('con un huésped que escribe en inglés le pide responder siempre en inglés', async () => {
+      await service.askQuestion(
+        'Do you have parking?',
+        null,
+        [],
+        null,
+        null,
+        null,
+        false,
+        null,
+        null,
+        null,
+        GuestLanguage.EN,
+      );
+      await service.askQuestion('¿Tienen estacionamiento?');
+
+      const [english, spanish] = chatInstructions();
+      expect(english).toContain('El cliente escribe en INGLÉS');
+      expect(spanish).not.toContain('El cliente escribe en INGLÉS');
+      expect(spanish).toContain('REGLA DE IDIOMA');
     });
   });
 });

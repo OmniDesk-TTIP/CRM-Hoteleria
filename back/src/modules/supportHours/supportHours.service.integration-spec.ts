@@ -86,6 +86,7 @@ describe('SupportHoursService (integración)', () => {
         on: jest.fn(),
         start: jest.fn(),
         use: jest.fn(),
+        action: jest.fn(),
       })
       .compile();
 
@@ -193,6 +194,25 @@ describe('SupportHoursService (integración)', () => {
         isOpen: true,
         nextOpeningLabel: null,
       });
+    });
+  });
+
+  describe('getDaySchedule', () => {
+    it('devuelve el horario del día en la zona del hotel', async () => {
+      await saveWeek(buildWeek({ 1: { opensAt: '08:00', closesAt: '20:00' } }));
+
+      expect(await service.getDaySchedule(MONDAY_09_00)).toMatchObject({
+        weekday: 1,
+        isClosed: false,
+        opensAt: '08:00',
+        closesAt: '20:00',
+      });
+    });
+
+    it('sin horarios cargados devuelve null', async () => {
+      await saveWeek([]);
+
+      expect(await service.getDaySchedule(MONDAY_09_00)).toBeNull();
     });
   });
 
