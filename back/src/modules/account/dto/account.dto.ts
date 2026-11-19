@@ -1,4 +1,15 @@
-import { IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { trimString } from '../../../common/transforms';
 import {
   AccountStatus,
   PaymentMethod,
@@ -12,15 +23,69 @@ import {
   AccountEntryModel,
   AccountModel,
   AccountReservationInfo,
+  MAX_ENTRY_AMOUNT,
+  MAX_ENTRY_DESCRIPTION_LENGTH,
+  MAX_ENTRY_REFERENCE_LENGTH,
   stayBalanceOf,
 } from '../account.model';
 
+const PAYMENT_METHOD_MESSAGE =
+  'El medio de pago debe ser CASH, CARD, TRANSFER o MERCADO_PAGO';
+
 /** Body de `POST /reservations/:id/account`: registra el pago del resto de la estadía. */
 export class OpenAccountDto {
-  @IsIn(Object.values(PaymentMethod), {
-    message: 'El medio de pago debe ser CASH, CARD, TRANSFER o MERCADO_PAGO',
-  })
+  @IsIn(Object.values(PaymentMethod), { message: PAYMENT_METHOD_MESSAGE })
   paymentMethod!: PaymentMethod;
+}
+
+/** Monto de un pago o reintegro: positivo, con hasta dos decimales. */
+class MoneyMovementDto {
+  // class-validator corre los decoradores de abajo hacia arriba: IsNumber va último para que un
+  // monto que no es número no termine avisando "demasiado grande".
+  @Max(MAX_ENTRY_AMOUNT, { message: 'El monto es demasiado grande' })
+  @Min(0.01, { message: 'El monto tiene que ser mayor a cero' })
+  @IsNumber(
+    { allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 },
+    { message: 'El monto debe ser un número con hasta dos decimales' },
+  )
+  amount!: number;
+
+  @IsIn(Object.values(PaymentMethod), { message: PAYMENT_METHOD_MESSAGE })
+  paymentMethod!: PaymentMethod;
+}
+
+/** Body de `POST /reservations/:id/account/payments`. */
+export class RegisterPaymentDto extends MoneyMovementDto {
+  /** Número de operación, de cupón, etc. */
+  @IsOptional()
+  @Transform(trimString)
+  @IsString({ message: 'La referencia debe ser un texto' })
+  @MaxLength(MAX_ENTRY_REFERENCE_LENGTH, {
+    message: `La referencia no puede superar ${MAX_ENTRY_REFERENCE_LENGTH} caracteres`,
+  })
+  reference?: string;
+}
+
+/** Body de `POST /reservations/:id/account/refunds`. */
+export class RegisterRefundDto extends MoneyMovementDto {
+  @Transform(trimString)
+  @IsString({ message: 'El motivo debe ser un texto' })
+  @IsNotEmpty({ message: 'El motivo es obligatorio' })
+  @MaxLength(MAX_ENTRY_DESCRIPTION_LENGTH, {
+    message: `El motivo no puede superar ${MAX_ENTRY_DESCRIPTION_LENGTH} caracteres`,
+  })
+  reason!: string;
+}
+
+/** Body de `POST /reservations/:id/account/payments/:entryId/reversal`. */
+export class ReverseEntryDto {
+  @Transform(trimString)
+  @IsString({ message: 'El motivo debe ser un texto' })
+  @IsNotEmpty({ message: 'El motivo es obligatorio' })
+  @MaxLength(MAX_ENTRY_DESCRIPTION_LENGTH, {
+    message: `El motivo no puede superar ${MAX_ENTRY_DESCRIPTION_LENGTH} caracteres`,
+  })
+  reason!: string;
 }
 
 export interface UserRefDto {
@@ -35,6 +100,10 @@ export class AccountEntryDto {
   description!: string;
   origin!: AccountEntryOrigin;
   sourceId!: string | null;
+  /** Solo en pagos, reintegros y anulaciones de pagos. */
+  paymentMethod!: PaymentMethod | null;
+  /** Número de operación o de cupón del pago, si se cargó. */
+  reference!: string | null;
   /** Movimiento que anula este, si es una anulación. */
   reversesId!: string | null;
   /** true si otro movimiento ya anuló a este. */
@@ -51,6 +120,8 @@ export class AccountEntryDto {
     dto.description = entry.description;
     dto.origin = entry.origin;
     dto.sourceId = entry.sourceId;
+    dto.paymentMethod = entry.paymentMethod;
+    dto.reference = entry.reference;
     dto.reversesId = entry.reversesId;
     dto.reversed = reversed;
     dto.registeredAt = entry.registeredAt;

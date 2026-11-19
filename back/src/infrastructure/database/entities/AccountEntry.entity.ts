@@ -9,7 +9,7 @@ import {
   Property,
 } from '@mikro-orm/decorators/legacy';
 import { v4 } from 'uuid';
-import { Account } from './Account.entity';
+import { Account, PaymentMethod } from './Account.entity';
 import { CustomBaseEntity } from './CustomBase.entity';
 import { User } from './User.entity';
 
@@ -59,6 +59,14 @@ export class AccountEntry extends CustomBaseEntity {
   /** Pedido de room service, turno de spa, reserva del restó o reserva de habitación que lo generó. */
   @Property({ type: 'uuid', nullable: true })
   sourceId?: string | null;
+
+  /** Con qué se cobró o se devolvió. Solo en pagos, reintegros y anulaciones de pagos. */
+  @Enum({ items: () => PaymentMethod, nullable: true })
+  paymentMethod?: PaymentMethod | null;
+
+  /** Número de operación, de cupón, etc. Opcional, solo en pagos. */
+  @Property({ type: 'varchar', length: 100, nullable: true })
+  reference?: string | null;
 
   @OneToOne(() => AccountEntry, {
     owner: true,

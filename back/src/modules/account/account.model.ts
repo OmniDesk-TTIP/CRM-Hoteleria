@@ -13,6 +13,7 @@ import { ReservationStatus } from '../../infrastructure/database/entities/Reserv
 /** Lo que entra en un decimal(12,2). */
 export const MAX_ENTRY_AMOUNT = 9_999_999_999.99;
 export const MAX_ENTRY_DESCRIPTION_LENGTH = 200;
+export const MAX_ENTRY_REFERENCE_LENGTH = 100;
 
 /** Tipos que se cargan directo. Las anulaciones solo nacen de `AccountEntryModel.reversalOf`. */
 export const DIRECT_ENTRY_TYPES = [
@@ -27,6 +28,27 @@ const REVERSAL_TYPE: Partial<Record<AccountEntryType, AccountEntryType>> = {
   [AccountEntryType.CHARGE]: AccountEntryType.CHARGE_REVERSAL,
   [AccountEntryType.PAYMENT]: AccountEntryType.PAYMENT_REVERSAL,
 };
+
+/** Movimientos que mueven plata con el huésped: llevan medio de pago. */
+const MONEY_TYPES: AccountEntryType[] = [
+  AccountEntryType.PAYMENT,
+  AccountEntryType.PAYMENT_REVERSAL,
+  AccountEntryType.REFUND,
+];
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  [PaymentMethod.CASH]: 'efectivo',
+  [PaymentMethod.CARD]: 'tarjeta',
+  [PaymentMethod.TRANSFER]: 'transferencia',
+  [PaymentMethod.MERCADO_PAGO]: 'Mercado Pago',
+};
+
+/** Descripción con la que queda en el libro un pago registrado en recepción. */
+export const paymentDescription = (method: PaymentMethod): string =>
+  `Pago en ${PAYMENT_METHOD_LABELS[method]}`;
+
+const formatAmount = (amount: number): string =>
+  `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 type Signs = Partial<Record<AccountEntryType, 1 | -1>>;
 
@@ -63,6 +85,8 @@ export interface AccountEntryProps {
   description: string;
   origin: AccountEntryOrigin;
   sourceId: string | null;
+  paymentMethod: PaymentMethod | null;
+  reference: string | null;
   reversesId: string | null;
   registeredAt: Date;
   registeredById: string | null;
@@ -75,6 +99,9 @@ export interface NewEntryData {
   description: string;
   origin: AccountEntryOrigin;
   sourceId?: string | null;
+  /** Obligatorio en pagos y reintegros; un cargo no lleva. */
+  paymentMethod?: PaymentMethod | null;
+  reference?: string | null;
 }
 
 /** Movimiento del libro. Inmutable: no tiene métodos que lo modifiquen. */
@@ -86,6 +113,8 @@ export class AccountEntryModel {
   readonly description: string;
   readonly origin: AccountEntryOrigin;
   readonly sourceId: string | null;
+  readonly paymentMethod: PaymentMethod | null;
+  readonly reference: string | null;
   readonly reversesId: string | null;
   readonly registeredAt: Date;
   readonly registeredById: string | null;
@@ -99,6 +128,8 @@ export class AccountEntryModel {
     this.description = props.description;
     this.origin = props.origin;
     this.sourceId = props.sourceId;
+    this.paymentMethod = props.paymentMethod;
+    this.reference = props.reference;
     this.reversesId = props.reversesId;
     this.registeredAt = props.registeredAt;
     this.registeredById = props.registeredById;
@@ -119,6 +150,8 @@ export class AccountEntryModel {
       description: data.description,
       origin: data.origin,
       sourceId: data.sourceId ?? null,
+      paymentMethod: data.paymentMethod ?? null,
+      reference: data.reference?.trim() || null,
       reversesId: null,
       registeredAt: now,
       registeredById: author.userId,
@@ -126,7 +159,10 @@ export class AccountEntryModel {
     });
   }
 
-  /** La anulación copia monto, origen y referencia del original; la descripción es el motivo. */
+  /**
+   * La anulación copia monto, origen, medio de pago y referencias del original; la descripción es
+   * el motivo.
+   */
   static reversalOf(
     original: AccountEntryModel,
     reason: string,
@@ -145,6 +181,8 @@ export class AccountEntryModel {
       description: reason,
       origin: original.origin,
       sourceId: original.sourceId,
+      paymentMethod: original.paymentMethod,
+      reference: original.reference,
       reversesId: original.id,
       registeredAt: now,
       registeredById: author.userId,
@@ -170,6 +208,14 @@ export class AccountEntryModel {
     if (!description) return 'La descripción no puede estar vacía';
     if (description.length > MAX_ENTRY_DESCRIPTION_LENGTH) {
       return `La descripción no puede superar ${MAX_ENTRY_DESCRIPTION_LENGTH} caracteres`;
+    }
+    const movesMoney = MONEY_TYPES.includes(this.type);
+    if (movesMoney && !this.paymentMethod) return 'Falta el medio de pago';
+    if (!movesMoney && this.paymentMethod) {
+      return 'Un cargo no lleva medio de pago';
+    }
+    if ((this.reference?.length ?? 0) > MAX_ENTRY_REFERENCE_LENGTH) {
+      return `La referencia no puede superar ${MAX_ENTRY_REFERENCE_LENGTH} caracteres`;
     }
     return null;
   }
@@ -309,6 +355,31 @@ export class AccountModel {
     return this.isOpen
       ? null
       : 'La cuenta está cerrada: no admite movimientos nuevos';
+  }
+
+  /**
+   * Un pago no puede superar lo que el huésped debe y un reintegro no puede superar su saldo a
+   * favor: ninguno de los dos deja la cuenta del otro lado de cero.
+   */
+  getAmountError(type: DirectEntryType, amount: number): string | null {
+    const balanceCents = toCents(this.summary.balance);
+    const amountCents = toCents(amount);
+
+    if (type === AccountEntryType.PAYMENT) {
+      if (balanceCents <= 0) return 'La cuenta no tiene saldo pendiente';
+      if (amountCents > balanceCents) {
+        return `El pago supera el saldo pendiente (${formatAmount(balanceCents / 100)})`;
+      }
+    }
+    if (type === AccountEntryType.REFUND) {
+      if (balanceCents >= 0) {
+        return 'La cuenta no tiene saldo a favor del huésped';
+      }
+      if (amountCents > -balanceCents) {
+        return `El reintegro supera el saldo a favor (${formatAmount(-balanceCents / 100)})`;
+      }
+    }
+    return null;
   }
 
   getReversalError(entryId: string): string | null {

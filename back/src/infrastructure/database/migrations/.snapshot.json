@@ -115,6 +115,45 @@
           ],
           "mappedType": "enum"
         },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "CASH",
+            "CARD",
+            "TRANSFER",
+            "MERCADO_PAGO"
+          ],
+          "mappedType": "enum"
+        },
+        "reference": {
+          "name": "reference",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
         "registered_at": {
           "name": "registered_at",
           "type": "timestamp(6)",
@@ -269,6 +308,12 @@
           "expression": "\"origin\" in ('ROOM_SERVICE', 'SPA', 'RESTAURANT', 'RECEPTION')",
           "definition": "check (\"origin\" in ('ROOM_SERVICE', 'SPA', 'RESTAURANT', 'RECEPTION'))",
           "columnName": "origin"
+        },
+        {
+          "name": "account_entries_payment_method_check",
+          "expression": "\"payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO')",
+          "definition": "check (\"payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO'))",
+          "columnName": "payment_method"
         },
         {
           "name": "account_entries_type_check",

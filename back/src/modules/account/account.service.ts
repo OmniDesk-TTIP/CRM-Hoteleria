@@ -7,16 +7,33 @@ import {
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import { PaymentMethod } from '../../infrastructure/database/entities/Account.entity';
 import {
+  AccountEntryOrigin,
+  AccountEntryType,
+} from '../../infrastructure/database/entities/AccountEntry.entity';
+import {
   AccountEntryModel,
   AccountModel,
   EntryAuthor,
   getOpenAccountError,
   NewEntryData,
+  paymentDescription,
 } from './account.model';
 import { AccountRepository } from './account.repository';
 import { ReservationAccountDto } from './dto/account.dto';
 
 const NO_ACCOUNT = 'La reserva no tiene una cuenta abierta';
+
+export interface PaymentData {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  reference?: string | null;
+}
+
+export interface RefundData {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  reason: string;
+}
 
 @Injectable()
 export class AccountService {
@@ -57,7 +74,77 @@ export class AccountService {
     return this.getForReservation(reservationId);
   }
 
-  /** Carga un cargo, un pago o un reintegro. Lo usan los módulos de consumos y recepción. */
+  /**
+   * US-28: recepción registra un pago (total o parcial) y devuelve la cuenta con el saldo que
+   * queda.
+   */
+  async registerPayment(
+    reservationId: string,
+    data: PaymentData,
+    author: EntryAuthor,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    await this.registerEntry(
+      reservationId,
+      {
+        type: AccountEntryType.PAYMENT,
+        amount: data.amount,
+        description: paymentDescription(data.paymentMethod),
+        origin: AccountEntryOrigin.RECEPTION,
+        paymentMethod: data.paymentMethod,
+        reference: data.reference,
+      },
+      author,
+      now,
+    );
+    return this.getForReservation(reservationId);
+  }
+
+  /** US-28: devuelve al huésped su saldo a favor, sin pasarse de $0. */
+  async registerRefund(
+    reservationId: string,
+    data: RefundData,
+    author: EntryAuthor,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    await this.registerEntry(
+      reservationId,
+      {
+        type: AccountEntryType.REFUND,
+        amount: data.amount,
+        description: data.reason,
+        origin: AccountEntryOrigin.RECEPTION,
+        paymentMethod: data.paymentMethod,
+      },
+      author,
+      now,
+    );
+    return this.getForReservation(reservationId);
+  }
+
+  /** US-28: anula un pago registrado por error; `reason` queda como descripción. */
+  async reversePayment(
+    reservationId: string,
+    entryId: string,
+    reason: string,
+    author: EntryAuthor,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    await this.appendReversal(
+      reservationId,
+      entryId,
+      reason,
+      author,
+      now,
+      AccountEntryType.PAYMENT,
+    );
+    return this.getForReservation(reservationId);
+  }
+
+  /**
+   * Carga un cargo, un pago o un reintegro. Lo usan los módulos de consumos y recepción. Un pago
+   * no puede superar el saldo pendiente ni un reintegro el saldo a favor.
+   */
   async registerEntry(
     reservationId: string,
     data: NewEntryData,
@@ -78,6 +165,9 @@ export class AccountService {
         );
         const invalid = created.getError();
         if (invalid) throw new BadRequestException(invalid);
+
+        const exceeds = account.getAmountError(data.type, created.amount);
+        if (exceeds) throw new BadRequestException(exceeds);
         return created;
       },
     );
@@ -86,21 +176,35 @@ export class AccountService {
   }
 
   /** Anula un cargo o un pago con un movimiento nuevo; `reason` queda como descripción. */
-  async reverseEntry(
+  reverseEntry(
     reservationId: string,
     entryId: string,
     reason: string,
     author: EntryAuthor,
     now: Date = new Date(),
   ): Promise<AccountEntryModel> {
+    return this.appendReversal(reservationId, entryId, reason, author, now);
+  }
+
+  /** `expectedType` limita qué se puede anular (por ejemplo, solo pagos). */
+  private async appendReversal(
+    reservationId: string,
+    entryId: string,
+    reason: string,
+    author: EntryAuthor,
+    now: Date,
+    expectedType?: AccountEntryType,
+  ): Promise<AccountEntryModel> {
     try {
       const reversal = await this.accountRepository.appendEntry(
         reservationId,
         (account) => {
           const original = account.findEntry(entryId);
-          if (!original) {
+          if (!original || (expectedType && original.type !== expectedType)) {
             throw new NotFoundException(
-              'El movimiento no pertenece a esta cuenta',
+              expectedType === AccountEntryType.PAYMENT
+                ? 'El pago no pertenece a esta cuenta'
+                : 'El movimiento no pertenece a esta cuenta',
             );
           }
           const error = account.getReversalError(entryId);

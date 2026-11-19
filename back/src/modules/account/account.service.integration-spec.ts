@@ -11,6 +11,7 @@ import { AppModule } from '../../app.module';
 import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
 import { AccountService } from './account.service';
+import { ReservationAccountDto } from './dto/account.dto';
 import {
   Account,
   AccountStatus,
@@ -272,6 +273,7 @@ describe('AccountService (integración)', () => {
           amount: 2000,
           description: 'Pago parcial',
           origin: AccountEntryOrigin.RECEPTION,
+          paymentMethod: PaymentMethod.CASH,
         },
         author(),
         NOW,
@@ -455,6 +457,225 @@ describe('AccountService (integración)', () => {
           NOW,
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('pagos en recepción (US-28)', () => {
+    const pay = (
+      reservationId: string,
+      amount: number,
+      paymentMethod = PaymentMethod.CASH,
+      reference?: string,
+    ) =>
+      service.registerPayment(
+        reservationId,
+        { amount, paymentMethod, reference },
+        author(),
+        NOW,
+      );
+
+    // todos los movimientos se registran en NOW: se buscan por tipo y monto, no por posición
+    const findEntry = (
+      dto: ReservationAccountDto,
+      type: AccountEntryType,
+      amount: number,
+    ) =>
+      dto.account?.entries.find(
+        (entry) => entry.type === type && entry.amount === amount,
+      );
+
+    /** Cuenta con un cargo de `amount`: el huésped debe eso. */
+    const seedOwingAccount = async (amount = 10000) => {
+      const reservationId = await seedOpenAccount();
+      const created = await service.registerEntry(
+        reservationId,
+        charge(amount),
+        author(),
+        NOW,
+      );
+      return { reservationId, chargeId: created.id };
+    };
+
+    it('registra pagos parciales con distintos medios y devuelve el saldo restante', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+
+      const first = await pay(reservationId, 4000, PaymentMethod.CASH);
+      expect(first.account?.balance).toBe(6000);
+
+      const second = await pay(
+        reservationId,
+        6000,
+        PaymentMethod.CARD,
+        '  cupón 4521 ',
+      );
+      expect(second.account).toMatchObject({
+        totalPayments: 10000,
+        balance: 0,
+      });
+      expect(findEntry(second, AccountEntryType.PAYMENT, 6000)).toMatchObject({
+        paymentMethod: PaymentMethod.CARD,
+        reference: 'cupón 4521',
+        description: 'Pago en tarjeta',
+        origin: AccountEntryOrigin.RECEPTION,
+        registeredBy: { id: user.id, fullName: 'Lucía Recepción' },
+      });
+
+      const rows = await entryRows(reservationId);
+      expect(rows.map((row) => row.paymentMethod ?? null).sort()).toEqual(
+        [PaymentMethod.CARD, PaymentMethod.CASH, null].sort(),
+      );
+    });
+
+    it('rechaza un pago mayor al saldo pendiente sin registrarlo', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+
+      await expect(pay(reservationId, 10000.01)).rejects.toThrow(
+        /supera el saldo pendiente/,
+      );
+      expect(await entryRows(reservationId)).toHaveLength(1);
+    });
+
+    it('dos pagos simultáneos no pueden pasarse del saldo', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+
+      const results = await Promise.allSettled([
+        pay(reservationId, 7000),
+        pay(reservationId, 7000),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const { account } = await service.getForReservation(reservationId);
+      expect(account?.balance).toBe(3000);
+    });
+
+    it('404 si la reserva no tiene cuenta', async () => {
+      const reservationId = await seedReservation();
+
+      await expect(pay(reservationId, 100)).rejects.toThrow(NotFoundException);
+    });
+
+    it('anula un pago con un movimiento que lo referencia y el saldo vuelve a subir', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+      const paid = await pay(
+        reservationId,
+        10000,
+        PaymentMethod.TRANSFER,
+        'op-1',
+      );
+      const paymentId = findEntry(paid, AccountEntryType.PAYMENT, 10000)!.id;
+
+      const reversed = await service.reversePayment(
+        reservationId,
+        paymentId,
+        '  Se cargó dos veces ',
+        author(),
+        NOW,
+      );
+
+      expect(reversed.account?.balance).toBe(10000);
+      expect(
+        findEntry(reversed, AccountEntryType.PAYMENT_REVERSAL, 10000),
+      ).toMatchObject({
+        reversesId: paymentId,
+        amount: 10000,
+        description: 'Se cargó dos veces',
+        paymentMethod: PaymentMethod.TRANSFER,
+        reference: 'op-1',
+      });
+      expect(
+        findEntry(reversed, AccountEntryType.PAYMENT, 10000)?.reversed,
+      ).toBe(true);
+    });
+
+    it('por el endpoint de pagos no se anula un cargo', async () => {
+      const { reservationId, chargeId } = await seedOwingAccount();
+
+      await expect(
+        service.reversePayment(reservationId, chargeId, 'Error', author(), NOW),
+      ).rejects.toThrow(/El pago no pertenece/);
+      expect(await entryRows(reservationId)).toHaveLength(1);
+    });
+
+    it('la anulación de un pago exige el motivo', async () => {
+      const { reservationId } = await seedOwingAccount();
+      const paid = await pay(reservationId, 1000);
+
+      await expect(
+        service.reversePayment(
+          reservationId,
+          findEntry(paid, AccountEntryType.PAYMENT, 1000)!.id,
+          '   ',
+          author(),
+          NOW,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('reintegra el saldo a favor hasta dejarlo en cero', async () => {
+      const { reservationId, chargeId } = await seedOwingAccount(10000);
+      await pay(reservationId, 10000);
+      await service.reverseEntry(
+        reservationId,
+        chargeId,
+        'No correspondía',
+        author(),
+        NOW,
+      );
+
+      const partial = await service.registerRefund(
+        reservationId,
+        {
+          amount: 4000,
+          paymentMethod: PaymentMethod.CASH,
+          reason: 'Devolución parcial',
+        },
+        author(),
+        NOW,
+      );
+      expect(partial.account?.balance).toBe(-6000);
+
+      await expect(
+        service.registerRefund(
+          reservationId,
+          {
+            amount: 6000.01,
+            paymentMethod: PaymentMethod.CASH,
+            reason: 'Resto',
+          },
+          author(),
+          NOW,
+        ),
+      ).rejects.toThrow(/supera el saldo a favor/);
+
+      const full = await service.registerRefund(
+        reservationId,
+        {
+          amount: 6000,
+          paymentMethod: PaymentMethod.TRANSFER,
+          reason: '  Resto  ',
+        },
+        author(),
+        NOW,
+      );
+      expect(full.account?.balance).toBe(0);
+      expect(findEntry(full, AccountEntryType.REFUND, 6000)).toMatchObject({
+        paymentMethod: PaymentMethod.TRANSFER,
+        description: 'Resto',
+        reference: null,
+      });
+    });
+
+    it('sin saldo a favor no se puede reintegrar', async () => {
+      const { reservationId } = await seedOwingAccount();
+
+      await expect(
+        service.registerRefund(
+          reservationId,
+          { amount: 1, paymentMethod: PaymentMethod.CASH, reason: 'Error' },
+          author(),
+          NOW,
+        ),
+      ).rejects.toThrow(/no tiene saldo a favor/);
     });
   });
 });

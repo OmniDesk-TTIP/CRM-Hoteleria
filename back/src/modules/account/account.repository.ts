@@ -105,6 +105,8 @@ export class AccountRepository {
           description: entry.description,
           origin: entry.origin,
           sourceId: entry.sourceId,
+          paymentMethod: entry.paymentMethod,
+          reference: entry.reference,
           reverses: entry.reversesId
             ? em.getReference(AccountEntry, entry.reversesId)
             : null,
@@ -162,6 +164,8 @@ export class AccountRepository {
       description: entity.description,
       origin: entity.origin,
       sourceId: entity.sourceId ?? null,
+      paymentMethod: entity.paymentMethod ?? null,
+      reference: entity.reference ?? null,
       reversesId: entity.reverses?.id ?? null,
       registeredAt: entity.registeredAt,
       registeredById: entity.registeredBy?.id ?? null,

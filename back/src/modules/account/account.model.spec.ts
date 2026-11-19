@@ -15,6 +15,8 @@ import {
   getOpenAccountError,
   MAX_ENTRY_AMOUNT,
   MAX_ENTRY_DESCRIPTION_LENGTH,
+  MAX_ENTRY_REFERENCE_LENGTH,
+  paymentDescription,
   stayBalanceOf,
   summarizeEntries,
 } from './account.model';
@@ -33,10 +35,22 @@ const buildEntry = (overrides: Partial<AccountEntryProps> = {}) =>
     description: 'Room service: 2 cafés',
     origin: AccountEntryOrigin.ROOM_SERVICE,
     sourceId: 'order-1',
+    paymentMethod: null,
+    reference: null,
     reversesId: null,
     registeredAt: NOW,
     registeredById: null,
     registeredByName: null,
+    ...overrides,
+  });
+
+const buildPayment = (overrides: Partial<AccountEntryProps> = {}) =>
+  buildEntry({
+    type: AccountEntryType.PAYMENT,
+    description: 'Pago en efectivo',
+    origin: AccountEntryOrigin.RECEPTION,
+    sourceId: null,
+    paymentMethod: PaymentMethod.CASH,
     ...overrides,
   });
 
@@ -313,6 +327,174 @@ describe('AccountModel', () => {
       expect(
         buildAccount({ entries: [charge] }).getReversalError(charge.id),
       ).toBeNull();
+    });
+  });
+
+  describe('pagos y reintegros (US-28)', () => {
+    // cargos por 10.000: el huésped debe 10.000
+    const owing = () =>
+      buildAccount({ entries: [buildEntry({ amount: 10000 })] });
+
+    it('acepta un pago parcial y uno que cancela el saldo', () => {
+      expect(owing().getAmountError(AccountEntryType.PAYMENT, 4000)).toBeNull();
+      expect(
+        owing().getAmountError(AccountEntryType.PAYMENT, 10000),
+      ).toBeNull();
+    });
+
+    it('rechaza un pago mayor al saldo pendiente y avisa cuánto se debe', () => {
+      expect(
+        owing().getAmountError(AccountEntryType.PAYMENT, 10000.01),
+      ).toMatch(/supera el saldo pendiente \(\$10\.000,00\)/);
+    });
+
+    it('después de varios pagos parciales el saldo restante baja con cada uno', () => {
+      const account = buildAccount({
+        entries: [
+          buildEntry({ amount: 10000 }),
+          buildPayment({ amount: 4000 }),
+          buildPayment({ amount: 2500.5, paymentMethod: PaymentMethod.CARD }),
+        ],
+      });
+
+      expect(account.summary.balance).toBe(3499.5);
+      expect(
+        account.getAmountError(AccountEntryType.PAYMENT, 3499.5),
+      ).toBeNull();
+      expect(account.getAmountError(AccountEntryType.PAYMENT, 3499.51)).toMatch(
+        /supera/,
+      );
+    });
+
+    it.each([
+      ['en cero', []],
+      ['con saldo a favor', [buildPayment({ amount: 500 })]],
+    ])('no acepta pagos con la cuenta %s', (_, entries) => {
+      expect(
+        buildAccount({ entries }).getAmountError(AccountEntryType.PAYMENT, 1),
+      ).toMatch(/no tiene saldo pendiente/);
+    });
+
+    it('anular un pago vuelve a dejar ese monto como deuda', () => {
+      const payment = buildPayment({ amount: 10000 });
+      const reversal = AccountEntryModel.reversalOf(
+        payment,
+        'Se registró dos veces',
+        RECEPTIONIST,
+        NOW,
+      );
+      const account = buildAccount({
+        entries: [buildEntry({ amount: 10000 }), payment, reversal],
+      });
+
+      expect(account.summary.balance).toBe(10000);
+    });
+
+    it('el reintegro devuelve hasta dejar el saldo a favor en cero', () => {
+      // se pagaron 10.000 y después se anuló el cargo: el huésped tiene 10.000 a favor
+      const charge = buildEntry({ amount: 10000 });
+      const account = buildAccount({
+        entries: [
+          charge,
+          buildPayment({ amount: 10000 }),
+          AccountEntryModel.reversalOf(
+            charge,
+            'No correspondía',
+            RECEPTIONIST,
+            NOW,
+          ),
+        ],
+      });
+
+      expect(account.summary.balance).toBe(-10000);
+      expect(account.getAmountError(AccountEntryType.REFUND, 6000)).toBeNull();
+      expect(account.getAmountError(AccountEntryType.REFUND, 10000)).toBeNull();
+      expect(account.getAmountError(AccountEntryType.REFUND, 10000.01)).toMatch(
+        /supera el saldo a favor \(\$10\.000,00\)/,
+      );
+    });
+
+    it.each([
+      ['en cero', []],
+      ['con deuda', [buildEntry({ amount: 100 })]],
+    ])('no acepta reintegros con la cuenta %s', (_, entries) => {
+      expect(
+        buildAccount({ entries }).getAmountError(AccountEntryType.REFUND, 1),
+      ).toMatch(/no tiene saldo a favor/);
+    });
+
+    it('a los cargos no les aplica el tope de saldo', () => {
+      expect(
+        buildAccount().getAmountError(AccountEntryType.CHARGE, 5000),
+      ).toBeNull();
+    });
+
+    it.each([[AccountEntryType.PAYMENT], [AccountEntryType.REFUND]])(
+      'un %s sin medio de pago es inválido',
+      (type) => {
+        expect(buildPayment({ type, paymentMethod: null }).getError()).toMatch(
+          /medio de pago/,
+        );
+      },
+    );
+
+    it('un cargo no lleva medio de pago', () => {
+      expect(
+        buildEntry({ paymentMethod: PaymentMethod.CASH }).getError(),
+      ).toMatch(/no lleva medio de pago/);
+    });
+
+    it('rechaza una referencia demasiado larga', () => {
+      expect(
+        buildPayment({
+          reference: 'x'.repeat(MAX_ENTRY_REFERENCE_LENGTH + 1),
+        }).getError(),
+      ).toMatch(/referencia/);
+    });
+
+    it('guarda la referencia recortada y una vacía queda en null', () => {
+      const create = (reference: string) =>
+        AccountEntryModel.create(
+          'account-1',
+          {
+            type: AccountEntryType.PAYMENT,
+            amount: 100,
+            description: paymentDescription(PaymentMethod.CARD),
+            origin: AccountEntryOrigin.RECEPTION,
+            paymentMethod: PaymentMethod.CARD,
+            reference,
+          },
+          RECEPTIONIST,
+          NOW,
+        );
+
+      expect(create('  cupón 123 ')).toMatchObject({
+        reference: 'cupón 123',
+        paymentMethod: PaymentMethod.CARD,
+        description: 'Pago en tarjeta',
+      });
+      expect(create('   ').reference).toBeNull();
+    });
+
+    it('la anulación de un pago copia su medio y su referencia', () => {
+      const payment = buildPayment({
+        paymentMethod: PaymentMethod.TRANSFER,
+        reference: 'op-77',
+      });
+
+      const reversal = AccountEntryModel.reversalOf(
+        payment,
+        'Error de carga',
+        RECEPTIONIST,
+        NOW,
+      );
+
+      expect(reversal).toMatchObject({
+        type: AccountEntryType.PAYMENT_REVERSAL,
+        paymentMethod: PaymentMethod.TRANSFER,
+        reference: 'op-77',
+      });
+      expect(reversal.getError()).toBeNull();
     });
   });
 });
