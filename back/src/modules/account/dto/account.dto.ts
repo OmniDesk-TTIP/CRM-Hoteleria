@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -40,6 +41,13 @@ export class OpenAccountDto {
 
 /** Monto de un pago o reintegro: positivo, con hasta dos decimales. */
 class MoneyMovementDto {
+  /**
+   * UUID que genera el panel por cada confirmación. Si el pedido se reintenta con la misma clave,
+   * no se registra otro movimiento.
+   */
+  @IsUUID('4', { message: 'La clave de operación debe ser un UUID' })
+  operationId!: string;
+
   // class-validator corre los decoradores de abajo hacia arriba: IsNumber va último para que un
   // monto que no es número no termine avisando "demasiado grande".
   @Max(MAX_ENTRY_AMOUNT, { message: 'El monto es demasiado grande' })

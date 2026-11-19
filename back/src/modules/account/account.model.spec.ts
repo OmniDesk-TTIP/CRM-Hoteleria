@@ -12,6 +12,7 @@ import {
   AccountEntryProps,
   AccountModel,
   AccountProps,
+  DirectEntryType,
   getOpenAccountError,
   MAX_ENTRY_AMOUNT,
   MAX_ENTRY_DESCRIPTION_LENGTH,
@@ -37,6 +38,7 @@ const buildEntry = (overrides: Partial<AccountEntryProps> = {}) =>
     sourceId: 'order-1',
     paymentMethod: null,
     reference: null,
+    operationId: null,
     reversesId: null,
     registeredAt: NOW,
     registeredById: null,
@@ -226,11 +228,14 @@ describe('AccountModel', () => {
       [Number.NaN, /mayor a cero/],
       [MAX_ENTRY_AMOUNT + 1, /demasiado grande/],
       [10.123, /dos decimales/],
+      // menos de un centavo: numeric(12,2) lo redondearía a 0
+      [1e-9, /dos decimales/],
+      [0.001, /dos decimales/],
     ])('rechaza el monto %s', (amount, message) => {
       expect(buildEntry({ amount }).getError()).toMatch(message);
     });
 
-    it.each([[10.1], [0.01], [MAX_ENTRY_AMOUNT]])(
+    it.each([[10.1], [0.01], [134217728.02], [MAX_ENTRY_AMOUNT]])(
       'acepta el monto %s',
       (amount) => {
         expect(buildEntry({ amount }).getError()).toBeNull();
@@ -495,6 +500,49 @@ describe('AccountModel', () => {
         reference: 'op-77',
       });
       expect(reversal.getError()).toBeNull();
+    });
+  });
+
+  describe('reintentos con clave de operación', () => {
+    it('encuentra el movimiento ya registrado con esa clave', () => {
+      const payment = buildPayment({ operationId: 'op-1' });
+      const account = buildAccount({ entries: [buildEntry(), payment] });
+
+      expect(account.findByOperationId('op-1')).toBe(payment);
+      expect(account.findByOperationId('op-2')).toBeUndefined();
+      expect(account.findByOperationId(null)).toBeUndefined();
+    });
+
+    it('un reintento con el mismo tipo y monto es válido', () => {
+      expect(
+        buildPayment({ amount: 10.1 }).getRetryError({
+          type: AccountEntryType.PAYMENT,
+          amount: 10.1,
+        }),
+      ).toBeNull();
+    });
+
+    it.each([
+      [AccountEntryType.PAYMENT, 2000],
+      [AccountEntryType.REFUND, 1000],
+    ] as [DirectEntryType, number][])(
+      'la misma clave con otro pedido (%s por %s) es un error',
+      (type, amount) => {
+        expect(
+          buildPayment({ amount: 1000 }).getRetryError({ type, amount }),
+        ).toMatch(/ya se registró/);
+      },
+    );
+
+    it('la anulación no hereda la clave del pago', () => {
+      const reversal = AccountEntryModel.reversalOf(
+        buildPayment({ operationId: 'op-1' }),
+        'Error',
+        RECEPTIONIST,
+        NOW,
+      );
+
+      expect(reversal.operationId).toBeNull();
     });
   });
 });

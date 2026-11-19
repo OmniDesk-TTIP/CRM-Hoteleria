@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -260,7 +261,7 @@ describe('AccountService (integración)', () => {
     it('guarda el movimiento y el saldo sale de los movimientos', async () => {
       const reservationId = await seedOpenAccount();
 
-      await service.registerEntry(
+      const created = await service.registerEntry(
         reservationId,
         charge(5000, '  2 cafés  '),
         author(),
@@ -285,9 +286,11 @@ describe('AccountService (integración)', () => {
         totalPayments: 2000,
         balance: 3000,
       });
-      const [first] = await entryRows(reservationId);
-      expect(first.description).toBe('2 cafés');
-      expect(first.registeredBy?.id).toBe(user.id);
+      // el cargo y el pago tienen el mismo registeredAt: se busca por id, no por posición
+      const rows: AccountEntry[] = await entryRows(reservationId);
+      const saved = rows.find((row) => row.id === created.id);
+      expect(saved?.description).toBe('2 cafés');
+      expect(saved?.registeredBy?.id).toBe(user.id);
     });
 
     it('lo que carga Chamber queda sin usuario', async () => {
@@ -466,10 +469,11 @@ describe('AccountService (integración)', () => {
       amount: number,
       paymentMethod = PaymentMethod.CASH,
       reference?: string,
+      operationId: string = randomUUID(),
     ) =>
       service.registerPayment(
         reservationId,
-        { amount, paymentMethod, reference },
+        { operationId, amount, paymentMethod, reference },
         author(),
         NOW,
       );
@@ -625,6 +629,7 @@ describe('AccountService (integración)', () => {
       const partial = await service.registerRefund(
         reservationId,
         {
+          operationId: randomUUID(),
           amount: 4000,
           paymentMethod: PaymentMethod.CASH,
           reason: 'Devolución parcial',
@@ -638,6 +643,7 @@ describe('AccountService (integración)', () => {
         service.registerRefund(
           reservationId,
           {
+            operationId: randomUUID(),
             amount: 6000.01,
             paymentMethod: PaymentMethod.CASH,
             reason: 'Resto',
@@ -650,6 +656,7 @@ describe('AccountService (integración)', () => {
       const full = await service.registerRefund(
         reservationId,
         {
+          operationId: randomUUID(),
           amount: 6000,
           paymentMethod: PaymentMethod.TRANSFER,
           reason: '  Resto  ',
@@ -671,11 +678,112 @@ describe('AccountService (integración)', () => {
       await expect(
         service.registerRefund(
           reservationId,
-          { amount: 1, paymentMethod: PaymentMethod.CASH, reason: 'Error' },
+          {
+            operationId: randomUUID(),
+            amount: 1,
+            paymentMethod: PaymentMethod.CASH,
+            reason: 'Error',
+          },
           author(),
           NOW,
         ),
       ).rejects.toThrow(/no tiene saldo a favor/);
+    });
+
+    it('reintentar un pago con la misma clave no lo registra dos veces', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+      const operationId = randomUUID();
+
+      await pay(
+        reservationId,
+        10000,
+        PaymentMethod.CASH,
+        undefined,
+        operationId,
+      );
+      // el reintento llega con la cuenta ya en cero: igual responde bien
+      const retried = await pay(
+        reservationId,
+        10000,
+        PaymentMethod.CASH,
+        undefined,
+        operationId,
+      );
+
+      expect(retried.account?.balance).toBe(0);
+      expect(await entryRows(reservationId)).toHaveLength(2);
+    });
+
+    it('dos pedidos simultáneos con la misma clave registran un solo pago', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+      const operationId = randomUUID();
+
+      await Promise.all([
+        pay(reservationId, 3000, PaymentMethod.CASH, undefined, operationId),
+        pay(reservationId, 3000, PaymentMethod.CASH, undefined, operationId),
+      ]);
+
+      const { account } = await service.getForReservation(reservationId);
+      expect(account?.balance).toBe(7000);
+    });
+
+    it('la misma clave con otro monto se rechaza', async () => {
+      const { reservationId } = await seedOwingAccount(10000);
+      const operationId = randomUUID();
+      await pay(
+        reservationId,
+        3000,
+        PaymentMethod.CASH,
+        undefined,
+        operationId,
+      );
+
+      await expect(
+        pay(reservationId, 4000, PaymentMethod.CASH, undefined, operationId),
+      ).rejects.toThrow(ConflictException);
+      expect(await entryRows(reservationId)).toHaveLength(2);
+    });
+
+    it('una clave usada en otra cuenta se rechaza', async () => {
+      const first = await seedOwingAccount(10000);
+      const second = await seedOwingAccount(10000);
+      const operationId = randomUUID();
+      await pay(
+        first.reservationId,
+        3000,
+        PaymentMethod.CASH,
+        undefined,
+        operationId,
+      );
+
+      await expect(
+        pay(
+          second.reservationId,
+          3000,
+          PaymentMethod.CASH,
+          undefined,
+          operationId,
+        ),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('apertura con cancelación de por medio', () => {
+    it('si la reserva se canceló antes de abrir, no abre la cuenta', async () => {
+      const reservationId = await seedReservation();
+      // la cancelación termina entre que el panel mostró la reserva y la apertura
+      await em
+        .fork()
+        .nativeUpdate(
+          Reservation,
+          { id: reservationId },
+          { status: ReservationStatus.CANCELLED },
+        );
+
+      await expect(
+        service.open(reservationId, PaymentMethod.CASH, user.id, NOW),
+      ).rejects.toThrow(ConflictException);
+      expect(await accountRow(reservationId)).toBeNull();
     });
   });
 });

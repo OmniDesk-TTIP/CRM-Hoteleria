@@ -68,6 +68,13 @@ export class AccountEntry extends CustomBaseEntity {
   @Property({ type: 'varchar', length: 100, nullable: true })
   reference?: string | null;
 
+  /**
+   * Clave que manda el panel por cada pago o reintegro confirmado. Única: si el pedido se
+   * reintenta, no se registra un segundo movimiento.
+   */
+  @Property({ type: 'uuid', nullable: true, unique: true })
+  operationId?: string | null;
+
   @OneToOne(() => AccountEntry, {
     owner: true,
     nullable: true,

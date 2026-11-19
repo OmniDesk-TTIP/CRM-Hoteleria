@@ -14,6 +14,8 @@ import { ReservationStatus } from '../../infrastructure/database/entities/Reserv
 export const MAX_ENTRY_AMOUNT = 9_999_999_999.99;
 export const MAX_ENTRY_DESCRIPTION_LENGTH = 200;
 export const MAX_ENTRY_REFERENCE_LENGTH = 100;
+export const OPERATION_REUSED =
+  'La operación ya se registró con otro monto o tipo de movimiento';
 
 /** Tipos que se cargan directo. Las anulaciones solo nacen de `AccountEntryModel.reversalOf`. */
 export const DIRECT_ENTRY_TYPES = [
@@ -67,9 +69,12 @@ const PAYMENT_SIGNS: Signs = {
 /** Se suma en centavos enteros: sumar decimales en float arrastra errores de redondeo. */
 const toCents = (amount: number): number => Math.round(amount * 100);
 
-// tolerancia por float: 10.1 * 100 da 1009.9999999999999
+/**
+ * Sin tolerancia fija: el monto tiene que ser exactamente el número que se escribe con dos
+ * decimales. Así 10.1 o 134217728.02 pasan y 1e-9 (que la base redondearía a 0) no.
+ */
 const hasTwoDecimals = (amount: number): boolean =>
-  Math.abs(amount * 100 - toCents(amount)) < 1e-6;
+  Number(amount.toFixed(2)) === amount;
 
 /** Quién registró un movimiento: un usuario del panel o Chamber (`userId` null). */
 export interface EntryAuthor {
@@ -87,6 +92,7 @@ export interface AccountEntryProps {
   sourceId: string | null;
   paymentMethod: PaymentMethod | null;
   reference: string | null;
+  operationId: string | null;
   reversesId: string | null;
   registeredAt: Date;
   registeredById: string | null;
@@ -102,6 +108,8 @@ export interface NewEntryData {
   /** Obligatorio en pagos y reintegros; un cargo no lleva. */
   paymentMethod?: PaymentMethod | null;
   reference?: string | null;
+  /** Clave de idempotencia: reintentar con la misma no registra otro movimiento. */
+  operationId?: string | null;
 }
 
 /** Movimiento del libro. Inmutable: no tiene métodos que lo modifiquen. */
@@ -115,6 +123,7 @@ export class AccountEntryModel {
   readonly sourceId: string | null;
   readonly paymentMethod: PaymentMethod | null;
   readonly reference: string | null;
+  readonly operationId: string | null;
   readonly reversesId: string | null;
   readonly registeredAt: Date;
   readonly registeredById: string | null;
@@ -130,6 +139,7 @@ export class AccountEntryModel {
     this.sourceId = props.sourceId;
     this.paymentMethod = props.paymentMethod;
     this.reference = props.reference;
+    this.operationId = props.operationId;
     this.reversesId = props.reversesId;
     this.registeredAt = props.registeredAt;
     this.registeredById = props.registeredById;
@@ -152,6 +162,7 @@ export class AccountEntryModel {
       sourceId: data.sourceId ?? null,
       paymentMethod: data.paymentMethod ?? null,
       reference: data.reference?.trim() || null,
+      operationId: data.operationId ?? null,
       reversesId: null,
       registeredAt: now,
       registeredById: author.userId,
@@ -183,11 +194,20 @@ export class AccountEntryModel {
       sourceId: original.sourceId,
       paymentMethod: original.paymentMethod,
       reference: original.reference,
+      operationId: null,
       reversesId: original.id,
       registeredAt: now,
       registeredById: author.userId,
       registeredByName: author.userName ?? null,
     });
+  }
+
+  /** Un reintento tiene que pedir lo mismo: otro tipo o monto con la misma clave es un error. */
+  getRetryError(data: Pick<NewEntryData, 'type' | 'amount'>): string | null {
+    return this.type === data.type &&
+      toCents(this.amount) === toCents(data.amount)
+      ? null
+      : OPERATION_REUSED;
   }
 
   get isReversible(): boolean {
@@ -399,6 +419,14 @@ export class AccountModel {
 
   findEntry(entryId: string): AccountEntryModel | undefined {
     return this.entries.find((entry) => entry.id === entryId);
+  }
+
+  /** Movimiento ya registrado con esa clave de operación: el pedido es un reintento. */
+  findByOperationId(
+    operationId: string | null | undefined,
+  ): AccountEntryModel | undefined {
+    if (!operationId) return undefined;
+    return this.entries.find((entry) => entry.operationId === operationId);
   }
 }
 

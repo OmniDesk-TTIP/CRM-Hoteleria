@@ -93,6 +93,23 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "origin": {
           "name": "origin",
           "type": "text",
@@ -274,6 +291,16 @@
           "keyName": "account_entries_account_id_registered_at_index",
           "primary": false,
           "unique": false
+        },
+        {
+          "columnNames": [
+            "operation_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "account_entries_operation_id_unique",
+          "primary": false,
+          "unique": true
         },
         {
           "columnNames": [

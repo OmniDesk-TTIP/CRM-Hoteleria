@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getReservationAccount, openReservationAccount } from '@/services/account.service';
 import type { AccountEntryOrigin, AccountEntryType, PaymentMethod, ReservationAccount } from '@/config/types';
@@ -26,24 +26,39 @@ export default function ReservationAccountPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('ALL');
 
-  const fetchAccount = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      setData(await getReservationAccount(reservationId));
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al cargar la cuenta corriente.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [reservationId]);
+  // Reserva que la página muestra ahora: una respuesta que llega después de cambiar de reserva
+  // (o de salir de la página) se descarta en vez de pisar los datos de la nueva.
+  const activeReservationRef = useRef(reservationId);
+
+  const fetchAccount = useCallback(
+    async (isActive: () => boolean = () => true) => {
+      setIsLoading(true);
+      setError(null);
+      setData(null);
+      try {
+        const result = await getReservationAccount(reservationId);
+        if (isActive()) setData(result);
+      } catch (err: unknown) {
+        if (isActive()) setError(err instanceof Error ? err.message : 'Error al cargar la cuenta corriente.');
+      } finally {
+        if (isActive()) setIsLoading(false);
+      }
+    },
+    [reservationId],
+  );
 
   useEffect(() => {
-    fetchAccount();
-  }, [fetchAccount]);
+    let active = true;
+    activeReservationRef.current = reservationId;
+    fetchAccount(() => active);
+    return () => {
+      active = false;
+    };
+  }, [fetchAccount, reservationId]);
 
   const handleOpen = async (paymentMethod: PaymentMethod) => {
-    setData(await openReservationAccount(reservationId, paymentMethod));
+    const result = await openReservationAccount(reservationId, paymentMethod);
+    if (activeReservationRef.current === reservationId) setData(result);
   };
 
   const entries = useMemo(
@@ -82,7 +97,7 @@ export default function ReservationAccountPage() {
       {!isLoading && error && (
         <div role="alert" className="rounded-lg border border-danger/20 bg-danger/10 p-4 text-sm text-dangerText">
           {error}
-          <button type="button" onClick={fetchAccount} className="ml-3 underline">
+          <button type="button" onClick={() => fetchAccount(() => activeReservationRef.current === reservationId)} className="ml-3 underline">
             Reintentar
           </button>
         </div>

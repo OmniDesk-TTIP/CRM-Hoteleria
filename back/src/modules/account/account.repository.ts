@@ -13,6 +13,7 @@ import {
   AccountEntryModel,
   AccountModel,
   AccountReservationInfo,
+  ReservationForAccount,
 } from './account.model';
 
 @Injectable()
@@ -50,10 +51,31 @@ export class AccountRepository {
     return this.loadAccount(this.em, reservationId);
   }
 
-  /** Devuelve false si la reserva ya tenía cuenta (la FK única lo frena aunque sea simultáneo). */
-  async insert(model: AccountModel): Promise<boolean> {
+  /**
+   * Abre la cuenta con la reserva bloqueada: `build` valida el estado y calcula el importe con esa
+   * lectura, así una cancelación que terminó antes impide la apertura y una que llega después
+   * espera. Devuelve null si la reserva no existe y false si ya tenía cuenta (la FK única lo frena
+   * aunque sea simultáneo).
+   */
+  async insert(
+    reservationId: string,
+    build: (reservation: ReservationForAccount) => AccountModel,
+  ): Promise<boolean | null> {
     try {
-      await this.em.transactional((em) => {
+      return await this.em.transactional(async (em) => {
+        const reservation = await em.findOne(
+          Reservation,
+          { id: reservationId },
+          { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
+        );
+        if (!reservation) return null;
+
+        const model = build({
+          id: reservation.id,
+          status: reservation.status,
+          totalAmount: Number(reservation.totalAmount),
+          depositAmount: Number(reservation.depositAmount),
+        });
         em.persist(
           em.create(Account, {
             id: model.id,
@@ -66,8 +88,8 @@ export class AccountRepository {
             closedAt: model.closedAt,
           }),
         );
+        return true;
       });
-      return true;
     } catch (error) {
       if (error instanceof UniqueConstraintViolationException) return false;
       throw error;
@@ -78,6 +100,7 @@ export class AccountRepository {
    * Agrega un movimiento con la cuenta bloqueada. Leer los movimientos, decidir y guardar es una
    * sola operación: sin el lock, dos usuarios podrían anular el mismo cargo o cargar en una
    * cuenta que se está cerrando. `build` decide con la cuenta al día y puede lanzar para abortar.
+   * Si `build` devuelve un movimiento que la cuenta ya tiene (un reintento), no se guarda de nuevo.
    * Devuelve null si la reserva no tiene cuenta.
    */
   async appendEntry(
@@ -96,6 +119,8 @@ export class AccountRepository {
       if (!account) return null;
 
       const entry = build(account);
+      if (account.findEntry(entry.id)) return entry;
+
       em.persist(
         em.create(AccountEntry, {
           id: entry.id,
@@ -107,6 +132,7 @@ export class AccountRepository {
           sourceId: entry.sourceId,
           paymentMethod: entry.paymentMethod,
           reference: entry.reference,
+          operationId: entry.operationId,
           reverses: entry.reversesId
             ? em.getReference(AccountEntry, entry.reversesId)
             : null,
@@ -166,6 +192,7 @@ export class AccountRepository {
       sourceId: entity.sourceId ?? null,
       paymentMethod: entity.paymentMethod ?? null,
       reference: entity.reference ?? null,
+      operationId: entity.operationId ?? null,
       reversesId: entity.reverses?.id ?? null,
       registeredAt: entity.registeredAt,
       registeredById: entity.registeredBy?.id ?? null,

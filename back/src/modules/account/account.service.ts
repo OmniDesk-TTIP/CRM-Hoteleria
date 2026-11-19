@@ -16,6 +16,7 @@ import {
   EntryAuthor,
   getOpenAccountError,
   NewEntryData,
+  OPERATION_REUSED,
   paymentDescription,
 } from './account.model';
 import { AccountRepository } from './account.repository';
@@ -24,12 +25,16 @@ import { ReservationAccountDto } from './dto/account.dto';
 const NO_ACCOUNT = 'La reserva no tiene una cuenta abierta';
 
 export interface PaymentData {
+  /** Clave de idempotencia que genera el panel por cada pago confirmado. */
+  operationId: string;
   amount: number;
   paymentMethod: PaymentMethod;
   reference?: string | null;
 }
 
 export interface RefundData {
+  /** Clave de idempotencia que genera el panel por cada reintegro confirmado. */
+  operationId: string;
   amount: number;
   paymentMethod: PaymentMethod;
   reason: string;
@@ -58,15 +63,15 @@ export class AccountService {
     userId: string,
     now: Date = new Date(),
   ): Promise<ReservationAccountDto> {
-    const reservation =
-      await this.accountRepository.findReservation(reservationId);
-    if (!reservation) throw new NotFoundException('Reserva no encontrada');
-
-    const error = getOpenAccountError(reservation);
-    if (error) throw new ConflictException(error);
-
-    const account = AccountModel.open(reservation, paymentMethod, userId, now);
-    const inserted = await this.accountRepository.insert(account);
+    const inserted = await this.accountRepository.insert(
+      reservationId,
+      (reservation) => {
+        const error = getOpenAccountError(reservation);
+        if (error) throw new ConflictException(error);
+        return AccountModel.open(reservation, paymentMethod, userId, now);
+      },
+    );
+    if (inserted === null) throw new NotFoundException('Reserva no encontrada');
     if (!inserted) {
       throw new ConflictException('La cuenta de esta reserva ya está abierta');
     }
@@ -93,6 +98,7 @@ export class AccountService {
         origin: AccountEntryOrigin.RECEPTION,
         paymentMethod: data.paymentMethod,
         reference: data.reference,
+        operationId: data.operationId,
       },
       author,
       now,
@@ -115,6 +121,7 @@ export class AccountService {
         description: data.reason,
         origin: AccountEntryOrigin.RECEPTION,
         paymentMethod: data.paymentMethod,
+        operationId: data.operationId,
       },
       author,
       now,
@@ -151,9 +158,16 @@ export class AccountService {
     author: EntryAuthor,
     now: Date = new Date(),
   ): Promise<AccountEntryModel> {
-    const entry = await this.accountRepository.appendEntry(
-      reservationId,
-      (account) => {
+    const entry = await this.accountRepository
+      .appendEntry(reservationId, (account) => {
+        // va primero: el reintento de un pago que canceló el saldo ya no pasaría el tope
+        const retried = account.findByOperationId(data.operationId);
+        if (retried) {
+          const reused = retried.getRetryError(data);
+          if (reused) throw new ConflictException(reused);
+          return retried;
+        }
+
         const closed = account.getNewEntryError();
         if (closed) throw new ConflictException(closed);
 
@@ -169,8 +183,14 @@ export class AccountService {
         const exceeds = account.getAmountError(data.type, created.amount);
         if (exceeds) throw new BadRequestException(exceeds);
         return created;
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        // dentro de la cuenta el lock ya lo resuelve; esto es una clave usada en otra cuenta
+        if (error instanceof UniqueConstraintViolationException) {
+          throw new ConflictException(OPERATION_REUSED);
+        }
+        throw error;
+      });
     if (!entry) throw new NotFoundException(NO_ACCOUNT);
     return entry;
   }
