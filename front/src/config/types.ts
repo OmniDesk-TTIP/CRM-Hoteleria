@@ -833,3 +833,65 @@ export interface PromotionListFilters {
   page: number;
   pageSize: number;
 }
+
+/** US-26/US-32: cuenta corriente de una reserva. Espejo de los enums del back. */
+export type AccountStatus = 'OPEN' | 'CLOSED';
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MERCADO_PAGO';
+export type AccountEntryType = 'CHARGE' | 'PAYMENT' | 'CHARGE_REVERSAL' | 'PAYMENT_REVERSAL' | 'REFUND';
+export type AccountEntryOrigin = 'ROOM_SERVICE' | 'SPA' | 'RESTAURANT' | 'RECEPTION';
+
+export interface UserRef {
+  id: string;
+  fullName: string;
+}
+
+export interface AccountEntry {
+  id: string;
+  type: AccountEntryType;
+  amount: number;
+  description: string;
+  origin: AccountEntryOrigin;
+  sourceId: string | null;
+  reversesId: string | null;
+  /** true si otro movimiento ya lo anuló. */
+  reversed: boolean;
+  registeredAt: string;
+  /** Null cuando lo registró Chamber. */
+  registeredBy: UserRef | null;
+}
+
+export interface Account {
+  id: string;
+  status: AccountStatus;
+  stayBalanceAmount: number;
+  stayBalancePaymentMethod: PaymentMethod;
+  openedAt: string;
+  openedBy: UserRef;
+  closedAt: string | null;
+  totalCharges: number;
+  totalPayments: number;
+  /** Positivo: el huésped debe; negativo: tiene saldo a favor. */
+  balance: number;
+  /** Del más nuevo al más viejo. */
+  entries: AccountEntry[];
+}
+
+export interface ReservationAccount {
+  reservation: {
+    id: string;
+    status: ReservationStatus;
+    guestFullName: string;
+    guestDni: string;
+    roomNumber: string;
+    categoryName: string;
+    /** YYYY-MM-DD */
+    checkIn: string;
+    checkOut: string;
+    totalAmount: number;
+    depositAmount: number;
+    /** Resto de la estadía (total − seña): se cobra para abrir la cuenta. */
+    stayBalance: number;
+  };
+  /** Null hasta que se registra el pago del resto de la estadía. */
+  account: Account | null;
+}
