@@ -24,6 +24,7 @@ import { CampaignModule } from './modules/campaign/campaign.module';
 import { RoomServiceModule } from './modules/roomService/roomService.module';
 import { ArrivalMessageModule } from './modules/arrivalMessage/arrivalMessage.module';
 import { PromotionModule } from './modules/promotion/promotion.module';
+import { AccountModule } from './modules/account/account.module';
 import { GuestLanguageModule } from './modules/guestLanguage/guestLanguage.module';
 import { GuestLanguageService } from './modules/guestLanguage/guestLanguage.service';
 import { EvalModule } from './modules/eval/eval.module';
@@ -51,6 +52,7 @@ import { EvalModule } from './modules/eval/eval.module';
     RoomServiceModule,
     ArrivalMessageModule,
     PromotionModule,
+    AccountModule,
     TelegrafModule.forRootAsync({
       imports: [ConfigModule, GuestLanguageModule],
       useFactory: (

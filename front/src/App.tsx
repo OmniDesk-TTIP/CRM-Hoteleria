@@ -25,6 +25,7 @@ import ReviewsPage from '@/pages/admin/ReviewsPage';
 import CampaignsPage from '@/pages/admin/CampaignsPage';
 import PromotionsPage from '@/pages/admin/PromotionsPage';
 import RoomServiceOrdersPage from '@/pages/admin/RoomServiceOrdersPage';
+import ReservationAccountPage from '@/pages/admin/ReservationAccountPage';
 
 const RESERVATION_TABS: TabItem[] = [
   { to: '/admin/reservations', label: 'Habitaciones', end: true },
@@ -88,6 +89,8 @@ function App() {
                     </Route>
                     <Route path="refunds" element={<RefundsPage />} />
                   </Route>
+                  {/* US-32: cuenta corriente de una reserva, fuera de las pestañas */}
+                  <Route path="/admin/reservations/:reservationId/account" element={<ReservationAccountPage />} />
                   <Route
                     path="/admin/services"
                     element={<TabbedLayout tabs={SERVICE_TABS} maxWidth="max-w-6xl" />}

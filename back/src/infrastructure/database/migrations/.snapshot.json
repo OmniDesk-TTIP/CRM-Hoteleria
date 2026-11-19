@@ -5,6 +5,635 @@
   ],
   "tables": [
     {
+      "name": "account_entries",
+      "schema": "public",
+      "columns": {
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric(12,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 12,
+          "scale": 2,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "decimal"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "description": {
+          "name": "description",
+          "type": "varchar(200)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 200,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "ROOM_SERVICE",
+            "SPA",
+            "RESTAURANT",
+            "RECEPTION"
+          ],
+          "mappedType": "enum"
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "CASH",
+            "CARD",
+            "TRANSFER",
+            "MERCADO_PAGO"
+          ],
+          "mappedType": "enum"
+        },
+        "reference": {
+          "name": "reference",
+          "type": "varchar(100)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 100,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "registered_at": {
+          "name": "registered_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "registered_by_id": {
+          "name": "registered_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "reverses_id": {
+          "name": "reverses_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "CHARGE",
+            "PAYMENT",
+            "CHARGE_REVERSAL",
+            "PAYMENT_REVERSAL",
+            "REFUND"
+          ],
+          "mappedType": "enum"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "account_id",
+            "registered_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "account_entries_account_id_registered_at_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "operation_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "account_entries_operation_id_unique",
+          "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "account_entries_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "reverses_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "account_entries_reverses_id_unique",
+          "primary": false,
+          "unique": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "account_entries_amount_check",
+          "expression": "amount > 0",
+          "definition": "CHECK ((amount > (0)::numeric))",
+          "columnName": "amount"
+        },
+        {
+          "name": "account_entries_origin_check",
+          "expression": "\"origin\" in ('ROOM_SERVICE', 'SPA', 'RESTAURANT', 'RECEPTION')",
+          "definition": "check (\"origin\" in ('ROOM_SERVICE', 'SPA', 'RESTAURANT', 'RECEPTION'))",
+          "columnName": "origin"
+        },
+        {
+          "name": "account_entries_payment_method_check",
+          "expression": "\"payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO')",
+          "definition": "check (\"payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO'))",
+          "columnName": "payment_method"
+        },
+        {
+          "name": "account_entries_type_check",
+          "expression": "\"type\" in ('CHARGE', 'PAYMENT', 'CHARGE_REVERSAL', 'PAYMENT_REVERSAL', 'REFUND')",
+          "definition": "check (\"type\" in ('CHARGE', 'PAYMENT', 'CHARGE_REVERSAL', 'PAYMENT_REVERSAL', 'REFUND'))",
+          "columnName": "type"
+        }
+      ],
+      "triggers": [],
+      "foreignKeys": {
+        "account_entries_account_id_foreign": {
+          "columnNames": [
+            "account_id"
+          ],
+          "constraintName": "account_entries_account_id_foreign",
+          "localTableName": "public.account_entries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.accounts"
+        },
+        "account_entries_registered_by_id_foreign": {
+          "columnNames": [
+            "registered_by_id"
+          ],
+          "constraintName": "account_entries_registered_by_id_foreign",
+          "localTableName": "public.account_entries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.users"
+        },
+        "account_entries_reverses_id_foreign": {
+          "columnNames": [
+            "reverses_id"
+          ],
+          "constraintName": "account_entries_reverses_id_foreign",
+          "localTableName": "public.account_entries",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.account_entries"
+        }
+      },
+      "comment": null
+    },
+    {
+      "name": "accounts",
+      "schema": "public",
+      "columns": {
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "opened_by_id": {
+          "name": "opened_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'OPEN'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "OPEN",
+            "CLOSED"
+          ],
+          "mappedType": "enum"
+        },
+        "stay_balance_amount": {
+          "name": "stay_balance_amount",
+          "type": "numeric(12,2)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": 12,
+          "scale": 2,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "decimal"
+        },
+        "stay_balance_payment_method": {
+          "name": "stay_balance_payment_method",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "CASH",
+            "CARD",
+            "TRANSFER",
+            "MERCADO_PAGO"
+          ],
+          "mappedType": "enum"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "accounts_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "reservation_id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "accounts_reservation_id_unique",
+          "primary": false,
+          "unique": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "accounts_status_check",
+          "expression": "\"status\" in ('OPEN', 'CLOSED')",
+          "definition": "check (\"status\" in ('OPEN', 'CLOSED'))",
+          "columnName": "status"
+        },
+        {
+          "name": "accounts_stay_balance_payment_method_check",
+          "expression": "\"stay_balance_payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO')",
+          "definition": "check (\"stay_balance_payment_method\" in ('CASH', 'CARD', 'TRANSFER', 'MERCADO_PAGO'))",
+          "columnName": "stay_balance_payment_method"
+        }
+      ],
+      "triggers": [],
+      "foreignKeys": {
+        "accounts_opened_by_id_foreign": {
+          "columnNames": [
+            "opened_by_id"
+          ],
+          "constraintName": "accounts_opened_by_id_foreign",
+          "localTableName": "public.accounts",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.users"
+        },
+        "accounts_reservation_id_foreign": {
+          "columnNames": [
+            "reservation_id"
+          ],
+          "constraintName": "accounts_reservation_id_foreign",
+          "localTableName": "public.accounts",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.reservations"
+        }
+      },
+      "comment": null
+    },
+    {
       "name": "arrival_messages",
       "schema": "public",
       "columns": {
@@ -1251,6 +1880,26 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'es'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "es",
+            "en"
+          ],
+          "mappedType": "enum"
+        },
         "last_message_at": {
           "name": "last_message_at",
           "type": "timestamptz(6)",
@@ -1413,26 +2062,6 @@
           "enumItems": [],
           "mappedType": "integer"
         },
-        "language": {
-          "name": "language",
-          "type": "text",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "'es'",
-          "comment": null,
-          "collation": null,
-          "enumItems": [
-            "es",
-            "en"
-          ],
-          "mappedType": "enum"
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp(6)",
@@ -1492,6 +2121,12 @@
           "columnName": "handover_reason"
         },
         {
+          "name": "chat_sessions_language_check",
+          "expression": "\"language\" in ('es', 'en')",
+          "definition": "check (\"language\" in ('es', 'en'))",
+          "columnName": "language"
+        },
+        {
           "name": "chat_sessions_last_message_role_check",
           "expression": "\"last_message_role\" in ('USER', 'BOT', 'SYSTEM', 'OPERATOR')",
           "definition": "check (\"last_message_role\" in ('USER', 'BOT', 'SYSTEM', 'OPERATOR'))",
@@ -1502,12 +2137,6 @@
           "expression": "\"status\" in ('BOT', 'WAITING_HUMAN', 'HUMAN')",
           "definition": "check (\"status\" in ('BOT', 'WAITING_HUMAN', 'HUMAN'))",
           "columnName": "status"
-        },
-        {
-          "name": "chat_sessions_language_check",
-          "expression": "\"language\" in ('es', 'en')",
-          "definition": "check (\"language\" in ('es', 'en'))",
-          "columnName": "language"
         }
       ],
       "triggers": [],
@@ -2488,6 +3117,23 @@
           "enumItems": [],
           "mappedType": "decimal"
         },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "guest_count": {
           "name": "guest_count",
           "type": "int",
@@ -2678,6 +3324,23 @@
           "enumItems": [],
           "mappedType": "string"
         },
+        "recovery_answered_at": {
+          "name": "recovery_answered_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "refund_account_alias": {
           "name": "refund_account_alias",
           "type": "varchar(20)",
@@ -2783,6 +3446,23 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "reminder_sent_at": {
+          "name": "reminder_sent_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "room_id": {
           "name": "room_id",
           "type": "uuid",
@@ -2858,57 +3538,6 @@
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "collation": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "collation": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "recovery_answered_at": {
-          "name": "recovery_answered_at",
-          "type": "timestamp(6)",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": true,
-          "unique": false,
-          "length": 6,
-          "precision": null,
-          "scale": null,
-          "default": null,
-          "comment": null,
-          "collation": null,
-          "enumItems": [],
-          "mappedType": "datetime"
-        },
-        "reminder_sent_at": {
-          "name": "reminder_sent_at",
           "type": "timestamp(6)",
           "unsigned": false,
           "autoincrement": false,
