@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getReservationAccount, openReservationAccount } from '@/services/account.service';
-import type { AccountEntryOrigin, AccountEntryType, PaymentMethod, ReservationAccount } from '@/config/types';
+import {
+  getReservationAccount,
+  openReservationAccount,
+  registerAccountCharge,
+  reverseAccountCharge,
+} from '@/services/account.service';
+import type {
+  AccountEntry,
+  AccountEntryOrigin,
+  AccountEntryType,
+  ManualChargeData,
+  PaymentMethod,
+  ReservationAccount,
+} from '@/config/types';
+import { useAuth } from '@/context/auth.context';
 import AccountSummary from '@/components/account/AccountSummary';
 import AccountEntriesTable from '@/components/account/AccountEntriesTable';
 import OpenAccountCard from '@/components/account/OpenAccountCard';
+import AddChargeModal from '@/components/account/AddChargeModal';
+import ReverseChargeModal from '@/components/account/ReverseChargeModal';
 import { ENTRY_ORIGIN_LABELS, ENTRY_TYPE_LABELS } from '@/components/account/accountFormat';
 import { formatIsoDay } from '@/components/admin/spaFormat';
 
@@ -25,6 +40,10 @@ export default function ReservationAccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('ALL');
+  const [isAddingCharge, setIsAddingCharge] = useState(false);
+  const [reversing, setReversing] = useState<AccountEntry | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   // Reserva que la página muestra ahora: una respuesta que llega después de cambiar de reserva
   // (o de salir de la página) se descarta en vez de pisar los datos de la nueva.
@@ -61,6 +80,20 @@ export default function ReservationAccountPage() {
     if (activeReservationRef.current === reservationId) setData(result);
   };
 
+  // los modales muestran el error si falla: acá solo se cierra el modal cuando salió bien
+  const handleAddCharge = async (charge: ManualChargeData) => {
+    const result = await registerAccountCharge(reservationId, charge);
+    if (activeReservationRef.current === reservationId) setData(result);
+    setIsAddingCharge(false);
+  };
+
+  const handleReverse = async (reason: string) => {
+    if (!reversing) return;
+    const result = await reverseAccountCharge(reservationId, reversing.id, reason);
+    if (activeReservationRef.current === reservationId) setData(result);
+    setReversing(null);
+  };
+
   const entries = useMemo(
     () =>
       (data?.account?.entries ?? []).filter(
@@ -73,6 +106,7 @@ export default function ReservationAccountPage() {
 
   const reservation = data?.reservation;
   const account = data?.account;
+  const isOpen = account?.status === 'OPEN';
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 md:space-y-6 md:p-6">
@@ -113,8 +147,19 @@ export default function ReservationAccountPage() {
 
           <section className="overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
             <div className="flex flex-col gap-3 border-b border-goldLight/10 p-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
-              <h2 className="text-lg font-semibold text-text">Movimientos</h2>
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-text">Movimientos</h2>
+                {isOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCharge(true)}
+                    className="rounded-xl bg-gold px-4 py-2 text-sm font-medium text-shell transition hover:bg-goldLight motion-reduce:transition-none sm:hidden"
+                  >
+                    + Cargar consumo
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="flex flex-col gap-1 text-sm text-textMuted">
                   Tipo
                   <select
@@ -145,12 +190,31 @@ export default function ReservationAccountPage() {
                     ))}
                   </select>
                 </label>
+                {isOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCharge(true)}
+                    className="hidden rounded-xl bg-gold px-4 py-2 text-sm font-medium text-shell transition hover:bg-goldLight motion-reduce:transition-none sm:block"
+                  >
+                    + Cargar consumo
+                  </button>
+                )}
               </div>
             </div>
 
-            <AccountEntriesTable entries={entries} hasAnyEntry={account.entries.length > 0} />
+            <AccountEntriesTable
+              entries={entries}
+              hasAnyEntry={account.entries.length > 0}
+              onReverse={isAdmin && isOpen ? setReversing : undefined}
+            />
           </section>
         </>
+      )}
+
+      {isAddingCharge && <AddChargeModal onClose={() => setIsAddingCharge(false)} onSubmit={handleAddCharge} />}
+
+      {reversing && (
+        <ReverseChargeModal entry={reversing} onClose={() => setReversing(null)} onSubmit={handleReverse} />
       )}
     </div>
   );

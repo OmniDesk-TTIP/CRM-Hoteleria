@@ -56,7 +56,7 @@ export class AccountController {
     });
   }
 
-  /** US-27: consumo del restó o de recepción cargado a mano. Devuelve la cuenta actualizada. */
+  /** US-27: consumo del restó, el bar o recepción cargado a mano. Devuelve la cuenta actualizada. */
   @Post('charges')
   registerCharge(
     @Param('reservationId', ParseUUIDPipe) reservationId: string,

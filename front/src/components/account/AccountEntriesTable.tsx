@@ -5,6 +5,7 @@ import {
   ENTRY_TYPE_LABELS,
   formatEntryDateTime,
   formatSignedAmount,
+  isReversibleCharge,
 } from './accountFormat';
 
 const authorName = (entry: AccountEntry) => entry.registeredBy?.fullName ?? 'Chamber';
@@ -21,13 +22,20 @@ function ReversedBadge({ entry }: { entry: AccountEntry }) {
   );
 }
 
+const reverseButtonClasses =
+  'rounded-full border border-danger/40 px-3 py-1 text-xs font-medium text-dangerText transition hover:bg-danger/10 motion-reduce:transition-none';
+
 interface AccountEntriesTableProps {
   entries: AccountEntry[];
   /** Si hay movimientos pero ninguno pasa los filtros, el mensaje cambia. */
   hasAnyEntry: boolean;
+  /** US-27: solo para administradores con la cuenta abierta; sin esto no hay columna de acciones. */
+  onReverse?: (entry: AccountEntry) => void;
 }
 
-export default function AccountEntriesTable({ entries, hasAnyEntry }: AccountEntriesTableProps) {
+export default function AccountEntriesTable({ entries, hasAnyEntry, onReverse }: AccountEntriesTableProps) {
+  const canReverse = (entry: AccountEntry) => !!onReverse && isReversibleCharge(entry);
+  const columns = onReverse ? 7 : 6;
   const emptyMessage = hasAnyEntry
     ? 'No hay movimientos para los filtros seleccionados.'
     : 'Todavía no hay movimientos en esta cuenta.';
@@ -44,12 +52,13 @@ export default function AccountEntriesTable({ entries, hasAnyEntry }: AccountEnt
               <th className="px-4 py-3 font-medium sm:px-5">Origen</th>
               <th className="px-4 py-3 text-right font-medium sm:px-5">Monto</th>
               <th className="px-4 py-3 font-medium sm:px-5">Registró</th>
+              {onReverse && <th className="px-4 py-3 text-right font-medium sm:px-5">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-goldLight/10">
             {entries.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-textMuted">
+                <td colSpan={columns} className="px-5 py-10 text-center text-textMuted">
                   {emptyMessage}
                 </td>
               </tr>
@@ -70,6 +79,15 @@ export default function AccountEntriesTable({ entries, hasAnyEntry }: AccountEnt
                   {formatSignedAmount(entry.type, entry.amount)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-textMuted sm:px-5">{authorName(entry)}</td>
+                {onReverse && (
+                  <td className="px-4 py-3 text-right sm:px-5">
+                    {canReverse(entry) && (
+                      <button type="button" onClick={() => onReverse(entry)} className={reverseButtonClasses}>
+                        Anular
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -99,6 +117,15 @@ export default function AccountEntriesTable({ entries, hasAnyEntry }: AccountEnt
                     {formatEntryDateTime(entry.registeredAt)} · {authorName(entry)}
                   </span>
                   <ReversedBadge entry={entry} />
+                  {canReverse(entry) && (
+                    <button
+                      type="button"
+                      onClick={() => onReverse?.(entry)}
+                      className={`${reverseButtonClasses} ml-auto`}
+                    >
+                      Anular
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

@@ -568,6 +568,12 @@ describe('AccountModel', () => {
         'Lavandería',
         'Recepción: Lavandería',
       ],
+      [
+        AccountEntryOrigin.BAR,
+        '88',
+        '2 tragos',
+        'Bar: ticket N° 88 · 2 tragos',
+      ],
     ] as const)(
       '%s con ticket %s y detalle %s queda como "%s"',
       (origin, ticketNumber, detail, expected) => {
@@ -589,7 +595,7 @@ describe('AccountModel', () => {
       );
     });
 
-    it('en recepción el detalle es obligatorio; en el restó no', () => {
+    it('en recepción el detalle es obligatorio; en el restó y el bar no', () => {
       expect(getManualChargeError(AccountEntryOrigin.RECEPTION, '  ')).toMatch(
         /qué se está cobrando/,
       );
@@ -599,11 +605,13 @@ describe('AccountModel', () => {
       expect(
         getManualChargeError(AccountEntryOrigin.RESTAURANT, null),
       ).toBeNull();
+      expect(getManualChargeError(AccountEntryOrigin.BAR, null)).toBeNull();
     });
 
     it.each([
       [AccountEntryOrigin.RESTAURANT, true],
       [AccountEntryOrigin.RECEPTION, true],
+      [AccountEntryOrigin.BAR, true],
       [AccountEntryOrigin.ROOM_SERVICE, false],
       [AccountEntryOrigin.SPA, false],
     ])('%s se carga a mano: %s', (origin, expected) => {

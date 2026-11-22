@@ -37,6 +37,7 @@ const REVERSAL_TYPE: Partial<Record<AccountEntryType, AccountEntryType>> = {
  */
 export const MANUAL_CHARGE_ORIGINS = [
   AccountEntryOrigin.RESTAURANT,
+  AccountEntryOrigin.BAR,
   AccountEntryOrigin.RECEPTION,
 ] as const;
 export type ManualChargeOrigin = (typeof MANUAL_CHARGE_ORIGINS)[number];
@@ -46,6 +47,7 @@ export const MAX_CHARGE_DETAIL_LENGTH = 140;
 
 const MANUAL_CHARGE_LABELS: Record<ManualChargeOrigin, string> = {
   [AccountEntryOrigin.RESTAURANT]: 'Restó',
+  [AccountEntryOrigin.BAR]: 'Bar',
   [AccountEntryOrigin.RECEPTION]: 'Recepción',
 };
 
@@ -70,7 +72,7 @@ export function manualChargeDescription(
   return `${MANUAL_CHARGE_LABELS[origin]}: ${parts.length ? parts.join(' · ') : 'consumo'}`;
 }
 
-/** El restó se identifica con el ticket; en recepción hay que decir qué se cobra. */
+/** El restó y el bar se identifican con el ticket; en recepción hay que decir qué se cobra. */
 export function getManualChargeError(
   origin: ManualChargeOrigin,
   detail?: string | null,

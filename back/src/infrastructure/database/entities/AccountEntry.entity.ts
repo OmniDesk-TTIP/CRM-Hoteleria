@@ -25,6 +25,7 @@ export enum AccountEntryOrigin {
   ROOM_SERVICE = 'ROOM_SERVICE',
   SPA = 'SPA',
   RESTAURANT = 'RESTAURANT',
+  BAR = 'BAR',
   RECEPTION = 'RECEPTION',
 }
 

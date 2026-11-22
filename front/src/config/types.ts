@@ -838,7 +838,7 @@ export interface PromotionListFilters {
 export type AccountStatus = 'OPEN' | 'CLOSED';
 export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MERCADO_PAGO';
 export type AccountEntryType = 'CHARGE' | 'PAYMENT' | 'CHARGE_REVERSAL' | 'PAYMENT_REVERSAL' | 'REFUND';
-export type AccountEntryOrigin = 'ROOM_SERVICE' | 'SPA' | 'RESTAURANT' | 'RECEPTION';
+export type AccountEntryOrigin = 'ROOM_SERVICE' | 'SPA' | 'RESTAURANT' | 'BAR' | 'RECEPTION';
 
 export interface UserRef {
   id: string;
@@ -852,6 +852,10 @@ export interface AccountEntry {
   description: string;
   origin: AccountEntryOrigin;
   sourceId: string | null;
+  /** Solo en pagos, reintegros y anulaciones de pagos. */
+  paymentMethod: PaymentMethod | null;
+  /** Número de operación o de cupón del pago, si se cargó. */
+  reference: string | null;
   reversesId: string | null;
   /** true si otro movimiento ya lo anuló. */
   reversed: boolean;
@@ -894,4 +898,16 @@ export interface ReservationAccount {
   };
   /** Null hasta que se registra el pago del resto de la estadía. */
   account: Account | null;
+}
+
+/** US-27: orígenes de los consumos que se cargan a mano desde la cuenta. */
+export type ManualChargeOrigin = Extract<AccountEntryOrigin, 'RESTAURANT' | 'BAR' | 'RECEPTION'>;
+
+export interface ManualChargeData {
+  /** Clave de idempotencia: la genera el formulario, así un doble envío no carga dos veces. */
+  operationId: string;
+  origin: ManualChargeOrigin;
+  amount: number;
+  ticketNumber?: string;
+  detail?: string;
 }

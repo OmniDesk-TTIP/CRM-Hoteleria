@@ -42,7 +42,7 @@ export interface PaymentData {
   reference?: string | null;
 }
 
-/** US-27: consumo cargado a mano desde la cuenta (restó o recepción). */
+/** US-27: consumo cargado a mano desde la cuenta (restó, bar o recepción). */
 export interface ChargeData {
   /** Clave de idempotencia que genera el panel por cada cargo confirmado. */
   operationId: string;
@@ -269,7 +269,7 @@ export class AccountService {
     return this.appendReversal(reservationId, entryId, reason, author, now);
   }
 
-  /** US-27: carga un consumo del restó o de recepción y devuelve la cuenta actualizada. */
+  /** US-27: carga un consumo del restó, el bar o recepción y devuelve la cuenta actualizada. */
   async registerCharge(
     reservationId: string,
     data: ChargeData,

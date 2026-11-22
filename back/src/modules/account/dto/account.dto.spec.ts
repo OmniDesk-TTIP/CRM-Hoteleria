@@ -147,11 +147,11 @@ describe('DTO de consumos cargados a mano (US-27)', () => {
   it.each([
     [
       { operationId: OPERATION_ID, origin: 'ROOM_SERVICE', amount: 100 },
-      /RESTAURANT o RECEPTION/,
+      /RESTAURANT, BAR o RECEPTION/,
     ],
     [
       { operationId: OPERATION_ID, origin: 'SPA', amount: 100 },
-      /RESTAURANT o RECEPTION/,
+      /RESTAURANT, BAR o RECEPTION/,
     ],
     [
       { operationId: OPERATION_ID, origin: 'RESTAURANT', amount: 0 },

@@ -69,10 +69,10 @@ class MoneyMovementDto extends OperationAmountDto {
   paymentMethod!: PaymentMethod;
 }
 
-/** Body de `POST /reservations/:id/account/charges` (US-27): un consumo del restó o de recepción. */
+/** Body de `POST /reservations/:id/account/charges` (US-27): un consumo del restó, el bar o recepción. */
 export class RegisterChargeDto extends OperationAmountDto {
   @IsIn(MANUAL_CHARGE_ORIGINS, {
-    message: 'El origen del consumo debe ser RESTAURANT o RECEPTION',
+    message: 'El origen del consumo debe ser RESTAURANT, BAR o RECEPTION',
   })
   origin!: ManualChargeOrigin;
 
