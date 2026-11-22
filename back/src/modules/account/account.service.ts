@@ -38,6 +38,12 @@ export interface PaymentData {
   reference?: string | null;
 }
 
+/** De qué consumo es un cargo: su origen y el pedido, turno o mesa que lo generó. */
+export interface ChargeSource {
+  origin: AccountEntryOrigin;
+  sourceId: string;
+}
+
 export interface RefundData {
   /** Clave de idempotencia que genera el panel por cada reintegro confirmado. */
   operationId: string;
@@ -250,7 +256,34 @@ export class AccountService {
     return this.appendReversal(reservationId, entryId, reason, author, now);
   }
 
-  /** `expectedType` limita qué se puede anular (por ejemplo, solo pagos). */
+  /**
+   * US-27: anula un cargo de un consumo puntual (por ejemplo, el ticket de una mesa del restó).
+   * Solo encuentra cargos de ese origen y esa referencia: no sirve para anular otro consumo.
+   */
+  async reverseCharge(
+    reservationId: string,
+    entryId: string,
+    reason: string,
+    author: EntryAuthor,
+    source: ChargeSource,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    await this.appendReversal(
+      reservationId,
+      entryId,
+      reason,
+      author,
+      now,
+      AccountEntryType.CHARGE,
+      source,
+    );
+    return this.getForReservation(reservationId);
+  }
+
+  /**
+   * `expectedType` limita qué se puede anular (por ejemplo, solo pagos) y `source`, de qué
+   * consumo.
+   */
   private async appendReversal(
     reservationId: string,
     entryId: string,
@@ -258,17 +291,26 @@ export class AccountService {
     author: EntryAuthor,
     now: Date,
     expectedType?: AccountEntryType,
+    source?: ChargeSource,
   ): Promise<AccountEntryModel> {
     try {
       const reversal = await this.accountRepository.appendEntry(
         reservationId,
         (account) => {
           const original = account.findEntry(entryId);
-          if (!original || (expectedType && original.type !== expectedType)) {
+          const matches =
+            original &&
+            (!expectedType || original.type === expectedType) &&
+            (!source ||
+              (original.origin === source.origin &&
+                original.sourceId === source.sourceId));
+          if (!original || !matches) {
             throw new NotFoundException(
-              expectedType === AccountEntryType.PAYMENT
-                ? 'El pago no pertenece a esta cuenta'
-                : 'El movimiento no pertenece a esta cuenta',
+              source
+                ? 'El cargo no pertenece a este consumo'
+                : expectedType === AccountEntryType.PAYMENT
+                  ? 'El pago no pertenece a esta cuenta'
+                  : 'El movimiento no pertenece a esta cuenta',
             );
           }
           const error = account.getReversalError(entryId);
