@@ -66,17 +66,47 @@ nuevo que se suma en `tests:` de `promptfooconfig.yaml`:
       metric: correctitud
 ```
 
+### Huésped alojado y botones (US-27)
+
+Por defecto cada caso es un huésped nuevo, sin reservas. Con la variable `huesped` arranca alojado:
+
+| `huesped` | Qué crea antes de la conversación |
+|---|---|
+| `alojado` | Una reserva confirmada de ayer a pasado mañana (sin cuenta corriente) |
+| `alojado con cuenta` | Lo mismo, con la cuenta corriente abierta (la abre el primer admin de la base) |
+
+Una línea de `mensajes` con la forma `[botón] Etiqueta` toca ese botón de la respuesta anterior,
+como lo haría el huésped (por ahora, los botones de room service). El botón no queda en el
+historial del chat.
+
+```yaml
+- description: 'Room service: cargar a la habitación'
+  vars:
+    huesped: alojado con cuenta
+    mensajes: |
+      Quiero pedir por room service una unidad del primer plato de la carta
+      [botón] Cargar a la habitación
+  assert:
+    - type: javascript
+      value: context.metadata.state.account.entries.some((entry) => entry.type === 'CHARGE')
+      metric: accion
+```
+
+Los casos de room service necesitan el room service habilitado y en horario, con platos en la
+carta. La reserva de la eval ocupa una habitación: no corras las evals sobre datos que te importen.
+
 Qué hay en `context.metadata` (lo que devuelve el endpoint):
 
 | Campo | Qué es |
 |---|---|
 | `final.reply` | Última respuesta del bot (también es el `output`) |
-| `final.action` | Acción que eligió Gemini: `REPLY`, `SEARCH_AVAILABILITY`, `SEND_MENU_PDF`... |
+| `final.action` | Acción que eligió Gemini: `REPLY`, `SEARCH_AVAILABILITY`, `SEND_MENU_PDF`... (`BUTTON` si se tocó un botón) |
 | `final.kind` | `reply`, `handover`, `muted`, `discarded` o `error` |
 | `final.buttons` / `final.document` | Botones y PDF que se mandaron |
 | `turns[]` | Lo mismo para cada mensaje, con `latencyMs` |
 | `state.chatStatus` | `BOT`, `WAITING_HUMAN` o `HUMAN` |
 | `state.activeBooking` | Reserva en curso (`step`, `checkIn`, `checkOut`, `capacity`) o `null` |
+| `state.account` | Con `huesped`: saldo (`balance`) y movimientos (`type`, `origin`, `amount`) de la cuenta, o `null` |
 
 Preferí siempre las aserciones sin tokens (`icontains`, `javascript`) y usá `llm-rubric` solo
 para lo que no se puede chequear con código (tono, si inventó algo, idioma).

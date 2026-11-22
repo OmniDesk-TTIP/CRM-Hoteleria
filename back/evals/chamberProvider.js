@@ -25,6 +25,14 @@ class ChamberProvider {
       return { error: 'El caso no tiene `mensajes`' };
     }
 
+    // US-27: `huesped` arma al huésped antes de la conversación.
+    //   alojado            → estadía confirmada que incluye hoy, sin cuenta corriente
+    //   alojado con cuenta → además con la cuenta corriente abierta
+    const huesped = String(context?.vars?.huesped ?? '').trim().toLowerCase();
+    if (huesped && !['alojado', 'alojado con cuenta'].includes(huesped)) {
+      return { error: `huesped "${huesped}" no es "alojado" ni "alojado con cuenta"` };
+    }
+
     const baseUrl = process.env.EVAL_BASE_URL || 'http://localhost:3000';
     let response;
     try {
@@ -34,7 +42,11 @@ class ChamberProvider {
           'Content-Type': 'application/json',
           'x-eval-key': process.env.EVAL_API_KEY || '',
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({
+          messages,
+          stay: huesped === 'alojado',
+          account: huesped === 'alojado con cuenta',
+        }),
       });
     } catch (error) {
       return {
