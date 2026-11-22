@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
+  checkoutReservation,
   getReservationAccount,
   openReservationAccount,
   registerAccountCharge,
@@ -23,6 +24,8 @@ import OpenAccountCard from '@/components/account/OpenAccountCard';
 import AddChargeModal from '@/components/account/AddChargeModal';
 import ReverseChargeModal from '@/components/account/ReverseChargeModal';
 import CollectPaymentModal from '@/components/account/CollectPaymentModal';
+import CheckoutModal from '@/components/account/CheckoutModal';
+import { formatEntryDateTime } from '@/components/account/accountFormat';
 import { ENTRY_ORIGIN_LABELS, ENTRY_TYPE_LABELS } from '@/components/account/accountFormat';
 import { formatIsoDay } from '@/components/admin/spaFormat';
 
@@ -45,6 +48,7 @@ export default function ReservationAccountPage() {
   const [originFilter, setOriginFilter] = useState<OriginFilter>('ALL');
   const [isAddingCharge, setIsAddingCharge] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [reversing, setReversing] = useState<AccountEntry | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
@@ -97,6 +101,15 @@ export default function ReservationAccountPage() {
     setIsCollecting(false);
   };
 
+  const handleCheckout = async (force: boolean) => {
+    const result = await checkoutReservation(reservationId, force);
+    if (result.ok) {
+      if (activeReservationRef.current === reservationId) setData(result.account);
+      setIsCheckingOut(false);
+    }
+    return result;
+  };
+
   const handleReverse = async (reason: string) => {
     if (!reversing) return;
     const result = await reverseAccountCharge(reservationId, reversing.id, reason);
@@ -117,6 +130,7 @@ export default function ReservationAccountPage() {
   const reservation = data?.reservation;
   const account = data?.account;
   const isOpen = account?.status === 'OPEN';
+  const canCheckout = isOpen && !reservation?.checkedOutAt;
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 md:space-y-6 md:p-6">
@@ -127,7 +141,18 @@ export default function ReservationAccountPage() {
         >
           ← Volver a reservas
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-text">Cuenta corriente</h1>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold text-text">Cuenta corriente</h1>
+          {!isLoading && !error && canCheckout && (
+            <button
+              type="button"
+              onClick={() => setIsCheckingOut(true)}
+              className="rounded-xl border border-goldLight/30 px-4 py-2 text-sm font-medium text-goldLight transition hover:bg-goldLight/10 motion-reduce:transition-none"
+            >
+              Hacer checkout
+            </button>
+          )}
+        </div>
         {reservation && (
           <p className="text-sm text-textMuted">
             {reservation.guestFullName} · DNI {reservation.guestDni} · {reservation.categoryName} · Hab.{' '}
@@ -149,6 +174,14 @@ export default function ReservationAccountPage() {
 
       {!isLoading && !error && reservation && !account && (
         <OpenAccountCard reservation={reservation} onOpen={handleOpen} />
+      )}
+
+      {!isLoading && !error && reservation?.checkedOutAt && (
+        <div role="status" className="rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-successText">
+          Checkout hecho el {formatEntryDateTime(reservation.checkedOutAt)}
+          {reservation.checkedOutByName ? ` por ${reservation.checkedOutByName}` : ''}. La estadía está finalizada y la
+          cuenta, cerrada.
+        </div>
       )}
 
       {!isLoading && !error && account && (
@@ -228,6 +261,19 @@ export default function ReservationAccountPage() {
           balance={account.balance}
           onClose={() => setIsCollecting(false)}
           onSubmit={handleCollect}
+        />
+      )}
+
+      {isCheckingOut && reservation && (
+        <CheckoutModal
+          guestFullName={reservation.guestFullName}
+          roomNumber={reservation.roomNumber}
+          onCheckout={handleCheckout}
+          onClose={() => setIsCheckingOut(false)}
+          onCollect={() => {
+            setIsCheckingOut(false);
+            setIsCollecting(true);
+          }}
         />
       )}
 

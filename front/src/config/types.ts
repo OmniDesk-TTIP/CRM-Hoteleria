@@ -895,6 +895,9 @@ export interface ReservationAccount {
     depositAmount: number;
     /** Resto de la estadía (total − seña): se cobra para abrir la cuenta. */
     stayBalance: number;
+    /** US-30: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
+    checkedOutAt: string | null;
+    checkedOutByName: string | null;
   };
   /** Null hasta que se registra el pago del resto de la estadía. */
   account: Account | null;
@@ -921,3 +924,21 @@ export interface AccountPaymentData {
   /** Número de cupón del posnet o de la operación. */
   reference?: string;
 }
+
+/** US-30: consumo todavía en curso que el checkout avisa (room service o turno de spa). */
+export interface CheckoutActiveService {
+  kind: 'ROOM_SERVICE' | 'SPA';
+  id: string;
+  description: string;
+}
+
+/** Por qué el back rechazó el checkout (409). */
+export type CheckoutBlock =
+  | {
+      code: 'CHECKOUT_NOT_CONFIRMED' | 'CHECKOUT_ALREADY_DONE' | 'CHECKOUT_NO_ACCOUNT';
+      message: string;
+    }
+  | { code: 'CHECKOUT_PENDING_BALANCE'; message: string; balance: number }
+  | { code: 'CHECKOUT_ACTIVE_SERVICES'; message: string; activeServices: CheckoutActiveService[] };
+
+export type CheckoutResult = { ok: true; account: ReservationAccount } | { ok: false; block: CheckoutBlock };

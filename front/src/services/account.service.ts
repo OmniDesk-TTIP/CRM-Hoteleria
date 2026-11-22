@@ -1,5 +1,13 @@
+import { isAxiosError } from 'axios';
 import apiClient from '@/config/api';
-import type { AccountPaymentData, ManualChargeData, PaymentMethod, ReservationAccount } from '@/config/types';
+import type {
+  AccountPaymentData,
+  CheckoutBlock,
+  CheckoutResult,
+  ManualChargeData,
+  PaymentMethod,
+  ReservationAccount,
+} from '@/config/types';
 
 export const getReservationAccount = async (reservationId: string): Promise<ReservationAccount> => {
   const { data } = await apiClient.get<ReservationAccount>(`/reservations/${reservationId}/account`);
@@ -46,4 +54,29 @@ export const registerAccountPayment = async (
 ): Promise<ReservationAccount> => {
   const { data } = await apiClient.post<ReservationAccount>(`/reservations/${reservationId}/account/payments`, payment);
   return data;
+};
+
+const isCheckoutBlock = (data: unknown): data is CheckoutBlock =>
+  typeof data === 'object' &&
+  data !== null &&
+  typeof (data as { code?: unknown }).code === 'string' &&
+  (data as { code: string }).code.startsWith('CHECKOUT_');
+
+/**
+ * US-30: hace el checkout. Si el back lo rechaza por una regla (saldo, consumos en curso, etc.)
+ * devuelve el motivo para que el panel lo muestre; cualquier otro error se propaga.
+ */
+export const checkoutReservation = async (reservationId: string, force = false): Promise<CheckoutResult> => {
+  try {
+    const { data } = await apiClient.post<ReservationAccount>(`/reservations/${reservationId}/account/checkout`, {
+      force,
+    });
+    return { ok: true, account: data };
+  } catch (error: unknown) {
+    const body: unknown = isAxiosError(error) ? error.response?.data : undefined;
+    if (isAxiosError(error) && error.response?.status === 409 && isCheckoutBlock(body)) {
+      return { ok: false, block: body };
+    }
+    throw error;
+  }
 };
