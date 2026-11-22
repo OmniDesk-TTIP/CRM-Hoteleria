@@ -10,6 +10,18 @@ import { AppModule } from '../../app.module';
 import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
 import { RoomServiceService } from './roomService.service';
+import { AccountService } from '../account/account.service';
+import {
+  Account,
+  AccountStatus,
+  PaymentMethod,
+} from '../../infrastructure/database/entities/Account.entity';
+import {
+  AccountEntry,
+  AccountEntryOrigin,
+  AccountEntryType,
+} from '../../infrastructure/database/entities/AccountEntry.entity';
+import { User } from '../../infrastructure/database/entities/User.entity';
 import {
   Room,
   RoomStatus,
@@ -67,6 +79,8 @@ describe('RoomServiceService (integración)', () => {
     RestaurantSettings,
     'roomServiceEnabled' | 'roomServiceOpensAt' | 'roomServiceClosesAt'
   > | null = null;
+
+  let receptionist: User | undefined;
 
   let coffee: RestaurantMenuItem;
   let burger: RestaurantMenuItem;
@@ -244,6 +258,18 @@ describe('RoomServiceService (integración)', () => {
 
   afterAll(async () => {
     try {
+      const accounts = await em.find(Account, {
+        reservation: { $in: reservationIds },
+      });
+      const accountIds = accounts.map((account) => account.id);
+      // primero las anulaciones: apuntan a otros movimientos
+      await em.nativeDelete(AccountEntry, {
+        account: { $in: accountIds },
+        reverses: { $ne: null },
+      });
+      await em.nativeDelete(AccountEntry, { account: { $in: accountIds } });
+      await em.nativeDelete(Account, { id: { $in: accountIds } });
+      if (receptionist) await em.nativeDelete(User, { id: receptionist.id });
       await em.nativeDelete(ChatMessage, {
         telegramUserId: { $in: clientIds },
       });
@@ -765,6 +791,213 @@ describe('RoomServiceService (integración)', () => {
         RoomServicePaymentStatus.PENDING,
       );
       expect(sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cuenta corriente (US-27)', () => {
+    const openAccount = async (reservationId: string) => {
+      if (!receptionist) {
+        receptionist = em.create(User, {
+          email: `recepcion-rs-${suffix}@test.local`,
+          passwordHash: 'hash',
+          fullName: 'Recepción Room Service',
+        });
+        em.persist(receptionist);
+        await em.flush();
+      }
+      return app
+        .get(AccountService)
+        .open(reservationId, PaymentMethod.CASH, receptionist.id, NOW);
+    };
+
+    const entriesOf = async (reservationId: string) => {
+      const account = await em
+        .fork()
+        .findOne(Account, { reservation: reservationId });
+      if (!account) return [];
+      return em
+        .fork()
+        .find(
+          AccountEntry,
+          { account: account.id },
+          { orderBy: { registeredAt: 'asc', id: 'asc' } },
+        );
+    };
+
+    // la hora de registro no sirve para ordenar acá: los cargos usan el NOW de 2099 y las
+    // cancelaciones la hora real, y los movimientos de la apertura comparten la misma
+    const typesOf = (entries: AccountEntry[]) =>
+      entries.map((entry) => entry.type).sort();
+
+    const balanceOf = async (reservationId: string) =>
+      (await app.get(AccountService).getForReservation(reservationId)).account
+        ?.balance;
+
+    const pay = async (orderId: string, paymentId: number) => {
+      getPayment.mockResolvedValue({
+        id: paymentId,
+        status: 'approved',
+        external_reference: orderId,
+      });
+      await service.confirmPayment(String(paymentId), 'webhook');
+    };
+
+    it('al confirmar el pedido genera el cargo con el detalle, registrado por Chamber', async () => {
+      const guest = await seedGuest();
+      await openAccount(guest.reservationId);
+
+      const orderId = await placeOrder(guest.telegramUserId);
+
+      const [charge, ...rest] = await entriesOf(guest.reservationId);
+      expect(rest).toHaveLength(0);
+      expect(charge).toMatchObject({
+        type: AccountEntryType.CHARGE,
+        origin: AccountEntryOrigin.ROOM_SERVICE,
+        sourceId: orderId,
+        description: `Room service: 2 x ${coffee.name}`,
+        registeredBy: null,
+      });
+      expect(Number(charge.amount)).toBe(3001);
+      expect(await balanceOf(guest.reservationId)).toBe(3001);
+    });
+
+    it('el pago con el link entra a la cuenta una sola vez aunque el webhook se repita', async () => {
+      const guest = await seedGuest();
+      await openAccount(guest.reservationId);
+      const orderId = await placeOrder(guest.telegramUserId);
+
+      await pay(orderId, 901);
+      await pay(orderId, 901);
+
+      const payments = (await entriesOf(guest.reservationId)).filter(
+        (entry) => entry.type === AccountEntryType.PAYMENT,
+      );
+      expect(payments).toHaveLength(1);
+      expect(payments[0]).toMatchObject({
+        paymentMethod: PaymentMethod.MERCADO_PAGO,
+        reference: '901',
+        sourceId: orderId,
+      });
+      expect(await balanceOf(guest.reservationId)).toBe(0);
+    });
+
+    it('si el huésped lo cancela, anula el cargo', async () => {
+      const guest = await seedGuest();
+      await openAccount(guest.reservationId);
+      const orderId = await placeOrder(guest.telegramUserId);
+
+      const result = await service.cancelOrder(guest.telegramUserId, orderId);
+
+      expect(result.ok).toBe(true);
+      expect(typesOf(await entriesOf(guest.reservationId))).toEqual([
+        AccountEntryType.CHARGE,
+        AccountEntryType.CHARGE_REVERSAL,
+      ]);
+      expect(await balanceOf(guest.reservationId)).toBe(0);
+    });
+
+    it('los cambios de estado del panel no repiten el cargo y la cancelación lo anula', async () => {
+      const guest = await seedGuest();
+      await openAccount(guest.reservationId);
+      const orderId = await placeOrder(guest.telegramUserId);
+
+      await service.changeStatus(
+        orderId,
+        RoomServiceOrderStatus.IN_PREPARATION,
+      );
+      await service.changeStatus(orderId, RoomServiceOrderStatus.CANCELLED);
+
+      expect(typesOf(await entriesOf(guest.reservationId))).toEqual([
+        AccountEntryType.CHARGE,
+        AccountEntryType.CHARGE_REVERSAL,
+      ]);
+    });
+
+    it('sin cuenta abierta el pedido se toma igual y no genera movimientos', async () => {
+      const guest = await seedGuest();
+
+      const orderId = await placeOrder(guest.telegramUserId);
+
+      expect((await rowById(orderId)).status).toBe(
+        RoomServiceOrderStatus.RECEIVED,
+      );
+      expect(await entriesOf(guest.reservationId)).toHaveLength(0);
+    });
+
+    it('una cuenta cerrada no recibe el cargo', async () => {
+      const guest = await seedGuest();
+      await openAccount(guest.reservationId);
+      await em
+        .fork()
+        .nativeUpdate(
+          Account,
+          { reservation: guest.reservationId },
+          { status: AccountStatus.CLOSED, closedAt: NOW },
+        );
+
+      await placeOrder(guest.telegramUserId);
+
+      expect(await entriesOf(guest.reservationId)).toHaveLength(0);
+    });
+
+    it('al abrir la cuenta trae los pedidos previos: pendientes como cargo y pagados como cargo más pago', async () => {
+      const guest = await seedGuest();
+      const pending = await placeOrder(guest.telegramUserId);
+      const paid = await placeOrder(guest.telegramUserId);
+      await pay(paid, 902);
+      const cancelled = await placeOrder(guest.telegramUserId);
+      await service.cancelOrder(guest.telegramUserId, cancelled);
+
+      const { account } = await openAccount(guest.reservationId);
+
+      const entries = await entriesOf(guest.reservationId);
+      expect(
+        entries.map((entry) => `${entry.sourceId}:${entry.type}`).sort(),
+      ).toEqual(
+        [
+          `${pending}:${AccountEntryType.CHARGE}`,
+          `${paid}:${AccountEntryType.CHARGE}`,
+          `${paid}:${AccountEntryType.PAYMENT}`,
+        ].sort(),
+      );
+      // lo que debe hoy según el paymentStatus de cada pedido
+      const owed = (await rowsOf(guest.telegramUserId))
+        .filter(
+          (row) =>
+            // el cast saca el `Opt` de MikroORM, que el lint no reconoce como el mismo enum
+            (row.status as RoomServiceOrderStatus) !==
+              RoomServiceOrderStatus.CANCELLED &&
+            (row.paymentStatus as RoomServicePaymentStatus) ===
+              RoomServicePaymentStatus.PENDING,
+        )
+        .reduce((total, row) => total + Number(row.total), 0);
+      expect(account?.balance).toBe(owed);
+
+      // un evento posterior del mismo pedido no lo vuelve a cargar
+      await service.changeStatus(
+        pending,
+        RoomServiceOrderStatus.IN_PREPARATION,
+      );
+      expect(await entriesOf(guest.reservationId)).toHaveLength(3);
+    });
+
+    it('abrir la cuenta mientras se confirma un pedido no lo pierde ni lo duplica', async () => {
+      const guest = await seedGuest();
+      const draft = await prepare(guest.telegramUserId, [
+        { menuItemId: coffee.id, quantity: 1 },
+      ]);
+      if (!draft.ok || !draft.orderId) throw new Error('No se armó el pedido');
+
+      await Promise.all([
+        service.confirmOrder(guest.telegramUserId, draft.orderId, NOW),
+        openAccount(guest.reservationId),
+      ]);
+
+      const charges = (await entriesOf(guest.reservationId)).filter(
+        (entry) => entry.type === AccountEntryType.CHARGE,
+      );
+      expect(charges).toHaveLength(1);
+      expect(charges[0].sourceId).toBe(draft.orderId);
     });
   });
 });

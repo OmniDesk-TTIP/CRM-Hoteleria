@@ -108,6 +108,8 @@ export interface RoomServiceOrderProps {
   total: number;
   confirmedAt: Date | null;
   mpInitPoint: string | null;
+  /** Id del pago en Mercado Pago, cuando se pagó con el link. */
+  mpPaymentId?: string | null;
   createdAt?: Date;
 }
 
@@ -132,6 +134,7 @@ export class RoomServiceOrderModel {
   readonly total: number;
   confirmedAt: Date | null;
   mpInitPoint: string | null;
+  mpPaymentId: string | null;
   readonly createdAt?: Date;
 
   constructor(props: RoomServiceOrderProps) {
@@ -147,6 +150,7 @@ export class RoomServiceOrderModel {
     this.total = props.total;
     this.confirmedAt = props.confirmedAt;
     this.mpInitPoint = props.mpInitPoint;
+    this.mpPaymentId = props.mpPaymentId ?? null;
     this.createdAt = props.createdAt;
   }
 

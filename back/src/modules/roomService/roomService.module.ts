@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountModule } from '../account/account.module';
 import { ChatModule } from '../chat/chat.module';
 import { PaymentModule } from '../payment/payment.module';
 import { RestaurantModule } from '../restaurant/restaurant.module';
@@ -12,7 +13,13 @@ import { RoomServiceRepository } from './roomService.repository';
 import { RoomServiceService } from './roomService.service';
 
 @Module({
-  imports: [RestaurantModule, SpaModule, ChatModule, PaymentModule],
+  imports: [
+    RestaurantModule,
+    SpaModule,
+    ChatModule,
+    PaymentModule,
+    AccountModule,
+  ],
   controllers: [
     RoomServiceOrdersController,
     RoomServicePaymentController,

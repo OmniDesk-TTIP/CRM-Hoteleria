@@ -193,6 +193,7 @@ export class RoomServiceRepository {
       total: Number(entity.total),
       confirmedAt: entity.confirmedAt ?? null,
       mpInitPoint: entity.mpInitPoint ?? null,
+      mpPaymentId: entity.mpPaymentId ?? null,
       createdAt: entity.createdAt,
     });
   }

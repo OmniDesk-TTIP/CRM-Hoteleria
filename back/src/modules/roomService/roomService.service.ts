@@ -10,6 +10,8 @@ import {
   RoomServiceOrderStatus,
   RoomServicePaymentStatus,
 } from '../../infrastructure/database/entities/RoomServiceOrder.entity';
+import { AccountService } from '../account/account.service';
+import { roomServiceConsumption } from '../account/consumption.model';
 import { ChatService } from '../chat/chat.service';
 import { PaymentService } from '../payment/payment.service';
 import { MenuItemModel } from '../restaurant/model/restaurant.model';
@@ -57,6 +59,7 @@ export class RoomServiceService {
     private readonly spaService: SpaService,
     private readonly chatService: ChatService,
     private readonly paymentService: PaymentService,
+    private readonly accountService: AccountService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
@@ -177,6 +180,7 @@ export class RoomServiceService {
     if (!confirmed) {
       return { ok: false, reason: 'Ese pedido ya estaba confirmado.' };
     }
+    await this.syncAccount(order, now);
 
     const paymentLink = await this.createPaymentLink(order, check.stay);
     const reply = [
@@ -250,6 +254,7 @@ export class RoomServiceService {
           'Tu pedido ya está en preparación, así que no lo puedo cancelar. Si necesitás algo, te paso con recepción.',
       };
     }
+    await this.syncAccount(order);
 
     const refund =
       order.paymentStatus === RoomServicePaymentStatus.PAID
@@ -288,6 +293,7 @@ export class RoomServiceService {
     if (error) throw new BadRequestException(error);
 
     await this.roomServiceRepository.updateStatus(order);
+    await this.syncAccount(order);
     const notice = order.getStatusNotice();
     if (notice) await this.notifyGuest(order, notice);
     return RoomServiceOrderDto.fromModel(order);
@@ -330,6 +336,8 @@ export class RoomServiceService {
       String(payment.id),
     );
     if (!marked) return;
+    order.mpPaymentId = String(payment.id);
+    await this.syncAccount(order);
 
     await this.notifyGuest(order, order.getPaymentNotice());
     this.logger.log(
@@ -392,6 +400,18 @@ export class RoomServiceService {
       };
     }
     return { ok: true, stay };
+  }
+
+  /**
+   * US-27: el pedido confirmado es un cargo en la cuenta de la reserva; si se cancela, se anula, y
+   * si se paga con el link, se registra el pago. No hace nada si la reserva no tiene cuenta abierta.
+   */
+  private syncAccount(order: RoomServiceOrderModel, now: Date = new Date()) {
+    return this.accountService.syncConsumption(
+      order.roomReservationId,
+      roomServiceConsumption(order),
+      now,
+    );
   }
 
   private async createPaymentLink(

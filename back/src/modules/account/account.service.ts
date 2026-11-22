@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
@@ -20,6 +21,11 @@ import {
   paymentDescription,
 } from './account.model';
 import { AccountRepository } from './account.repository';
+import {
+  Consumption,
+  planConsumptionEntries,
+  planConsumptionsEntries,
+} from './consumption.model';
 import { ReservationAccountDto } from './dto/account.dto';
 
 const NO_ACCOUNT = 'La reserva no tiene una cuenta abierta';
@@ -42,6 +48,8 @@ export interface RefundData {
 
 @Injectable()
 export class AccountService {
+  private readonly logger = new Logger(AccountService.name);
+
   constructor(private readonly accountRepository: AccountRepository) {}
 
   async getForReservation(
@@ -65,10 +73,20 @@ export class AccountService {
   ): Promise<ReservationAccountDto> {
     const inserted = await this.accountRepository.insert(
       reservationId,
-      (reservation) => {
+      (reservation, consumptions) => {
         const error = getOpenAccountError(reservation);
         if (error) throw new ConflictException(error);
-        return AccountModel.open(reservation, paymentMethod, userId, now);
+        const account = AccountModel.open(
+          reservation,
+          paymentMethod,
+          userId,
+          now,
+        );
+        // US-27: lo que el huésped ya consumió en la estadía entra con la apertura
+        return {
+          account,
+          entries: planConsumptionsEntries(account, consumptions, now),
+        };
       },
     );
     if (inserted === null) throw new NotFoundException('Reserva no encontrada');
@@ -146,6 +164,32 @@ export class AccountService {
       AccountEntryType.PAYMENT,
     );
     return this.getForReservation(reservationId);
+  }
+
+  /**
+   * US-27: pone la cuenta al día con un consumo (cargo, anulación si se canceló y pago si se pagó
+   * con el link). Es idempotente y no genera nada si la reserva no tiene cuenta o está cerrada.
+   * Nunca lanza: un problema con la cuenta no puede frenar el pedido del huésped. Lo que falte se
+   * completa con el próximo evento del mismo consumo.
+   */
+  async syncConsumption(
+    reservationId: string,
+    consumption: Consumption | null,
+    now: Date = new Date(),
+  ): Promise<AccountEntryModel[]> {
+    if (!consumption) return [];
+    try {
+      const entries = await this.accountRepository.syncConsumption(
+        reservationId,
+        (account) => planConsumptionEntries(account, consumption, now),
+      );
+      return entries ?? [];
+    } catch (error) {
+      this.logger.error(
+        `No se pudo reflejar en la cuenta el consumo ${consumption.origin} ${consumption.sourceId}: ${String(error)}`,
+      );
+      return [];
+    }
   }
 
   /**

@@ -7,6 +7,10 @@ import {
 import { Account } from '../../infrastructure/database/entities/Account.entity';
 import { AccountEntry } from '../../infrastructure/database/entities/AccountEntry.entity';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
+import {
+  RoomServiceOrder,
+  RoomServiceOrderStatus,
+} from '../../infrastructure/database/entities/RoomServiceOrder.entity';
 import { User } from '../../infrastructure/database/entities/User.entity';
 import { toDateKey } from '../../common/date.util';
 import {
@@ -15,6 +19,13 @@ import {
   AccountReservationInfo,
   ReservationForAccount,
 } from './account.model';
+import { Consumption, roomServiceConsumption } from './consumption.model';
+
+/** Lo que se guarda al abrir la cuenta: la cuenta y los consumos previos de la estadía. */
+export interface OpenedAccount {
+  account: AccountModel;
+  entries: AccountEntryModel[];
+}
 
 @Injectable()
 export class AccountRepository {
@@ -59,7 +70,10 @@ export class AccountRepository {
    */
   async insert(
     reservationId: string,
-    build: (reservation: ReservationForAccount) => AccountModel,
+    build: (
+      reservation: ReservationForAccount,
+      consumptions: Consumption[],
+    ) => OpenedAccount,
   ): Promise<boolean | null> {
     try {
       return await this.em.transactional(async (em) => {
@@ -70,12 +84,15 @@ export class AccountRepository {
         );
         if (!reservation) return null;
 
-        const model = build({
-          id: reservation.id,
-          status: reservation.status,
-          totalAmount: Number(reservation.totalAmount),
-          depositAmount: Number(reservation.depositAmount),
-        });
+        const { account: model, entries } = build(
+          {
+            id: reservation.id,
+            status: reservation.status,
+            totalAmount: Number(reservation.totalAmount),
+            depositAmount: Number(reservation.depositAmount),
+          },
+          await this.findConsumptions(em, reservationId),
+        );
         em.persist(
           em.create(Account, {
             id: model.id,
@@ -88,6 +105,7 @@ export class AccountRepository {
             closedAt: model.closedAt,
           }),
         );
+        entries.forEach((entry) => this.persistEntry(em, entry));
         return true;
       });
     } catch (error) {
@@ -107,43 +125,114 @@ export class AccountRepository {
     reservationId: string,
     build: (account: AccountModel) => AccountEntryModel,
   ): Promise<AccountEntryModel | null> {
+    const entries = await this.appendEntries(reservationId, (account) => [
+      build(account),
+    ]);
+    return entries?.[0] ?? null;
+  }
+
+  /**
+   * Pone la cuenta al día con un consumo (pedido de room service, etc.). Bloquea primero la
+   * reserva y después la cuenta, en el mismo orden que la apertura: si la cuenta se está abriendo
+   * en ese momento, espera y la encuentra; si no, la apertura ya ve el pedido y lo trae ella.
+   * Devuelve los movimientos nuevos, o null si la reserva no tiene cuenta.
+   */
+  async syncConsumption(
+    reservationId: string,
+    build: (account: AccountModel) => AccountEntryModel[],
+  ): Promise<AccountEntryModel[] | null> {
     return this.em.transactional(async (em) => {
-      const locked = await em.findOne(
-        Account,
-        { reservation: reservationId },
+      await em.findOne(
+        Reservation,
+        { id: reservationId },
         { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
       );
-      if (!locked) return null;
-
-      const account = await this.loadAccount(em, reservationId);
-      if (!account) return null;
-
-      const entry = build(account);
-      if (account.findEntry(entry.id)) return entry;
-
-      em.persist(
-        em.create(AccountEntry, {
-          id: entry.id,
-          account: em.getReference(Account, entry.accountId),
-          type: entry.type,
-          amount: entry.amount,
-          description: entry.description,
-          origin: entry.origin,
-          sourceId: entry.sourceId,
-          paymentMethod: entry.paymentMethod,
-          reference: entry.reference,
-          operationId: entry.operationId,
-          reverses: entry.reversesId
-            ? em.getReference(AccountEntry, entry.reversesId)
-            : null,
-          registeredAt: entry.registeredAt,
-          registeredBy: entry.registeredById
-            ? em.getReference(User, entry.registeredById)
-            : null,
-        }),
-      );
-      return entry;
+      return this.appendLocked(em, reservationId, build);
     });
+  }
+
+  async appendEntries(
+    reservationId: string,
+    build: (account: AccountModel) => AccountEntryModel[],
+  ): Promise<AccountEntryModel[] | null> {
+    return this.em.transactional((em) =>
+      this.appendLocked(em, reservationId, build),
+    );
+  }
+
+  private async appendLocked(
+    em: EntityManager,
+    reservationId: string,
+    build: (account: AccountModel) => AccountEntryModel[],
+  ): Promise<AccountEntryModel[] | null> {
+    const locked = await em.findOne(
+      Account,
+      { reservation: reservationId },
+      { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
+    );
+    if (!locked) return null;
+
+    const account = await this.loadAccount(em, reservationId);
+    if (!account) return null;
+
+    const entries = build(account);
+    entries
+      .filter((entry) => !account.findEntry(entry.id))
+      .forEach((entry) => this.persistEntry(em, entry));
+    return entries;
+  }
+
+  private persistEntry(em: EntityManager, entry: AccountEntryModel): void {
+    em.persist(
+      em.create(AccountEntry, {
+        id: entry.id,
+        account: em.getReference(Account, entry.accountId),
+        type: entry.type,
+        amount: entry.amount,
+        description: entry.description,
+        origin: entry.origin,
+        sourceId: entry.sourceId,
+        paymentMethod: entry.paymentMethod,
+        reference: entry.reference,
+        operationId: entry.operationId,
+        reverses: entry.reversesId
+          ? em.getReference(AccountEntry, entry.reversesId)
+          : null,
+        registeredAt: entry.registeredAt,
+        registeredBy: entry.registeredById
+          ? em.getReference(User, entry.registeredById)
+          : null,
+      }),
+    );
+  }
+
+  /** Consumos de la estadía que todavía no están en la cuenta (los borradores no cuentan). */
+  private async findConsumptions(
+    em: EntityManager,
+    reservationId: string,
+  ): Promise<Consumption[]> {
+    const orders = await em.find(
+      RoomServiceOrder,
+      {
+        roomReservation: reservationId,
+        status: { $ne: RoomServiceOrderStatus.PENDING_CONFIRMATION },
+      },
+      { orderBy: { confirmedAt: 'asc', id: 'asc' }, refresh: true },
+    );
+    return orders
+      .map((order) =>
+        roomServiceConsumption({
+          id: order.id,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          items: order.items,
+          total: Number(order.total),
+          mpPaymentId: order.mpPaymentId ?? null,
+        }),
+      )
+      .filter(
+        (consumption): consumption is Consumption => consumption !== null,
+      );
   }
 
   private async loadAccount(
