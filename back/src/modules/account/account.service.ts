@@ -15,7 +15,11 @@ import {
   AccountEntryModel,
   AccountModel,
   EntryAuthor,
+  getManualChargeError,
   getOpenAccountError,
+  MANUAL_CHARGE_ORIGINS,
+  manualChargeDescription,
+  ManualChargeOrigin,
   NewEntryData,
   OPERATION_REUSED,
   paymentDescription,
@@ -38,10 +42,14 @@ export interface PaymentData {
   reference?: string | null;
 }
 
-/** De qué consumo es un cargo: su origen y el pedido, turno o mesa que lo generó. */
-export interface ChargeSource {
-  origin: AccountEntryOrigin;
-  sourceId: string;
+/** US-27: consumo cargado a mano desde la cuenta (restó o recepción). */
+export interface ChargeData {
+  /** Clave de idempotencia que genera el panel por cada cargo confirmado. */
+  operationId: string;
+  origin: ManualChargeOrigin;
+  amount: number;
+  ticketNumber?: string | null;
+  detail?: string | null;
 }
 
 export interface RefundData {
@@ -261,16 +269,44 @@ export class AccountService {
     return this.appendReversal(reservationId, entryId, reason, author, now);
   }
 
+  /** US-27: carga un consumo del restó o de recepción y devuelve la cuenta actualizada. */
+  async registerCharge(
+    reservationId: string,
+    data: ChargeData,
+    author: EntryAuthor,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    const error = getManualChargeError(data.origin, data.detail);
+    if (error) throw new BadRequestException(error);
+
+    await this.registerEntry(
+      reservationId,
+      {
+        type: AccountEntryType.CHARGE,
+        amount: data.amount,
+        description: manualChargeDescription(
+          data.origin,
+          data.ticketNumber,
+          data.detail,
+        ),
+        origin: data.origin,
+        operationId: data.operationId,
+      },
+      author,
+      now,
+    );
+    return this.getForReservation(reservationId);
+  }
+
   /**
-   * US-27: anula un cargo de un consumo puntual (por ejemplo, el ticket de una mesa del restó).
-   * Solo encuentra cargos de ese origen y esa referencia: no sirve para anular otro consumo.
+   * US-27: anula un consumo cargado a mano por error; `reason` queda como descripción. Los cargos
+   * de room service no: se anulan solos al cancelar el pedido.
    */
   async reverseCharge(
     reservationId: string,
     entryId: string,
     reason: string,
     author: EntryAuthor,
-    source: ChargeSource,
     now: Date = new Date(),
   ): Promise<ReservationAccountDto> {
     await this.appendReversal(
@@ -280,14 +316,14 @@ export class AccountService {
       author,
       now,
       AccountEntryType.CHARGE,
-      source,
+      MANUAL_CHARGE_ORIGINS,
     );
     return this.getForReservation(reservationId);
   }
 
   /**
-   * `expectedType` limita qué se puede anular (por ejemplo, solo pagos) y `source`, de qué
-   * consumo.
+   * `expectedType` limita qué se puede anular (por ejemplo, solo pagos) y `origins`, de dónde
+   * puede venir el movimiento.
    */
   private async appendReversal(
     reservationId: string,
@@ -296,7 +332,7 @@ export class AccountService {
     author: EntryAuthor,
     now: Date,
     expectedType?: AccountEntryType,
-    source?: ChargeSource,
+    origins?: readonly AccountEntryOrigin[],
   ): Promise<AccountEntryModel> {
     try {
       const reversal = await this.accountRepository.appendEntry(
@@ -306,13 +342,11 @@ export class AccountService {
           const matches =
             original &&
             (!expectedType || original.type === expectedType) &&
-            (!source ||
-              (original.origin === source.origin &&
-                original.sourceId === source.sourceId));
+            (!origins || origins.includes(original.origin));
           if (!original || !matches) {
             throw new NotFoundException(
-              source
-                ? 'El cargo no pertenece a este consumo'
+              origins
+                ? 'El cargo no existe en esta cuenta o no se carga a mano (los de room service se anulan al cancelar el pedido)'
                 : expectedType === AccountEntryType.PAYMENT
                   ? 'El pago no pertenece a esta cuenta'
                   : 'El movimiento no pertenece a esta cuenta',

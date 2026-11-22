@@ -31,6 +31,55 @@ const REVERSAL_TYPE: Partial<Record<AccountEntryType, AccountEntryType>> = {
   [AccountEntryType.PAYMENT]: AccountEntryType.PAYMENT_REVERSAL,
 };
 
+/**
+ * US-27: orígenes de los consumos que se cargan a mano desde la cuenta. Room service no está:
+ * sus cargos los genera y anula el propio pedido, así la cuenta y el pedido nunca se contradicen.
+ */
+export const MANUAL_CHARGE_ORIGINS = [
+  AccountEntryOrigin.RESTAURANT,
+  AccountEntryOrigin.RECEPTION,
+] as const;
+export type ManualChargeOrigin = (typeof MANUAL_CHARGE_ORIGINS)[number];
+
+export const MAX_TICKET_NUMBER_LENGTH = 30;
+export const MAX_CHARGE_DETAIL_LENGTH = 140;
+
+const MANUAL_CHARGE_LABELS: Record<ManualChargeOrigin, string> = {
+  [AccountEntryOrigin.RESTAURANT]: 'Restó',
+  [AccountEntryOrigin.RECEPTION]: 'Recepción',
+};
+
+export const isManualChargeOrigin = (
+  origin: AccountEntryOrigin,
+): origin is ManualChargeOrigin =>
+  (MANUAL_CHARGE_ORIGINS as readonly AccountEntryOrigin[]).includes(origin);
+
+/**
+ * Cómo queda en el libro un consumo cargado a mano: "Restó: ticket N° 1234 · Cena para 2" o
+ * "Recepción: lavandería". Con los topes de arriba entra en los 200 caracteres de la descripción.
+ */
+export function manualChargeDescription(
+  origin: ManualChargeOrigin,
+  ticketNumber?: string | null,
+  detail?: string | null,
+): string {
+  const parts = [
+    ticketNumber?.trim() ? `ticket N° ${ticketNumber.trim()}` : null,
+    detail?.trim() || null,
+  ].filter((part): part is string => part !== null);
+  return `${MANUAL_CHARGE_LABELS[origin]}: ${parts.length ? parts.join(' · ') : 'consumo'}`;
+}
+
+/** El restó se identifica con el ticket; en recepción hay que decir qué se cobra. */
+export function getManualChargeError(
+  origin: ManualChargeOrigin,
+  detail?: string | null,
+): string | null {
+  return origin === AccountEntryOrigin.RECEPTION && !detail?.trim()
+    ? 'Indicá qué se está cobrando'
+    : null;
+}
+
 /** Movimientos que mueven plata con el huésped: llevan medio de pago. */
 const MONEY_TYPES: AccountEntryType[] = [
   AccountEntryType.PAYMENT,

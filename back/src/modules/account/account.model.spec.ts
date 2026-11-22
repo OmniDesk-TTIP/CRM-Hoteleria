@@ -13,10 +13,15 @@ import {
   AccountModel,
   AccountProps,
   DirectEntryType,
+  getManualChargeError,
   getOpenAccountError,
+  isManualChargeOrigin,
+  manualChargeDescription,
+  MAX_CHARGE_DETAIL_LENGTH,
   MAX_ENTRY_AMOUNT,
   MAX_ENTRY_DESCRIPTION_LENGTH,
   MAX_ENTRY_REFERENCE_LENGTH,
+  MAX_TICKET_NUMBER_LENGTH,
   paymentDescription,
   stayBalanceOf,
   summarizeEntries,
@@ -543,6 +548,66 @@ describe('AccountModel', () => {
       );
 
       expect(reversal.operationId).toBeNull();
+    });
+  });
+
+  describe('consumos cargados a mano (US-27)', () => {
+    it.each([
+      [
+        AccountEntryOrigin.RESTAURANT,
+        '1234',
+        'Cena para 2',
+        'Restó: ticket N° 1234 · Cena para 2',
+      ],
+      [AccountEntryOrigin.RESTAURANT, '1234', null, 'Restó: ticket N° 1234'],
+      [AccountEntryOrigin.RESTAURANT, null, null, 'Restó: consumo'],
+      [AccountEntryOrigin.RESTAURANT, '  ', '  ', 'Restó: consumo'],
+      [
+        AccountEntryOrigin.RECEPTION,
+        null,
+        'Lavandería',
+        'Recepción: Lavandería',
+      ],
+    ] as const)(
+      '%s con ticket %s y detalle %s queda como "%s"',
+      (origin, ticketNumber, detail, expected) => {
+        expect(manualChargeDescription(origin, ticketNumber, detail)).toBe(
+          expected,
+        );
+      },
+    );
+
+    it('con los topes de largo entra en la descripción de un movimiento', () => {
+      const description = manualChargeDescription(
+        AccountEntryOrigin.RECEPTION,
+        'x'.repeat(MAX_TICKET_NUMBER_LENGTH),
+        'y'.repeat(MAX_CHARGE_DETAIL_LENGTH),
+      );
+
+      expect(description.length).toBeLessThanOrEqual(
+        MAX_ENTRY_DESCRIPTION_LENGTH,
+      );
+    });
+
+    it('en recepción el detalle es obligatorio; en el restó no', () => {
+      expect(getManualChargeError(AccountEntryOrigin.RECEPTION, '  ')).toMatch(
+        /qué se está cobrando/,
+      );
+      expect(
+        getManualChargeError(AccountEntryOrigin.RECEPTION, 'Frigobar'),
+      ).toBeNull();
+      expect(
+        getManualChargeError(AccountEntryOrigin.RESTAURANT, null),
+      ).toBeNull();
+    });
+
+    it.each([
+      [AccountEntryOrigin.RESTAURANT, true],
+      [AccountEntryOrigin.RECEPTION, true],
+      [AccountEntryOrigin.ROOM_SERVICE, false],
+      [AccountEntryOrigin.SPA, false],
+    ])('%s se carga a mano: %s', (origin, expected) => {
+      expect(isManualChargeOrigin(origin)).toBe(expected);
     });
   });
 });

@@ -11,7 +11,7 @@ import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { AppModule } from '../../app.module';
 import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
-import { AccountService } from './account.service';
+import { AccountService, ChargeData } from './account.service';
 import { ReservationAccountDto } from './dto/account.dto';
 import {
   Account,
@@ -784,6 +784,145 @@ describe('AccountService (integración)', () => {
         service.open(reservationId, PaymentMethod.CASH, user.id, NOW),
       ).rejects.toThrow(ConflictException);
       expect(await accountRow(reservationId)).toBeNull();
+    });
+  });
+
+  describe('consumos cargados a mano (US-27)', () => {
+    const chargeManually = (
+      reservationId: string,
+      overrides: Partial<ChargeData> = {},
+    ) =>
+      service.registerCharge(
+        reservationId,
+        {
+          operationId: randomUUID(),
+          origin: AccountEntryOrigin.RESTAURANT,
+          amount: 18500.5,
+          ticketNumber: '1234',
+          detail: 'Cena para 2',
+          ...overrides,
+        },
+        author(),
+        NOW,
+      );
+
+    it('carga el consumo del restó a nombre del usuario y suma al saldo', async () => {
+      const reservationId = await seedOpenAccount();
+
+      const result = await chargeManually(reservationId);
+
+      expect(result.account?.balance).toBe(18500.5);
+      const [row] = await entryRows(reservationId);
+      expect(row).toMatchObject({
+        type: AccountEntryType.CHARGE,
+        origin: AccountEntryOrigin.RESTAURANT,
+        description: 'Restó: ticket N° 1234 · Cena para 2',
+        reference: null,
+        sourceId: null,
+      });
+      expect(row.registeredBy?.id).toBe(user.id);
+    });
+
+    it('un consumo de recepción necesita el detalle', async () => {
+      const reservationId = await seedOpenAccount();
+
+      await expect(
+        chargeManually(reservationId, {
+          origin: AccountEntryOrigin.RECEPTION,
+          ticketNumber: null,
+          detail: '  ',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      const result = await chargeManually(reservationId, {
+        origin: AccountEntryOrigin.RECEPTION,
+        ticketNumber: null,
+        detail: 'Lavandería',
+        amount: 4000,
+      });
+
+      expect(result.account?.entries[0].description).toBe(
+        'Recepción: Lavandería',
+      );
+    });
+
+    it('reintentar con la misma clave no carga otro consumo', async () => {
+      const reservationId = await seedOpenAccount();
+      const operationId = randomUUID();
+
+      await chargeManually(reservationId, { operationId });
+      await chargeManually(reservationId, { operationId });
+
+      expect(await entryRows(reservationId)).toHaveLength(1);
+    });
+
+    it('sin cuenta o con la cuenta cerrada no se carga', async () => {
+      const withoutAccount = await seedReservation();
+      const closed = await seedOpenAccount();
+      await em
+        .fork()
+        .nativeUpdate(
+          Account,
+          { reservation: closed },
+          { status: AccountStatus.CLOSED, closedAt: NOW },
+        );
+
+      await expect(chargeManually(withoutAccount)).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(chargeManually(closed)).rejects.toThrow(ConflictException);
+    });
+
+    it('anula un consumo cargado a mano con el motivo; no dos veces', async () => {
+      const reservationId = await seedOpenAccount();
+      const charged = await chargeManually(reservationId);
+      const chargeId = charged.account!.entries[0].id;
+
+      const result = await service.reverseCharge(
+        reservationId,
+        chargeId,
+        'Se cargó a la habitación equivocada',
+        author(),
+        NOW,
+      );
+
+      expect(result.account?.balance).toBe(0);
+      expect(
+        result.account?.entries.find((entry) => entry.id === chargeId)
+          ?.reversed,
+      ).toBe(true);
+      await expect(
+        service.reverseCharge(reservationId, chargeId, 'Otra', author(), NOW),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('no anula cargos de room service ni pagos', async () => {
+      const reservationId = await seedOpenAccount();
+      const roomService = await service.registerEntry(
+        reservationId,
+        charge(3000),
+        CHAMBER,
+        NOW,
+      );
+      const paid = await service.registerPayment(
+        reservationId,
+        {
+          operationId: randomUUID(),
+          amount: 1000,
+          paymentMethod: PaymentMethod.CASH,
+        },
+        author(),
+        NOW,
+      );
+      const paymentId = paid.account!.entries.find(
+        (entry) => entry.type === AccountEntryType.PAYMENT,
+      )!.id;
+
+      await expect(
+        service.reverseCharge(reservationId, roomService.id, 'Error', author()),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.reverseCharge(reservationId, paymentId, 'Error', author()),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

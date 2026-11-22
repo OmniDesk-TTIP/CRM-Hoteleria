@@ -21,25 +21,6 @@ export type NewRestaurantReservationProps = Omit<
   'id' | 'status' | 'createdAt'
 >;
 
-/** US-27: datos opcionales del ticket del restó que se carga a la cuenta. */
-export const MAX_TICKET_NUMBER_LENGTH = 30;
-export const MAX_TICKET_DETAIL_LENGTH = 150;
-
-/**
- * Cómo queda el ticket en la cuenta: "Restó: ticket N° 1234 · Cena para 2". Con los topes de
- * arriba entra en los 200 caracteres de la descripción de un movimiento.
- */
-export function ticketDescription(
-  ticketNumber?: string | null,
-  detail?: string | null,
-): string {
-  const parts = [
-    ticketNumber?.trim() ? `ticket N° ${ticketNumber.trim()}` : null,
-    detail?.trim() || null,
-  ].filter((part): part is string => part !== null);
-  return `Restó: ${parts.length ? parts.join(' · ') : 'consumo'}`;
-}
-
 const ALLOWED_TRANSITIONS: Record<
   RestaurantReservationStatus,
   RestaurantReservationStatus[]
@@ -112,13 +93,6 @@ export class RestaurantReservationModel {
     }
     this.status = next;
     return null;
-  }
-
-  /** El ticket se carga sobre una mesa confirmada: una pendiente o rechazada no se consumió. */
-  getTicketError(): string | null {
-    return this.status === RestaurantReservationStatus.CONFIRMED
-      ? null
-      : 'Solo se puede cargar el ticket de una reserva de mesa confirmada';
   }
 
   getStatusNotice(): string | null {

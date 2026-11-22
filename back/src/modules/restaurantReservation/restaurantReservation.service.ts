@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,13 +7,6 @@ import {
 import { InjectBot } from 'nestjs-telegraf';
 import { Context, Telegraf } from 'telegraf';
 import { RestaurantReservationStatus } from '../../infrastructure/database/entities/RestaurantReservation.entity';
-import {
-  AccountEntryOrigin,
-  AccountEntryType,
-} from '../../infrastructure/database/entities/AccountEntry.entity';
-import { AccountService } from '../account/account.service';
-import { EntryAuthor } from '../account/account.model';
-import { ReservationAccountDto } from '../account/dto/account.dto';
 import { formatDate, parseDate } from '../bookingProcess/date.util';
 import { ChatService } from '../chat/chat.service';
 import { RestaurantService } from '../restaurant/restaurant.service';
@@ -22,13 +14,9 @@ import { describeSchedule } from '../restaurant/model/restaurant.model';
 import { SpaService } from '../spa/spa.service';
 import { toCalendarDayString } from '../spa/model/spa.model';
 import { escapeHtml } from '../telegram/telegram.format';
-import {
-  RestaurantReservationModel,
-  ticketDescription,
-} from './restaurantReservation.model';
+import { RestaurantReservationModel } from './restaurantReservation.model';
 import { RestaurantReservationRepository } from './restaurantReservation.repository';
 import {
-  ChargeRestaurantTicketDto,
   ListRestaurantReservationsQueryDto,
   PaginatedRestaurantReservationsDto,
   RequestTableBookingDto,
@@ -48,7 +36,6 @@ export class RestaurantReservationService {
     private readonly restaurantService: RestaurantService,
     private readonly spaService: SpaService,
     private readonly chatService: ChatService,
-    private readonly accountService: AccountService,
     @InjectBot() private readonly bot: Telegraf<Context>,
   ) {}
 
@@ -165,61 +152,6 @@ export class RestaurantReservationService {
     await this.restaurantReservationRepository.updateStatus(request);
     await this.notifyGuest(request);
     return RestaurantReservationDto.fromModel(request);
-  }
-
-  /**
-   * US-27: carga el ticket del restó a la cuenta de la estadía. Solo sobre una mesa confirmada y
-   * con la cuenta abierta (si no, la cuenta lo rechaza). Devuelve la cuenta actualizada.
-   */
-  async chargeTicket(
-    id: string,
-    data: ChargeRestaurantTicketDto,
-    author: EntryAuthor,
-    now: Date = new Date(),
-  ): Promise<ReservationAccountDto> {
-    const request = await this.findForTicket(id);
-    const error = request.getTicketError();
-    if (error) throw new ConflictException(error);
-
-    await this.accountService.registerEntry(
-      request.roomReservationId,
-      {
-        type: AccountEntryType.CHARGE,
-        amount: data.amount,
-        description: ticketDescription(data.ticketNumber, data.detail),
-        origin: AccountEntryOrigin.RESTAURANT,
-        sourceId: request.id,
-        operationId: data.operationId,
-      },
-      author,
-      now,
-    );
-    return this.accountService.getForReservation(request.roomReservationId);
-  }
-
-  /** US-27: anula un ticket del restó cargado por error (solo administradores, con motivo). */
-  async reverseTicket(
-    id: string,
-    entryId: string,
-    reason: string,
-    author: EntryAuthor,
-    now: Date = new Date(),
-  ): Promise<ReservationAccountDto> {
-    const request = await this.findForTicket(id);
-    return this.accountService.reverseCharge(
-      request.roomReservationId,
-      entryId,
-      reason,
-      author,
-      { origin: AccountEntryOrigin.RESTAURANT, sourceId: request.id },
-      now,
-    );
-  }
-
-  private async findForTicket(id: string): Promise<RestaurantReservationModel> {
-    const request = await this.restaurantReservationRepository.findById(id);
-    if (!request) throw new NotFoundException('Reserva de mesa no encontrada');
-    return request;
   }
 
   private async notifyGuest(

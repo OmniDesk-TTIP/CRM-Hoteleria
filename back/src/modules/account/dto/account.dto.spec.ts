@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { createValidationPipe } from '../../../validation.config';
 import { MAX_ENTRY_REFERENCE_LENGTH } from '../account.model';
 import {
+  RegisterChargeDto,
   RegisterPaymentDto,
   RegisterRefundDto,
   ReverseEntryDto,
@@ -122,4 +123,60 @@ describe('DTOs de pagos (US-28)', () => {
       ).toMatch(/clave de operación/);
     },
   );
+});
+
+describe('DTO de consumos cargados a mano (US-27)', () => {
+  it('acepta un consumo del restó y recorta los textos', async () => {
+    await expect(
+      validate(RegisterChargeDto, {
+        operationId: OPERATION_ID,
+        origin: 'RESTAURANT',
+        amount: 18500.5,
+        ticketNumber: ' 1234 ',
+        detail: '  Cena para 2 ',
+      }),
+    ).resolves.toEqual({
+      operationId: OPERATION_ID,
+      origin: 'RESTAURANT',
+      amount: 18500.5,
+      ticketNumber: '1234',
+      detail: 'Cena para 2',
+    });
+  });
+
+  it.each([
+    [
+      { operationId: OPERATION_ID, origin: 'ROOM_SERVICE', amount: 100 },
+      /RESTAURANT o RECEPTION/,
+    ],
+    [
+      { operationId: OPERATION_ID, origin: 'SPA', amount: 100 },
+      /RESTAURANT o RECEPTION/,
+    ],
+    [
+      { operationId: OPERATION_ID, origin: 'RESTAURANT', amount: 0 },
+      /mayor a cero/,
+    ],
+    [{ operationId: 'no-es-uuid', origin: 'RESTAURANT', amount: 100 }, /UUID/],
+    [
+      {
+        operationId: OPERATION_ID,
+        origin: 'RESTAURANT',
+        amount: 100,
+        ticketNumber: 'x'.repeat(31),
+      },
+      /número de ticket/,
+    ],
+    [
+      {
+        operationId: OPERATION_ID,
+        origin: 'RECEPTION',
+        amount: 100,
+        detail: 'x'.repeat(141),
+      },
+      /detalle/,
+    ],
+  ])('rechaza %j', async (body, message) => {
+    expect(String(await messageOf(RegisterChargeDto, body))).toMatch(message);
+  });
 });

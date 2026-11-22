@@ -14,6 +14,7 @@ import { AuthUser } from '../auth/auth.types';
 import { AccountService } from './account.service';
 import {
   OpenAccountDto,
+  RegisterChargeDto,
   RegisterPaymentDto,
   RegisterRefundDto,
   ReservationAccountDto,
@@ -53,6 +54,36 @@ export class AccountController {
     return this.accountService.registerPayment(reservationId, body, {
       userId: user.id,
     });
+  }
+
+  /** US-27: consumo del restó o de recepción cargado a mano. Devuelve la cuenta actualizada. */
+  @Post('charges')
+  registerCharge(
+    @Param('reservationId', ParseUUIDPipe) reservationId: string,
+    @Body() body: RegisterChargeDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ReservationAccountDto> {
+    return this.accountService.registerCharge(reservationId, body, {
+      userId: user.id,
+    });
+  }
+
+  /** US-27: solo un administrador anula un consumo cargado a mano, con motivo. */
+  @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Post('charges/:entryId/reversal')
+  reverseCharge(
+    @Param('reservationId', ParseUUIDPipe) reservationId: string,
+    @Param('entryId', ParseUUIDPipe) entryId: string,
+    @Body() body: ReverseEntryDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ReservationAccountDto> {
+    return this.accountService.reverseCharge(
+      reservationId,
+      entryId,
+      body.reason,
+      { userId: user.id },
+    );
   }
 
   @Roles(UserRole.ADMIN)

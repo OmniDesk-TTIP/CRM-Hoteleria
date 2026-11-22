@@ -1,9 +1,7 @@
 import {
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
-  IsUUID,
   IsString,
   Matches,
   Max,
@@ -18,12 +16,7 @@ import { trimString } from '../../../common/transforms';
 import { isValidDateFormat } from '../../bookingProcess/date.util';
 import { TIME_REGEX } from '../../spa/dto/createSpaService.dto';
 import { RestaurantReservationStatus } from '../../../infrastructure/database/entities/RestaurantReservation.entity';
-import {
-  MAX_TICKET_DETAIL_LENGTH,
-  MAX_TICKET_NUMBER_LENGTH,
-  RestaurantReservationModel,
-} from '../restaurantReservation.model';
-import { MAX_ENTRY_AMOUNT } from '../../account/account.model';
+import { RestaurantReservationModel } from '../restaurantReservation.model';
 
 @ValidatorConstraint({ name: 'isDateFormat', async: false })
 class IsDateFormatConstraint implements ValidatorConstraintInterface {
@@ -132,40 +125,4 @@ export interface PaginatedRestaurantReservationsDto {
   total: number;
   page: number;
   pageSize: number;
-}
-
-/** Body de `POST /restaurant-reservations/:id/tickets` (US-27): el ticket del restó a la cuenta. */
-export class ChargeRestaurantTicketDto {
-  /**
-   * UUID que genera el panel por cada ticket confirmado. Si el pedido se reintenta con la misma
-   * clave, no se carga otro cargo.
-   */
-  @IsUUID('4', { message: 'La clave de operación debe ser un UUID' })
-  operationId!: string;
-
-  // class-validator corre los decoradores de abajo hacia arriba: IsNumber va último para que un
-  // monto que no es número no termine avisando "demasiado grande".
-  @Max(MAX_ENTRY_AMOUNT, { message: 'El monto es demasiado grande' })
-  @Min(0.01, { message: 'El monto tiene que ser mayor a cero' })
-  @IsNumber(
-    { allowNaN: false, allowInfinity: false, maxDecimalPlaces: 2 },
-    { message: 'El monto debe ser un número con hasta dos decimales' },
-  )
-  amount!: number;
-
-  @IsOptional()
-  @Transform(trimString)
-  @IsString({ message: 'El número de ticket debe ser un texto' })
-  @MaxLength(MAX_TICKET_NUMBER_LENGTH, {
-    message: `El número de ticket no puede superar ${MAX_TICKET_NUMBER_LENGTH} caracteres`,
-  })
-  ticketNumber?: string;
-
-  @IsOptional()
-  @Transform(trimString)
-  @IsString({ message: 'El detalle debe ser un texto' })
-  @MaxLength(MAX_TICKET_DETAIL_LENGTH, {
-    message: `El detalle no puede superar ${MAX_TICKET_DETAIL_LENGTH} caracteres`,
-  })
-  detail?: string;
 }

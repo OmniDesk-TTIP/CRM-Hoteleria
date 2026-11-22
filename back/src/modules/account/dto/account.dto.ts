@@ -23,6 +23,10 @@ import { ReservationStatus } from '../../../infrastructure/database/entities/Res
 import {
   AccountEntryModel,
   AccountModel,
+  MANUAL_CHARGE_ORIGINS,
+  MAX_CHARGE_DETAIL_LENGTH,
+  MAX_TICKET_NUMBER_LENGTH,
+  ManualChargeOrigin,
   AccountReservationInfo,
   MAX_ENTRY_AMOUNT,
   MAX_ENTRY_DESCRIPTION_LENGTH,
@@ -39,8 +43,8 @@ export class OpenAccountDto {
   paymentMethod!: PaymentMethod;
 }
 
-/** Monto de un pago o reintegro: positivo, con hasta dos decimales. */
-class MoneyMovementDto {
+/** Clave de operación y monto de un movimiento cargado desde el panel. */
+class OperationAmountDto {
   /**
    * UUID que genera el panel por cada confirmación. Si el pedido se reintenta con la misma clave,
    * no se registra otro movimiento.
@@ -57,9 +61,36 @@ class MoneyMovementDto {
     { message: 'El monto debe ser un número con hasta dos decimales' },
   )
   amount!: number;
+}
 
+/** Monto de un pago o reintegro: positivo, con hasta dos decimales. */
+class MoneyMovementDto extends OperationAmountDto {
   @IsIn(Object.values(PaymentMethod), { message: PAYMENT_METHOD_MESSAGE })
   paymentMethod!: PaymentMethod;
+}
+
+/** Body de `POST /reservations/:id/account/charges` (US-27): un consumo del restó o de recepción. */
+export class RegisterChargeDto extends OperationAmountDto {
+  @IsIn(MANUAL_CHARGE_ORIGINS, {
+    message: 'El origen del consumo debe ser RESTAURANT o RECEPTION',
+  })
+  origin!: ManualChargeOrigin;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString({ message: 'El número de ticket debe ser un texto' })
+  @MaxLength(MAX_TICKET_NUMBER_LENGTH, {
+    message: `El número de ticket no puede superar ${MAX_TICKET_NUMBER_LENGTH} caracteres`,
+  })
+  ticketNumber?: string;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString({ message: 'El detalle debe ser un texto' })
+  @MaxLength(MAX_CHARGE_DETAIL_LENGTH, {
+    message: `El detalle no puede superar ${MAX_CHARGE_DETAIL_LENGTH} caracteres`,
+  })
+  detail?: string;
 }
 
 /** Body de `POST /reservations/:id/account/payments`. */

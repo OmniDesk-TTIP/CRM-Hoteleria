@@ -17,7 +17,7 @@ const rolesOf = (handler: keyof AccountController) => ({
 
 /** US-28: quién puede hacer qué con la cuenta. ADMIN y EMPLOYEE pasan el guard global. */
 describe('AccountController (roles)', () => {
-  it.each(['reversePayment', 'registerRefund'] as const)(
+  it.each(['reversePayment', 'registerRefund', 'reverseCharge'] as const)(
     '%s es solo para administradores',
     (handler) => {
       expect(rolesOf(handler)).toEqual({
@@ -27,7 +27,7 @@ describe('AccountController (roles)', () => {
     },
   );
 
-  it.each(['get', 'open', 'registerPayment'] as const)(
+  it.each(['get', 'open', 'registerPayment', 'registerCharge'] as const)(
     '%s lo puede usar cualquier usuario del panel',
     (handler) => {
       expect(rolesOf(handler)).toEqual({
