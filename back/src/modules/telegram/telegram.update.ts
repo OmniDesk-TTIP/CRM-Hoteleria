@@ -8,15 +8,10 @@ import {
 } from '../reservation/reservation.service';
 import { BookingProcessService } from '../bookingProcess/bookingProcess.service';
 import { ChatService } from '../chat/chat.service';
-import {
-  RoomServiceChatResult,
-  RoomServiceService,
-} from '../roomService/roomService.service';
 import { BotService, TECHNICAL_ERROR_REPLY } from '../bot/bot.service';
 import { ChatSession } from '../../infrastructure/database/entities/ChatSession.entity';
 import { TelegramProfile } from '../chat/chat.repository';
 import {
-  escapeHtml,
   EXPIRED_DECLINE_LABEL,
   EXPIRED_RECOVERY_CALLBACK,
   EXPIRED_RESUME_LABEL,
@@ -39,7 +34,6 @@ export class TelegramUpdate {
     private readonly reservationService: ReservationService,
     private readonly bookingProcessService: BookingProcessService,
     private readonly chatService: ChatService,
-    private readonly roomServiceService: RoomServiceService,
     private readonly orm: MikroORM,
   ) {}
 
@@ -147,7 +141,7 @@ export class TelegramUpdate {
       );
       await ctx.sendChatAction('typing');
 
-      const botReply = await this.resolveRoomServiceButton(
+      const botReply = await this.botService.resolveRoomServiceButton(
         telegramUserId,
         button,
         orderId,
@@ -164,37 +158,6 @@ export class TelegramUpdate {
         'Hubo un error técnico con tu pedido de room service. Por favor, intentá nuevamente en unos minutos.',
       );
     }
-  }
-
-  private async resolveRoomServiceButton(
-    telegramUserId: string,
-    button: RoomServiceButton,
-    orderId: string,
-  ): Promise<string> {
-    let result: RoomServiceChatResult;
-    switch (button) {
-      case 'confirm':
-        result = await this.roomServiceService.confirmOrder(
-          telegramUserId,
-          orderId,
-        );
-        break;
-      case 'discard':
-        result = await this.roomServiceService.discardDraft(
-          telegramUserId,
-          orderId,
-        );
-        break;
-      case 'cancel':
-        result = await this.roomServiceService.cancelOrder(
-          telegramUserId,
-          orderId,
-        );
-        break;
-      case 'keep':
-        return 'Perfecto, tu pedido sigue en curso.';
-    }
-    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   @Action(EXPIRED_RECOVERY_CALLBACK)

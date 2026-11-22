@@ -9,7 +9,11 @@ import { MikroORM, EntityManager } from '@mikro-orm/core';
 import { AppModule } from '../../app.module';
 import { RagService } from '../rag/rag.service';
 import { PaymentService } from '../payment/payment.service';
-import { RoomServiceService } from './roomService.service';
+import {
+  NO_ROOM_CHARGE_REASON,
+  RoomServiceService,
+} from './roomService.service';
+import { RoomServicePaymentOption } from './roomService.model';
 import { AccountService } from '../account/account.service';
 import {
   Account,
@@ -158,6 +162,7 @@ describe('RoomServiceService (integración)', () => {
     const confirmed = await service.confirmOrder(
       telegramUserId,
       draft.orderId,
+      RoomServicePaymentOption.PAY_NOW,
       NOW,
     );
     if (!confirmed.ok) throw new Error(confirmed.reason);
@@ -470,6 +475,7 @@ describe('RoomServiceService (integración)', () => {
       const result = await service.confirmOrder(
         guest.telegramUserId,
         draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
         NOW,
       );
 
@@ -526,6 +532,7 @@ describe('RoomServiceService (integración)', () => {
       const result = await service.confirmOrder(
         guest.telegramUserId,
         draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
         NOW,
       );
 
@@ -546,14 +553,21 @@ describe('RoomServiceService (integración)', () => {
       const stolen = await service.confirmOrder(
         other.telegramUserId,
         draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
         NOW,
       );
       expect(stolen.ok).toBe(false);
 
-      await service.confirmOrder(guest.telegramUserId, draft.orderId!, NOW);
+      await service.confirmOrder(
+        guest.telegramUserId,
+        draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
+        NOW,
+      );
       const again = await service.confirmOrder(
         guest.telegramUserId,
         draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
         NOW,
       );
       expect(again).toEqual({
@@ -624,6 +638,7 @@ describe('RoomServiceService (integración)', () => {
       const result = await service.confirmOrder(
         guest.telegramUserId,
         draft.orderId!,
+        RoomServicePaymentOption.PAY_NOW,
         NOW,
       );
       expect(result.ok).toBe(false);
@@ -989,7 +1004,12 @@ describe('RoomServiceService (integración)', () => {
       if (!draft.ok || !draft.orderId) throw new Error('No se armó el pedido');
 
       await Promise.all([
-        service.confirmOrder(guest.telegramUserId, draft.orderId, NOW),
+        service.confirmOrder(
+          guest.telegramUserId,
+          draft.orderId,
+          RoomServicePaymentOption.PAY_NOW,
+          NOW,
+        ),
         openAccount(guest.reservationId),
       ]);
 
@@ -998,6 +1018,100 @@ describe('RoomServiceService (integración)', () => {
       );
       expect(charges).toHaveLength(1);
       expect(charges[0].sourceId).toBe(draft.orderId);
+    });
+
+    describe('pagar ahora o cargar a la habitación', () => {
+      const draftOf = async (telegramUserId: string) => {
+        const draft = await prepare(telegramUserId, [
+          { menuItemId: coffee.id, quantity: 2 },
+        ]);
+        if (!draft.ok || !draft.orderId)
+          throw new Error('No se armó el pedido');
+        return draft;
+      };
+
+      it('el resumen ofrece cargar a la habitación solo con la cuenta abierta', async () => {
+        const withAccount = await seedGuest();
+        await openAccount(withAccount.reservationId);
+        const withoutAccount = await seedGuest();
+
+        const offered = await draftOf(withAccount.telegramUserId);
+        const notOffered = await draftOf(withoutAccount.telegramUserId);
+
+        expect(offered).toMatchObject({ canChargeToRoom: true });
+        expect(offered.ok && offered.reply).toContain('Cargar a la habitación');
+        expect(notOffered).toMatchObject({ canChargeToRoom: false });
+        expect(notOffered.ok && notOffered.reply).not.toContain(
+          'Cargar a la habitación',
+        );
+      });
+
+      it('cargar a la habitación confirma el pedido, genera el cargo y no manda link', async () => {
+        const guest = await seedGuest();
+        await openAccount(guest.reservationId);
+        const draft = await draftOf(guest.telegramUserId);
+
+        const result = await service.confirmOrder(
+          guest.telegramUserId,
+          draft.orderId!,
+          RoomServicePaymentOption.CHARGE_TO_ROOM,
+          NOW,
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.ok && result.reply).toContain('cuenta de tu habitación');
+        expect(result.ok && result.reply).not.toContain(INIT_POINT);
+        expect(createRoomServicePreference).not.toHaveBeenCalled();
+        expect((await rowById(draft.orderId!)).status).toBe(
+          RoomServiceOrderStatus.RECEIVED,
+        );
+        expect(typesOf(await entriesOf(guest.reservationId))).toEqual([
+          AccountEntryType.CHARGE,
+        ]);
+      });
+
+      it('pagar ahora también genera el cargo y además manda el link', async () => {
+        const guest = await seedGuest();
+        await openAccount(guest.reservationId);
+        const draft = await draftOf(guest.telegramUserId);
+
+        const result = await service.confirmOrder(
+          guest.telegramUserId,
+          draft.orderId!,
+          RoomServicePaymentOption.PAY_NOW,
+          NOW,
+        );
+
+        expect(result.ok && result.reply).toContain(INIT_POINT);
+        expect(typesOf(await entriesOf(guest.reservationId))).toEqual([
+          AccountEntryType.CHARGE,
+        ]);
+      });
+
+      it('sin cuenta abierta no lo carga a la habitación y el borrador sigue para pagar ahora', async () => {
+        const guest = await seedGuest();
+        const draft = await draftOf(guest.telegramUserId);
+
+        const result = await service.confirmOrder(
+          guest.telegramUserId,
+          draft.orderId!,
+          RoomServicePaymentOption.CHARGE_TO_ROOM,
+          NOW,
+        );
+
+        expect(result).toEqual({ ok: false, reason: NO_ROOM_CHARGE_REASON });
+        expect((await rowById(draft.orderId!)).status).toBe(
+          RoomServiceOrderStatus.PENDING_CONFIRMATION,
+        );
+
+        const paid = await service.confirmOrder(
+          guest.telegramUserId,
+          draft.orderId!,
+          RoomServicePaymentOption.PAY_NOW,
+          NOW,
+        );
+        expect(paid.ok).toBe(true);
+      });
     });
   });
 });

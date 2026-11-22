@@ -4,7 +4,10 @@ import {
   LockMode,
   UniqueConstraintViolationException,
 } from '@mikro-orm/core';
-import { Account } from '../../infrastructure/database/entities/Account.entity';
+import {
+  Account,
+  AccountStatus,
+} from '../../infrastructure/database/entities/Account.entity';
 import { AccountEntry } from '../../infrastructure/database/entities/AccountEntry.entity';
 import { Reservation } from '../../infrastructure/database/entities/Reservation.entity';
 import {
@@ -54,6 +57,14 @@ export class AccountRepository {
       checkIn: toDateKey(reservation.checkIn),
       checkOut: toDateKey(reservation.checkOut),
     };
+  }
+
+  async hasOpenAccount(reservationId: string): Promise<boolean> {
+    const count = await this.em.count(Account, {
+      reservation: reservationId,
+      status: AccountStatus.OPEN,
+    });
+    return count > 0;
   }
 
   async findByReservationId(

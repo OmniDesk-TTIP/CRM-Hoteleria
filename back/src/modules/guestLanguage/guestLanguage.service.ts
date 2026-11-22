@@ -11,8 +11,10 @@ import {
   EXPIRED_DECLINE_LABEL,
   EXPIRED_RESUME_LABEL,
   ROOM_SERVICE_CANCEL_LABEL,
+  ROOM_SERVICE_CHARGE_LABEL,
   ROOM_SERVICE_CONFIRM_LABEL,
   ROOM_SERVICE_KEEP_LABEL,
+  ROOM_SERVICE_PAY_NOW_LABEL,
 } from '../telegram/telegram.format';
 import { detectLanguage } from './language.detector';
 
@@ -39,6 +41,8 @@ const BUTTON_LABELS: Partial<Record<GuestLanguage, Record<string, string>>> = {
     // EXPIRED_DECLINE_LABEL y ROOM_SERVICE_DISCARD_LABEL son el mismo texto ("No, gracias").
     [EXPIRED_DECLINE_LABEL]: 'No, thanks',
     [ROOM_SERVICE_CONFIRM_LABEL]: 'Confirm order',
+    [ROOM_SERVICE_PAY_NOW_LABEL]: 'Pay now',
+    [ROOM_SERVICE_CHARGE_LABEL]: 'Charge to my room',
     [ROOM_SERVICE_CANCEL_LABEL]: 'Yes, cancel',
     [ROOM_SERVICE_KEEP_LABEL]: 'No, keep it',
   },

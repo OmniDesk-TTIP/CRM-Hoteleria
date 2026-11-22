@@ -13,6 +13,7 @@ import { CancellationService } from '../cancellation/cancellation.service';
 import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import { RoomServiceService } from '../roomService/roomService.service';
+import { RoomServicePaymentOption } from '../roomService/roomService.model';
 import { PromotionService } from '../promotion/promotion.service';
 import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
 import { detectLanguage } from '../guestLanguage/language.detector';
@@ -1132,7 +1133,7 @@ describe('TelegramUpdate', () => {
       );
     });
 
-    it('arma el resumen y lo manda con los botones para confirmar (CA4)', async () => {
+    it('arma el resumen y, sin cuenta abierta, solo ofrece pagar ahora (CA4, US-27)', async () => {
       jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
         action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
         datos,
@@ -1141,6 +1142,7 @@ describe('TelegramUpdate', () => {
         ok: true,
         orderId: ORDER_ID,
         reply: 'Tu pedido de room service',
+        canChargeToRoom: false,
       });
 
       await update.onMessage('Quiero 2 hamburguesas sin sal', mockCtx);
@@ -1157,9 +1159,50 @@ describe('TelegramUpdate', () => {
           inline_keyboard: [
             [
               expect.objectContaining({
-                text: 'Confirmar pedido',
-                callback_data: `roomservice:confirm:${ORDER_ID}`,
+                text: 'Pagar ahora',
+                callback_data: `roomservice:pay:${ORDER_ID}`,
               }),
+            ],
+            [
+              expect.objectContaining({
+                text: 'No, gracias',
+                callback_data: `roomservice:discard:${ORDER_ID}`,
+              }),
+            ],
+          ],
+        },
+      });
+    });
+
+    it('con la cuenta abierta ofrece pagar ahora o cargar a la habitación (US-27)', async () => {
+      jest.spyOn(ragService, 'askQuestion').mockResolvedValue({
+        action: ChatAction.PREPARE_ROOM_SERVICE_ORDER,
+        datos,
+      });
+      roomServiceService.prepareOrder.mockResolvedValue({
+        ok: true,
+        orderId: ORDER_ID,
+        reply: 'Tu pedido de room service',
+        canChargeToRoom: true,
+      });
+
+      await update.onMessage('Quiero 2 hamburguesas sin sal', mockCtx);
+
+      expect(mockCtx.reply).toHaveBeenCalledWith('Tu pedido de room service', {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              expect.objectContaining({
+                text: 'Pagar ahora',
+                callback_data: `roomservice:pay:${ORDER_ID}`,
+              }),
+              expect.objectContaining({
+                text: 'Cargar a la habitación',
+                callback_data: `roomservice:charge:${ORDER_ID}`,
+              }),
+            ],
+            [
               expect.objectContaining({
                 text: 'No, gracias',
                 callback_data: `roomservice:discard:${ORDER_ID}`,
@@ -1234,8 +1277,8 @@ describe('TelegramUpdate', () => {
       );
     });
 
-    it('el botón "Confirmar pedido" confirma, saca los botones y deja todo en el chat', async () => {
-      const ctx = buttonCtx(`roomservice:confirm:${ORDER_ID}`);
+    it('el botón "Pagar ahora" confirma, saca los botones y deja todo en el chat', async () => {
+      const ctx = buttonCtx(`roomservice:pay:${ORDER_ID}`);
       roomServiceService.confirmOrder.mockResolvedValue({
         ok: true,
         orderId: ORDER_ID,
@@ -1249,10 +1292,11 @@ describe('TelegramUpdate', () => {
       expect(roomServiceService.confirmOrder).toHaveBeenCalledWith(
         mockTelegramUserId,
         ORDER_ID,
+        RoomServicePaymentOption.PAY_NOW,
       );
       expect(chatService.recordIncomingMessage).toHaveBeenCalledWith(
         session,
-        'Confirmar pedido',
+        'Pagar ahora',
       );
       expect(chatService.recordBotMessage).toHaveBeenCalledWith(
         session,
@@ -1262,6 +1306,38 @@ describe('TelegramUpdate', () => {
         parse_mode: 'HTML',
       });
     });
+
+    it.each([
+      [
+        'charge',
+        'Cargar a la habitación',
+        RoomServicePaymentOption.CHARGE_TO_ROOM,
+      ],
+      // los resúmenes enviados antes de US-27 tenían "Confirmar pedido": sigue pagando ahora
+      ['confirm', 'Confirmar pedido', RoomServicePaymentOption.PAY_NOW],
+    ] as const)(
+      'el botón %s ("%s") confirma con %s',
+      async (button, label, option) => {
+        const ctx = buttonCtx(`roomservice:${button}:${ORDER_ID}`);
+        roomServiceService.confirmOrder.mockResolvedValue({
+          ok: true,
+          orderId: ORDER_ID,
+          reply: 'Listo',
+        });
+
+        await update.onRoomServiceAction(ctx);
+
+        expect(roomServiceService.confirmOrder).toHaveBeenCalledWith(
+          mockTelegramUserId,
+          ORDER_ID,
+          option,
+        );
+        expect(chatService.recordIncomingMessage).toHaveBeenCalledWith(
+          session,
+          label,
+        );
+      },
+    );
 
     it.each([
       ['discard', 'discardDraft'],

@@ -70,6 +70,11 @@ export class AccountService {
     return ReservationAccountDto.from(reservation, account);
   }
 
+  /** US-27: si se le pueden cargar consumos (Chamber ofrece "Cargar a la habitación"). */
+  hasOpenAccount(reservationId: string): Promise<boolean> {
+    return this.accountRepository.hasOpenAccount(reservationId);
+  }
+
   /** Registra el pago del resto de la estadía y abre la cuenta de la reserva. */
   async open(
     reservationId: string,

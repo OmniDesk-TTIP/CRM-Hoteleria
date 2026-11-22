@@ -95,6 +95,14 @@ export function describeRoomServiceHours(hours: RoomServiceHours): string {
   return `todos los días de ${hours.opensAt} a ${hours.closesAt}`;
 }
 
+/** US-27: cómo eligió pagar el huésped al confirmar el pedido. */
+export enum RoomServicePaymentOption {
+  /** Con el link de Mercado Pago, como hasta ahora. */
+  PAY_NOW = 'PAY_NOW',
+  /** A la cuenta corriente de la reserva: lo paga al terminar la estadía. */
+  CHARGE_TO_ROOM = 'CHARGE_TO_ROOM',
+}
+
 export interface RoomServiceOrderProps {
   id: string;
   status: RoomServiceOrderStatus;

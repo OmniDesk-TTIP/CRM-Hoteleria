@@ -26,6 +26,7 @@ import {
   OrderLine,
   RoomServiceHours,
   RoomServiceOrderModel,
+  RoomServicePaymentOption,
 } from './roomService.model';
 import { RoomServiceRepository } from './roomService.repository';
 import {
@@ -38,7 +39,17 @@ import {
 } from './roomService.dto';
 
 export type RoomServiceChatResult =
-  { ok: true; reply: string; orderId?: string } | { ok: false; reason: string };
+  | {
+      ok: true;
+      reply: string;
+      orderId?: string;
+      /** Solo en el resumen: si se ofrece "Cargar a la habitación" (cuenta abierta). */
+      canChargeToRoom?: boolean;
+    }
+  | { ok: false; reason: string };
+
+export const NO_ROOM_CHARGE_REASON =
+  'En este momento no puedo cargarlo a tu habitación porque tu cuenta no está habilitada. Si querés, tocá "Pagar ahora" y te paso el link de pago.';
 
 export interface RoomServiceChatContext {
   block: string;
@@ -135,13 +146,19 @@ export class RoomServiceService {
     });
     await this.roomServiceRepository.replaceDraft(draft);
 
+    const canChargeToRoom = await this.accountService.hasOpenAccount(
+      check.stay.reservationId,
+    );
     return {
       ok: true,
       orderId: draft.id,
+      canChargeToRoom,
       reply: [
         draft.getSummary(),
         '',
-        '¿Lo confirmás? Tocá <b>Confirmar pedido</b> para enviarlo a la cocina.',
+        canChargeToRoom
+          ? '¿Cómo querés pagarlo? Tocá <b>Pagar ahora</b> para recibir el link de pago o <b>Cargar a la habitación</b> para abonarlo al final de tu estadía. Con cualquiera de los dos lo enviamos a la cocina.'
+          : '¿Lo confirmás? Tocá <b>Pagar ahora</b> para enviarlo a la cocina y recibir el link de pago.',
       ].join('\n'),
     };
   }
@@ -149,6 +166,7 @@ export class RoomServiceService {
   async confirmOrder(
     telegramUserId: string,
     orderId: string,
+    paymentOption: RoomServicePaymentOption = RoomServicePaymentOption.PAY_NOW,
     now: Date = new Date(),
   ): Promise<RoomServiceChatResult> {
     const order = await this.roomServiceRepository.findById(orderId);
@@ -174,6 +192,16 @@ export class RoomServiceService {
     const check = await this.checkCanOrder(telegramUserId, now);
     if (!check.ok) return check;
 
+    const chargeToRoom =
+      paymentOption === RoomServicePaymentOption.CHARGE_TO_ROOM;
+    // se chequea antes de confirmar: si la cuenta se cerró, el borrador sigue y puede pagar ahora
+    if (
+      chargeToRoom &&
+      !(await this.accountService.hasOpenAccount(order.roomReservationId))
+    ) {
+      return { ok: false, reason: NO_ROOM_CHARGE_REASON };
+    }
+
     const error = order.confirm(now);
     if (error) return { ok: false, reason: error };
     const confirmed = await this.roomServiceRepository.confirmIfDraft(order);
@@ -182,12 +210,26 @@ export class RoomServiceService {
     }
     await this.syncAccount(order, now);
 
-    const paymentLink = await this.createPaymentLink(order, check.stay);
-    const reply = [
+    const received = [
       `✅ ¡Listo! Recibimos tu pedido para la habitación ${escapeHtml(order.roomNumber)}. Te aviso por acá cuando esté en preparación y cuando te lo entreguen.`,
       '',
       `Total: $${order.total}`,
       '',
+    ];
+    if (chargeToRoom) {
+      return {
+        ok: true,
+        orderId: order.id,
+        reply: [
+          ...received,
+          '🧾 Lo cargué a la cuenta de tu habitación: lo abonás al final de tu estadía.',
+        ].join('\n'),
+      };
+    }
+
+    const paymentLink = await this.createPaymentLink(order, check.stay);
+    const reply = [
+      ...received,
       ...(paymentLink
         ? [
             '💳 Podés pagarlo desde tu habitación con este link:',
