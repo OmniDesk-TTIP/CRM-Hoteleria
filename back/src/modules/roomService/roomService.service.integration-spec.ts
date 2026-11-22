@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -182,6 +183,7 @@ describe('RoomServiceService (integración)', () => {
         createRoomServicePreference,
         getPayment,
         verifyWebhookSignature: jest.fn(),
+        expirePreference: jest.fn(),
         notifyPaymentApproved: jest.fn(),
       })
       .overrideProvider(getBotToken())
@@ -274,7 +276,6 @@ describe('RoomServiceService (integración)', () => {
       });
       await em.nativeDelete(AccountEntry, { account: { $in: accountIds } });
       await em.nativeDelete(Account, { id: { $in: accountIds } });
-      if (receptionist) await em.nativeDelete(User, { id: receptionist.id });
       await em.nativeDelete(ChatMessage, {
         telegramUserId: { $in: clientIds },
       });
@@ -285,6 +286,8 @@ describe('RoomServiceService (integración)', () => {
         telegramUserId: { $in: clientIds },
       });
       await em.nativeDelete(Reservation, { id: { $in: reservationIds } });
+      // después de las reservas: el checkout deja al usuario referenciado en ellas
+      if (receptionist) await em.nativeDelete(User, { id: receptionist.id });
       await em.nativeDelete(RestaurantMenuItem, { id: { $in: menuItemIds } });
       if (createdSettings) {
         await em.nativeDelete(RestaurantSettings, { id: settingsId });
@@ -1111,6 +1114,58 @@ describe('RoomServiceService (integración)', () => {
           NOW,
         );
         expect(paid.ok).toBe(true);
+      });
+    });
+
+    describe('después del checkout (US-30)', () => {
+      it('ya no es huésped alojado: Chamber no le toma pedidos', async () => {
+        const guest = await seedGuest();
+        await openAccount(guest.reservationId);
+        const before = await service.getChatContext(guest.telegramUserId, NOW);
+        await app
+          .get(AccountService)
+          .checkout(guest.reservationId, false, receptionist!.id, NOW);
+
+        const draft = await prepare(guest.telegramUserId, [
+          { menuItemId: coffee.id, quantity: 1 },
+        ]);
+        const after = await service.getChatContext(guest.telegramUserId, NOW);
+
+        expect(before.canOrder).toBe(true);
+        expect(draft.ok).toBe(false);
+        expect(after.canOrder).toBe(false);
+      });
+
+      it('un pago con link que llega después del checkout no entra a la cuenta cerrada', async () => {
+        const guest = await seedGuest();
+        await openAccount(guest.reservationId);
+        const orderId = await placeOrder(guest.telegramUserId);
+        // recepción cobra el pedido y hace el checkout (con el pedido todavía en curso, así que lo
+        // confirma con force); el huésped paga el link igual
+        await app.get(AccountService).registerPayment(
+          guest.reservationId,
+          {
+            operationId: randomUUID(),
+            amount: 3001,
+            paymentMethod: PaymentMethod.CARD,
+          },
+          { userId: receptionist!.id },
+          NOW,
+        );
+        await app
+          .get(AccountService)
+          .checkout(guest.reservationId, true, receptionist!.id, NOW);
+
+        await pay(orderId, 903);
+
+        expect((await rowById(orderId)).paymentStatus).toBe(
+          RoomServicePaymentStatus.PAID,
+        );
+        expect(
+          typesOf(await entriesOf(guest.reservationId)).filter(
+            (type) => type === AccountEntryType.PAYMENT,
+          ),
+        ).toHaveLength(1);
       });
     });
   });

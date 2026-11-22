@@ -36,6 +36,7 @@ import { User } from '../../infrastructure/database/entities/User.entity';
 import {
   RoomServiceOrder,
   RoomServiceOrderStatus,
+  RoomServicePaymentStatus,
 } from '../../infrastructure/database/entities/RoomServiceOrder.entity';
 import {
   SpaReservation,
@@ -43,6 +44,7 @@ import {
 } from '../../infrastructure/database/entities/SpaReservation.entity';
 import { SpaService } from '../../infrastructure/database/entities/SpaService.entity';
 import { CheckoutBlockCode } from './checkout.model';
+import { SpaService as SpaCatalogService } from '../spa/spa.service';
 
 /**
  * US-26 contra la base de test: reservas, cuentas y movimientos son filas reales; Mercado Pago,
@@ -91,6 +93,7 @@ describe('AccountService (integración)', () => {
   };
 
   const author = () => ({ userId: user.id });
+  const expirePreference = jest.fn();
   const spaServiceIds: string[] = [];
   const CHAMBER = { userId: null };
 
@@ -125,7 +128,7 @@ describe('AccountService (integración)', () => {
       .overrideProvider(RagService)
       .useValue({ ingestDocument: jest.fn(), askQuestion: jest.fn() })
       .overrideProvider(PaymentService)
-      .useValue({})
+      .useValue({ expirePreference })
       .overrideProvider(getBotToken())
       .useValue({
         launch: jest.fn(),
@@ -1111,6 +1114,72 @@ describe('AccountService (integración)', () => {
       await expect(
         service.checkout(randomUUID(), false, user.id, NOW),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    describe('efectos', () => {
+      const seedOrder = async (
+        reservationId: string,
+        overrides: Partial<RoomServiceOrder>,
+      ) => {
+        const order = em.create(RoomServiceOrder, {
+          status: RoomServiceOrderStatus.DELIVERED,
+          telegramUserId: `tg-checkout-${next()}`,
+          roomReservation: em.getReference(Reservation, reservationId),
+          roomNumber: '101',
+          guestFullName: 'Ana Cuenta',
+          items: [],
+          total: 3000,
+          ...overrides,
+        });
+        await em.persist(order).flush();
+        return order;
+      };
+
+      beforeEach(() => expirePreference.mockReset());
+
+      it('vence en Mercado Pago solo los links de pedidos sin pagar', async () => {
+        const reservationId = await seedOpenAccount();
+        await seedOrder(reservationId, { mpPreferenceId: 'pref-sin-pagar' });
+        await seedOrder(reservationId, {
+          mpPreferenceId: 'pref-pagado',
+          paymentStatus: RoomServicePaymentStatus.PAID,
+        });
+        await seedOrder(reservationId, {});
+
+        await service.checkout(reservationId, false, user.id, NOW);
+
+        expect(expirePreference).toHaveBeenCalledTimes(1);
+        expect(expirePreference).toHaveBeenCalledWith('pref-sin-pagar', NOW);
+      });
+
+      it('si Mercado Pago falla, el checkout queda hecho igual', async () => {
+        const reservationId = await seedOpenAccount();
+        await seedOrder(reservationId, { mpPreferenceId: 'pref-caido' });
+        expirePreference.mockRejectedValue(new Error('MP caído'));
+
+        const result = await service.checkout(
+          reservationId,
+          false,
+          user.id,
+          NOW,
+        );
+
+        expect(result.account?.status).toBe(AccountStatus.CLOSED);
+      });
+
+      it('con el checkout hecho deja de ser huésped para el spa, el restó y las cartas', async () => {
+        const reservationId = await seedOpenAccount();
+        const { telegramUserId } = await em
+          .fork()
+          .findOneOrFail(Reservation, { id: reservationId });
+        const spa = app.get(SpaCatalogService);
+        expect(await spa.findEligibleStay(telegramUserId!, NOW)).not.toBeNull();
+
+        await service.checkout(reservationId, false, user.id, NOW);
+
+        orm.em.clear();
+        expect(await spa.findEligibleStay(telegramUserId!, NOW)).toBeNull();
+      });
     });
   });
 });

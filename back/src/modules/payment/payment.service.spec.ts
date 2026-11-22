@@ -7,21 +7,39 @@ import { PaymentRepository } from './payment.repository';
 
 jest.mock('mercadopago', () => {
   const createMock = jest.fn();
+  const getPreferenceMock = jest.fn();
+  const updatePreferenceMock = jest.fn();
   const getPaymentMock = jest.fn();
   const validateMock = jest.fn();
   return {
     MercadoPagoConfig: jest.fn().mockImplementation(() => ({})),
-    Preference: jest.fn().mockImplementation(() => ({ create: createMock })),
+    Preference: jest.fn().mockImplementation(() => ({
+      create: createMock,
+      get: getPreferenceMock,
+      update: updatePreferenceMock,
+    })),
     Payment: jest.fn().mockImplementation(() => ({ get: getPaymentMock })),
     WebhookSignatureValidator: { validate: validateMock },
-    __mocks: { createMock, getPaymentMock, validateMock },
+    __mocks: {
+      createMock,
+      getPreferenceMock,
+      updatePreferenceMock,
+      getPaymentMock,
+      validateMock,
+    },
   };
 });
 
-const { createMock, getPaymentMock, validateMock } = jest.requireMock(
-  'mercadopago',
-).__mocks as {
+const {
+  createMock,
+  getPreferenceMock,
+  updatePreferenceMock,
+  getPaymentMock,
+  validateMock,
+} = jest.requireMock('mercadopago').__mocks as {
   createMock: jest.Mock;
+  getPreferenceMock: jest.Mock;
+  updatePreferenceMock: jest.Mock;
   getPaymentMock: jest.Mock;
   validateMock: jest.Mock;
 };
@@ -214,6 +232,33 @@ describe('PaymentService', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('expirePreference (US-30)', () => {
+    it('vence el link desde ese momento y reenvía los mismos ítems', async () => {
+      const items = [
+        { id: 'order-1', title: 'Room service', quantity: 1, unit_price: 3000 },
+      ];
+      getPreferenceMock.mockResolvedValue({ id: 'pref-rs', items });
+      updatePreferenceMock.mockResolvedValue({});
+      const at = new Date(Date.UTC(2099, 2, 20, 13, 0));
+
+      const module = await buildModule();
+      service = module.get<PaymentService>(PaymentService);
+      await service.expirePreference('pref-rs', at);
+
+      expect(getPreferenceMock).toHaveBeenCalledWith({
+        preferenceId: 'pref-rs',
+      });
+      expect(updatePreferenceMock).toHaveBeenCalledWith({
+        id: 'pref-rs',
+        updatePreferenceRequest: {
+          items,
+          expires: true,
+          expiration_date_to: at.toISOString(),
+        },
+      });
     });
   });
 

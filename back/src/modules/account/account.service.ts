@@ -1,3 +1,4 @@
+import { PaymentService } from '../payment/payment.service';
 import { getCheckoutBlock } from './checkout.model';
 import { zonedDateKey } from '../../common/date.util';
 import { ConfigService } from '@nestjs/config';
@@ -71,6 +72,7 @@ export class AccountService {
   constructor(
     private readonly accountRepository: AccountRepository,
     private readonly config: ConfigService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   async getForReservation(
@@ -110,7 +112,32 @@ export class AccountService {
       },
     );
     if (!done) throw new NotFoundException('Reserva no encontrada');
+
+    await this.expirePaymentLinks(reservationId, now);
     return this.getForReservation(reservationId);
+  }
+
+  /**
+   * US-30: con el checkout hecho, los links de room service que quedaron sin pagar dejan de servir:
+   * ese consumo ya se cobró en recepción (el saldo estaba en $0). Si Mercado Pago no responde, el
+   * checkout ya quedó hecho igual: se avisa en el log para vencerlo a mano.
+   */
+  private async expirePaymentLinks(
+    reservationId: string,
+    now: Date,
+  ): Promise<void> {
+    const links =
+      await this.accountRepository.findPendingPaymentLinks(reservationId);
+    for (const link of links) {
+      // en secuencia: son pocos y así un error de uno no corta los demás
+      try {
+        await this.paymentService.expirePreference(link.preferenceId, now);
+      } catch (error) {
+        this.logger.error(
+          `No se pudo vencer el link de pago del pedido ${link.orderId} tras el checkout: ${String(error)}`,
+        );
+      }
+    }
   }
 
   /** US-27: si se le pueden cargar consumos (Chamber ofrece "Cargar a la habitación"). */
@@ -233,10 +260,27 @@ export class AccountService {
   ): Promise<AccountEntryModel[]> {
     if (!consumption) return [];
     try {
+      let paidAfterClosing = false;
       const entries = await this.accountRepository.syncConsumption(
         reservationId,
-        (account) => planConsumptionEntries(account, consumption, now),
+        (account) => {
+          paidAfterClosing =
+            !account.isOpen &&
+            consumption.payment !== null &&
+            !account.entries.some(
+              (entry) =>
+                entry.type === AccountEntryType.PAYMENT &&
+                entry.sourceId === consumption.sourceId,
+            );
+          return planConsumptionEntries(account, consumption, now);
+        },
       );
+      if (paidAfterClosing) {
+        // la cuenta cerrada no lo acepta: la plata entró por Mercado Pago y hay que devolverla
+        this.logger.warn(
+          `Llegó el pago ${consumption.payment?.reference} del consumo ${consumption.origin} ${consumption.sourceId} con la cuenta ya cerrada: devolverlo desde recepción`,
+        );
+      }
       return entries ?? [];
     } catch (error) {
       this.logger.error(

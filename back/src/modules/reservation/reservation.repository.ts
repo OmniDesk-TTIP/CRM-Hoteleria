@@ -62,12 +62,14 @@ export class ReservationRepository {
     );
   }
 
+  /** Reservas confirmadas del huésped sin checkout (US-30): las que todavía lo habilitan como huésped. */
   async findConfirmedByTelegramUserId(
     telegramUserId: string,
   ): Promise<Reservation[]> {
     return this.em.find(Reservation, {
       telegramUserId,
       status: ReservationStatus.CONFIRMED,
+      checkedOutAt: null,
     });
   }
 

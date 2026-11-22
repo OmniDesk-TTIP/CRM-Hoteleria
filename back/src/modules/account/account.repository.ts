@@ -24,6 +24,7 @@ import { Reservation } from '../../infrastructure/database/entities/Reservation.
 import {
   RoomServiceOrder,
   RoomServiceOrderStatus,
+  RoomServicePaymentStatus,
 } from '../../infrastructure/database/entities/RoomServiceOrder.entity';
 import { User } from '../../infrastructure/database/entities/User.entity';
 import { toDateKey } from '../../common/date.util';
@@ -167,6 +168,21 @@ export class AccountRepository {
         }),
       })),
     ];
+  }
+
+  /** US-30: links de Mercado Pago de pedidos de room service de la reserva que siguen sin pagar. */
+  async findPendingPaymentLinks(
+    reservationId: string,
+  ): Promise<{ orderId: string; preferenceId: string }[]> {
+    const orders = await this.em.find(RoomServiceOrder, {
+      roomReservation: reservationId,
+      paymentStatus: RoomServicePaymentStatus.PENDING,
+      mpPreferenceId: { $ne: null },
+    });
+    return orders.map((order) => ({
+      orderId: order.id,
+      preferenceId: order.mpPreferenceId!,
+    }));
   }
 
   async hasOpenAccount(reservationId: string): Promise<boolean> {
