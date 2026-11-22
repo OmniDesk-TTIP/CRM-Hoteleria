@@ -4,10 +4,12 @@ import {
   getReservationAccount,
   openReservationAccount,
   registerAccountCharge,
+  registerAccountPayment,
   reverseAccountCharge,
 } from '@/services/account.service';
 import type {
   AccountEntry,
+  AccountPaymentData,
   AccountEntryOrigin,
   AccountEntryType,
   ManualChargeData,
@@ -20,6 +22,7 @@ import AccountEntriesTable from '@/components/account/AccountEntriesTable';
 import OpenAccountCard from '@/components/account/OpenAccountCard';
 import AddChargeModal from '@/components/account/AddChargeModal';
 import ReverseChargeModal from '@/components/account/ReverseChargeModal';
+import CollectPaymentModal from '@/components/account/CollectPaymentModal';
 import { ENTRY_ORIGIN_LABELS, ENTRY_TYPE_LABELS } from '@/components/account/accountFormat';
 import { formatIsoDay } from '@/components/admin/spaFormat';
 
@@ -41,6 +44,7 @@ export default function ReservationAccountPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [originFilter, setOriginFilter] = useState<OriginFilter>('ALL');
   const [isAddingCharge, setIsAddingCharge] = useState(false);
+  const [isCollecting, setIsCollecting] = useState(false);
   const [reversing, setReversing] = useState<AccountEntry | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
@@ -85,6 +89,12 @@ export default function ReservationAccountPage() {
     const result = await registerAccountCharge(reservationId, charge);
     if (activeReservationRef.current === reservationId) setData(result);
     setIsAddingCharge(false);
+  };
+
+  const handleCollect = async (payment: AccountPaymentData) => {
+    const result = await registerAccountPayment(reservationId, payment);
+    if (activeReservationRef.current === reservationId) setData(result);
+    setIsCollecting(false);
   };
 
   const handleReverse = async (reason: string) => {
@@ -143,7 +153,7 @@ export default function ReservationAccountPage() {
 
       {!isLoading && !error && account && (
         <>
-          <AccountSummary account={account} />
+          <AccountSummary account={account} onCollect={isOpen ? () => setIsCollecting(true) : undefined} />
 
           <section className="overflow-hidden rounded-2xl border border-goldLight/15 bg-card">
             <div className="flex flex-col gap-3 border-b border-goldLight/10 p-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
@@ -212,6 +222,14 @@ export default function ReservationAccountPage() {
       )}
 
       {isAddingCharge && <AddChargeModal onClose={() => setIsAddingCharge(false)} onSubmit={handleAddCharge} />}
+
+      {isCollecting && account && (
+        <CollectPaymentModal
+          balance={account.balance}
+          onClose={() => setIsCollecting(false)}
+          onSubmit={handleCollect}
+        />
+      )}
 
       {reversing && (
         <ReverseChargeModal entry={reversing} onClose={() => setReversing(null)} onSubmit={handleReverse} />

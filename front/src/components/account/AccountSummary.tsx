@@ -12,7 +12,13 @@ function balanceCaption(balance: number): string {
   return 'Sin deuda';
 }
 
-export default function AccountSummary({ account }: { account: Account }) {
+interface AccountSummaryProps {
+  account: Account;
+  /** Si viene, la tarjeta del saldo ofrece "Cobrar saldo" mientras el huésped deba algo. */
+  onCollect?: () => void;
+}
+
+export default function AccountSummary({ account, onCollect }: AccountSummaryProps) {
   return (
     <section className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -25,6 +31,15 @@ export default function AccountSummary({ account }: { account: Account }) {
             {formatPesos(Math.abs(account.balance))}
           </p>
           <p className="text-sm text-textMuted">{balanceCaption(account.balance)}</p>
+          {onCollect && account.balance > 0 && (
+            <button
+              type="button"
+              onClick={onCollect}
+              className="mt-3 w-full rounded-xl bg-gold px-4 py-2 text-sm font-medium text-shell transition hover:bg-goldLight motion-reduce:transition-none"
+            >
+              Cobrar saldo
+            </button>
+          )}
         </div>
 
         <SummaryCard label="Total de cargos" value={formatPesos(account.totalCharges)} />

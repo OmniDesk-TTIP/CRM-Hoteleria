@@ -911,3 +911,13 @@ export interface ManualChargeData {
   ticketNumber?: string;
   detail?: string;
 }
+
+/** US-28: pago del saldo registrado en recepción (posnet, efectivo, etc.). */
+export interface AccountPaymentData {
+  /** Clave de idempotencia: la genera el formulario. */
+  operationId: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  /** Número de cupón del posnet o de la operación. */
+  reference?: string;
+}

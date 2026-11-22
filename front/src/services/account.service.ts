@@ -1,5 +1,5 @@
 import apiClient from '@/config/api';
-import type { ManualChargeData, PaymentMethod, ReservationAccount } from '@/config/types';
+import type { AccountPaymentData, ManualChargeData, PaymentMethod, ReservationAccount } from '@/config/types';
 
 export const getReservationAccount = async (reservationId: string): Promise<ReservationAccount> => {
   const { data } = await apiClient.get<ReservationAccount>(`/reservations/${reservationId}/account`);
@@ -36,5 +36,14 @@ export const reverseAccountCharge = async (
     `/reservations/${reservationId}/account/charges/${entryId}/reversal`,
     { reason },
   );
+  return data;
+};
+
+/** US-28: registra un pago (total o parcial) del saldo pendiente. */
+export const registerAccountPayment = async (
+  reservationId: string,
+  payment: AccountPaymentData,
+): Promise<ReservationAccount> => {
+  const { data } = await apiClient.post<ReservationAccount>(`/reservations/${reservationId}/account/payments`, payment);
   return data;
 };
