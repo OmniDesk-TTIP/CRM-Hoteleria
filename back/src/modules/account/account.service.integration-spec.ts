@@ -1182,4 +1182,27 @@ describe('AccountService (integración)', () => {
       });
     });
   });
+
+  describe('estado de cuenta en PDF (US-30)', () => {
+    it('genera el PDF de la cuenta con el nombre por habitación y fecha', async () => {
+      const reservationId = await seedOpenAccount();
+      await service.registerEntry(reservationId, charge(5000), author(), NOW);
+
+      const { source, filename } = await service.buildStatement(
+        reservationId,
+        NOW,
+      );
+
+      expect(source.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+      expect(filename).toMatch(/^estado-de-cuenta-hab-.+-2099-03-10\.pdf$/);
+    });
+
+    it('404 si la reserva no tiene cuenta corriente', async () => {
+      const reservationId = await seedReservation();
+
+      await expect(service.buildStatement(reservationId, NOW)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
 });

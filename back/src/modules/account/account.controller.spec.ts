@@ -27,13 +27,17 @@ describe('AccountController (roles)', () => {
     },
   );
 
-  it.each(['get', 'open', 'registerPayment', 'registerCharge'] as const)(
-    '%s lo puede usar cualquier usuario del panel',
-    (handler) => {
-      expect(rolesOf(handler)).toEqual({
-        roles: undefined,
-        guards: undefined,
-      });
-    },
-  );
+  it.each([
+    'get',
+    'open',
+    'registerPayment',
+    'registerCharge',
+    'checkout',
+    'statement',
+  ] as const)('%s lo puede usar cualquier usuario del panel', (handler) => {
+    expect(rolesOf(handler)).toEqual({
+      roles: undefined,
+      guards: undefined,
+    });
+  });
 });

@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { UserRole } from '../../infrastructure/database/entities/User.entity';
@@ -45,6 +46,20 @@ export class AccountController {
     @CurrentUser() user: AuthUser,
   ): Promise<ReservationAccountDto> {
     return this.accountService.open(reservationId, body.paymentMethod, user.id);
+  }
+
+  /** US-30: estado de cuenta en PDF (ADMIN y EMPLOYEE). 404 si la reserva no tiene cuenta. */
+  @Get('statement')
+  async statement(
+    @Param('reservationId', ParseUUIDPipe) reservationId: string,
+  ): Promise<StreamableFile> {
+    const { source, filename } =
+      await this.accountService.buildStatement(reservationId);
+    return new StreamableFile(source, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${filename}"`,
+      length: source.length,
+    });
   }
 
   /**

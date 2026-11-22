@@ -1,3 +1,6 @@
+import { DEFAULT_HOTEL_NAME } from '../../common/hotelPdf';
+import { renderAccountStatement } from './accountStatement.renderer';
+import { buildAccountStatement } from './accountStatement.model';
 import { PaymentService } from '../payment/payment.service';
 import { getCheckoutBlock } from './checkout.model';
 import { zonedDateKey } from '../../common/date.util';
@@ -98,10 +101,7 @@ export class AccountService {
     userId: string,
     now: Date = new Date(),
   ): Promise<ReservationAccountDto> {
-    const today = zonedDateKey(
-      now,
-      this.config.get<string>('SUPPORT_TIMEZONE') ?? DEFAULT_TIMEZONE,
-    );
+    const today = zonedDateKey(now, this.timeZone);
     const done = await this.accountRepository.checkout(
       reservationId,
       today,
@@ -138,6 +138,40 @@ export class AccountService {
         );
       }
     }
+  }
+
+  /**
+   * US-30: estado de cuenta en PDF, con el diseño de los PDF del hotel. Se puede pedir en cualquier
+   * momento: mientras la cuenta está abierta muestra el saldo que queda.
+   */
+  async buildStatement(
+    reservationId: string,
+    now: Date = new Date(),
+  ): Promise<{ source: Buffer; filename: string }> {
+    const reservation =
+      await this.accountRepository.findReservation(reservationId);
+    if (!reservation) throw new NotFoundException('Reserva no encontrada');
+    const account =
+      await this.accountRepository.findByReservationId(reservationId);
+    if (!account) {
+      throw new NotFoundException('La reserva no tiene cuenta corriente');
+    }
+
+    const statement = buildAccountStatement(
+      reservation,
+      account,
+      this.config.get<string>('HOTEL_NAME') || DEFAULT_HOTEL_NAME,
+      now,
+      this.timeZone,
+    );
+    return {
+      source: await renderAccountStatement(statement),
+      filename: statement.filename,
+    };
+  }
+
+  private get timeZone(): string {
+    return this.config.get<string>('SUPPORT_TIMEZONE') ?? DEFAULT_TIMEZONE;
   }
 
   /** US-27: si se le pueden cargar consumos (Chamber ofrece "Cargar a la habitación"). */

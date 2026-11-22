@@ -80,3 +80,31 @@ export const checkoutReservation = async (reservationId: string, force = false):
     throw error;
   }
 };
+
+const STATEMENT_ERROR = 'No se pudo generar el estado de cuenta.';
+
+/** El error de un pedido con `responseType: 'blob'` llega como Blob: se lee el mensaje del back. */
+const readBlobError = async (error: unknown): Promise<string> => {
+  if (!isAxiosError(error) || !(error.response?.data instanceof Blob)) return STATEMENT_ERROR;
+  try {
+    const { message } = JSON.parse(await error.response.data.text()) as { message?: string };
+    return message || STATEMENT_ERROR;
+  } catch {
+    return STATEMENT_ERROR;
+  }
+};
+
+/** US-30: estado de cuenta en PDF, con el nombre de archivo que propone el back. */
+export const fetchAccountStatement = async (reservationId: string): Promise<{ blob: Blob; filename: string }> => {
+  try {
+    const response = await apiClient.get<Blob>(`/reservations/${reservationId}/account/statement`, {
+      responseType: 'blob',
+      timeout: 30_000,
+    });
+    const disposition = String(response.headers['content-disposition'] ?? '');
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'estado-de-cuenta.pdf';
+    return { blob: response.data, filename };
+  } catch (error: unknown) {
+    throw new Error(await readBlobError(error));
+  }
+};

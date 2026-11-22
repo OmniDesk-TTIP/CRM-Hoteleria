@@ -16,6 +16,8 @@ async function bootstrap() {
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
+    // US-30: el panel lee de acá el nombre del PDF del estado de cuenta
+    exposedHeaders: ['Content-Disposition'],
   });
   app.use(cookieParser());
   app.useGlobalPipes(createValidationPipe());

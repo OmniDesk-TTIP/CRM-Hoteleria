@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   checkoutReservation,
+  fetchAccountStatement,
   getReservationAccount,
   openReservationAccount,
   registerAccountCharge,
@@ -49,6 +50,8 @@ export default function ReservationAccountPage() {
   const [isAddingCharge, setIsAddingCharge] = useState(false);
   const [isCollecting, setIsCollecting] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [reversing, setReversing] = useState<AccountEntry | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
@@ -101,6 +104,25 @@ export default function ReservationAccountPage() {
     setIsCollecting(false);
   };
 
+  const handleDownloadStatement = async () => {
+    setDownloadError(null);
+    setIsDownloading(true);
+    try {
+      const { blob, filename } = await fetchAccountStatement(reservationId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      // se libera después del click: el navegador ya empezó la descarga
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: unknown) {
+      setDownloadError(err instanceof Error ? err.message : 'No se pudo generar el estado de cuenta.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleCheckout = async (force: boolean) => {
     const result = await checkoutReservation(reservationId, force);
     if (result.ok) {
@@ -143,14 +165,26 @@ export default function ReservationAccountPage() {
         </Link>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold text-text">Cuenta corriente</h1>
-          {!isLoading && !error && canCheckout && (
-            <button
-              type="button"
-              onClick={() => setIsCheckingOut(true)}
-              className="rounded-xl border border-goldLight/30 px-4 py-2 text-sm font-medium text-goldLight transition hover:bg-goldLight/10 motion-reduce:transition-none"
-            >
-              Hacer checkout
-            </button>
+          {!isLoading && !error && account && (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={handleDownloadStatement}
+                disabled={isDownloading}
+                className="rounded-xl border border-goldLight/30 px-4 py-2 text-sm font-medium text-goldLight transition hover:bg-goldLight/10 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+              >
+                {isDownloading ? 'Generando…' : 'Descargar estado de cuenta'}
+              </button>
+              {canCheckout && (
+                <button
+                  type="button"
+                  onClick={() => setIsCheckingOut(true)}
+                  className="rounded-xl border border-goldLight/30 px-4 py-2 text-sm font-medium text-goldLight transition hover:bg-goldLight/10 motion-reduce:transition-none"
+                >
+                  Hacer checkout
+                </button>
+              )}
+            </div>
           )}
         </div>
         {reservation && (
@@ -160,6 +194,12 @@ export default function ReservationAccountPage() {
           </p>
         )}
       </div>
+
+      {downloadError && (
+        <div role="alert" className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-dangerText">
+          {downloadError}
+        </div>
+      )}
 
       {isLoading && <p className="py-10 text-center text-textMuted">Cargando cuenta corriente…</p>}
 
