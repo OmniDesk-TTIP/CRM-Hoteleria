@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -36,6 +37,14 @@ import {
 
 const PAYMENT_METHOD_MESSAGE =
   'El medio de pago debe ser CASH, CARD, TRANSFER o MERCADO_PAGO';
+
+/** Body de `POST /reservations/:id/account/checkout` (US-30). */
+export class CheckoutDto {
+  /** true para hacer el checkout aunque haya consumos en curso (recepción ya vio el aviso). */
+  @IsOptional()
+  @IsBoolean({ message: 'force debe ser true o false' })
+  force?: boolean;
+}
 
 /** Body de `POST /reservations/:id/account`: registra el pago del resto de la estadía. */
 export class OpenAccountDto {
@@ -222,6 +231,9 @@ export class ReservationAccountDto {
     depositAmount: number;
     /** Lo que se cobra para abrir la cuenta: total − seña. */
     stayBalance: number;
+    /** US-30: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
+    checkedOutAt: Date | null;
+    checkedOutByName: string | null;
   };
   account!: AccountDto | null;
 
@@ -242,6 +254,8 @@ export class ReservationAccountDto {
       totalAmount: reservation.totalAmount,
       depositAmount: reservation.depositAmount,
       stayBalance: stayBalanceOf(reservation),
+      checkedOutAt: reservation.checkedOutAt,
+      checkedOutByName: reservation.checkedOutByName,
     };
     dto.account = account ? AccountDto.fromModel(account) : null;
     return dto;

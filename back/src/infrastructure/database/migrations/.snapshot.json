@@ -3067,6 +3067,40 @@
           "enumItems": [],
           "mappedType": "date"
         },
+        "checked_out_at": {
+          "name": "checked_out_at",
+          "type": "timestamp(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "checked_out_by_id": {
+          "name": "checked_out_by_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp(6)",
@@ -3589,6 +3623,17 @@
       ],
       "triggers": [],
       "foreignKeys": {
+        "reservations_checked_out_by_id_foreign": {
+          "columnNames": [
+            "checked_out_by_id"
+          ],
+          "constraintName": "reservations_checked_out_by_id_foreign",
+          "localTableName": "public.reservations",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.users"
+        },
         "reservations_promotion_id_foreign": {
           "columnNames": [
             "promotion_id"

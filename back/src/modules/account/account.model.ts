@@ -353,6 +353,9 @@ export interface AccountReservationInfo extends ReservationForAccount {
   checkIn: string;
   /** YYYY-MM-DD */
   checkOut: string;
+  /** US-30: null mientras la estadía no tenga checkout. */
+  checkedOutAt: Date | null;
+  checkedOutByName: string | null;
 }
 
 /** Cuenta corriente de una reserva con sus movimientos. */

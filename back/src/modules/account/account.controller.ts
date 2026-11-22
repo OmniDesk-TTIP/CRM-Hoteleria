@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -13,6 +15,7 @@ import { RolesGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.types';
 import { AccountService } from './account.service';
 import {
+  CheckoutDto,
   OpenAccountDto,
   RegisterChargeDto,
   RegisterPaymentDto,
@@ -42,6 +45,24 @@ export class AccountController {
     @CurrentUser() user: AuthUser,
   ): Promise<ReservationAccountDto> {
     return this.accountService.open(reservationId, body.paymentMethod, user.id);
+  }
+
+  /**
+   * US-30: checkout de la estadía (ADMIN y EMPLOYEE). 409 con `code` si el saldo no es $0
+   * (`balance`) o si hay consumos en curso (`activeServices`; se confirma con `force`).
+   */
+  @Post('checkout')
+  @HttpCode(HttpStatus.OK)
+  checkout(
+    @Param('reservationId', ParseUUIDPipe) reservationId: string,
+    @Body() body: CheckoutDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ReservationAccountDto> {
+    return this.accountService.checkout(
+      reservationId,
+      body.force ?? false,
+      user.id,
+    );
   }
 
   /** Pago total o parcial de la cuenta. Devuelve la cuenta con el saldo restante. */

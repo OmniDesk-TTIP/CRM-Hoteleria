@@ -33,6 +33,16 @@ import {
 } from '../../infrastructure/database/entities/Room.entity';
 import { RoomCategory } from '../../infrastructure/database/entities/RoomCategory.entity';
 import { User } from '../../infrastructure/database/entities/User.entity';
+import {
+  RoomServiceOrder,
+  RoomServiceOrderStatus,
+} from '../../infrastructure/database/entities/RoomServiceOrder.entity';
+import {
+  SpaReservation,
+  SpaReservationStatus,
+} from '../../infrastructure/database/entities/SpaReservation.entity';
+import { SpaService } from '../../infrastructure/database/entities/SpaService.entity';
+import { CheckoutBlockCode } from './checkout.model';
 
 /**
  * US-26 contra la base de test: reservas, cuentas y movimientos son filas reales; Mercado Pago,
@@ -81,6 +91,7 @@ describe('AccountService (integración)', () => {
   };
 
   const author = () => ({ userId: user.id });
+  const spaServiceIds: string[] = [];
   const CHAMBER = { userId: null };
 
   const charge = (amount: number, description = 'Room service') => ({
@@ -162,6 +173,13 @@ describe('AccountService (integración)', () => {
 
   afterAll(async () => {
     try {
+      await em.nativeDelete(RoomServiceOrder, {
+        roomReservation: { $in: reservationIds },
+      });
+      await em.nativeDelete(SpaReservation, {
+        roomReservation: { $in: reservationIds },
+      });
+      await em.nativeDelete(SpaService, { id: { $in: spaServiceIds } });
       const accounts = await em.find(Account, {
         reservation: { $in: reservationIds },
       });
@@ -922,6 +940,176 @@ describe('AccountService (integración)', () => {
       ).rejects.toThrow(NotFoundException);
       await expect(
         service.reverseCharge(reservationId, paymentId, 'Error', author()),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('checkout (US-30)', () => {
+    /** Error 409 del checkout: el cuerpo trae `code` y, según el caso, `balance` o `activeServices`. */
+    const checkoutError = async (promise: Promise<unknown>) => {
+      try {
+        await promise;
+      } catch (error) {
+        if (!(error instanceof ConflictException)) throw error;
+        return error.getResponse() as Record<string, unknown>;
+      }
+      throw new Error('El checkout no se rechazó');
+    };
+
+    const pay = (reservationId: string, amount: number) =>
+      service.registerPayment(
+        reservationId,
+        {
+          operationId: randomUUID(),
+          amount,
+          paymentMethod: PaymentMethod.CARD,
+        },
+        author(),
+        NOW,
+      );
+
+    const seedActiveOrder = async (reservationId: string) => {
+      const order = em.create(RoomServiceOrder, {
+        status: RoomServiceOrderStatus.IN_PREPARATION,
+        telegramUserId: `tg-checkout-${next()}`,
+        roomReservation: em.getReference(Reservation, reservationId),
+        roomNumber: '101',
+        guestFullName: 'Ana Cuenta',
+        items: [
+          {
+            menuItemId: randomUUID(),
+            name: 'Café',
+            unitPrice: 1500,
+            quantity: 2,
+            notes: null,
+          },
+        ],
+        total: 3000,
+      });
+      await em.persist(order).flush();
+      return order.id;
+    };
+
+    const seedSpaTurn = async (
+      reservationId: string,
+      requestedDate: string,
+    ) => {
+      const spa = em.create(SpaService, {
+        name: `Masaje checkout ${next()}`,
+        description: 'Masaje',
+        durationMinutes: 60,
+        price: 15000,
+        availableWeekdays: [0, 1, 2, 3, 4, 5, 6],
+        opensAt: '10:00',
+        closesAt: '20:00',
+      });
+      const turn = em.create(SpaReservation, {
+        status: SpaReservationStatus.CONFIRMED,
+        telegramUserId: `tg-checkout-${next()}`,
+        roomReservation: em.getReference(Reservation, reservationId),
+        spaService: spa,
+        serviceName: spa.name,
+        guestFullName: 'Ana Cuenta',
+        requestedDate,
+        requestedTime: '15:00',
+        amount: 0,
+      });
+      await em.persist([spa, turn]).flush();
+      spaServiceIds.push(spa.id);
+      return turn.id;
+    };
+
+    it('con la cuenta en $0 registra quién y cuándo, y cierra la cuenta', async () => {
+      const reservationId = await seedOpenAccount();
+      await service.registerEntry(reservationId, charge(5000), author(), NOW);
+      await pay(reservationId, 5000);
+
+      const result = await service.checkout(reservationId, false, user.id, NOW);
+
+      expect(result.reservation).toMatchObject({
+        checkedOutAt: NOW,
+        checkedOutByName: user.fullName,
+        status: ReservationStatus.CONFIRMED,
+      });
+      expect(result.account).toMatchObject({
+        status: AccountStatus.CLOSED,
+        closedAt: NOW,
+        balance: 0,
+      });
+    });
+
+    it('con saldo pendiente lo rechaza con el monto y no cierra nada', async () => {
+      const reservationId = await seedOpenAccount();
+      await service.registerEntry(reservationId, charge(5000), author(), NOW);
+      await pay(reservationId, 1000);
+
+      const body = await checkoutError(
+        service.checkout(reservationId, true, user.id, NOW),
+      );
+
+      expect(body).toMatchObject({
+        code: CheckoutBlockCode.PENDING_BALANCE,
+        balance: 4000,
+      });
+      const { reservation, account } =
+        await service.getForReservation(reservationId);
+      expect(reservation.checkedOutAt).toBeNull();
+      expect(account?.status).toBe(AccountStatus.OPEN);
+    });
+
+    it('avisa room service y spa en curso; con force lo hace igual', async () => {
+      const reservationId = await seedOpenAccount();
+      await seedActiveOrder(reservationId);
+      await seedSpaTurn(reservationId, '2099-03-16');
+      // un turno de un día que ya pasó no cuenta como en curso
+      await seedSpaTurn(reservationId, '2099-03-14');
+
+      const body = await checkoutError(
+        service.checkout(reservationId, false, user.id, NOW),
+      );
+
+      expect(body.code).toBe(CheckoutBlockCode.ACTIVE_SERVICES);
+      const descriptions = (
+        body.activeServices as { kind: string; description: string }[]
+      ).map((item) => `${item.kind} ${item.description}`);
+      expect(descriptions).toEqual([
+        'ROOM_SERVICE Room service: 2 x Café (en preparación)',
+        expect.stringMatching(
+          /^SPA Spa: Masaje checkout .* el 16\/03\/2099 a las 15:00$/,
+        ),
+      ]);
+
+      const forced = await service.checkout(reservationId, true, user.id, NOW);
+      expect(forced.account?.status).toBe(AccountStatus.CLOSED);
+    });
+
+    it('sin cuenta abierta pide registrar primero el resto de la estadía', async () => {
+      const reservationId = await seedReservation();
+
+      const body = await checkoutError(
+        service.checkout(reservationId, false, user.id, NOW),
+      );
+
+      expect(body.code).toBe(CheckoutBlockCode.NO_ACCOUNT);
+    });
+
+    it('no se repite y la cuenta cerrada no acepta movimientos', async () => {
+      const reservationId = await seedOpenAccount();
+      await service.checkout(reservationId, false, user.id, NOW);
+
+      const body = await checkoutError(
+        service.checkout(reservationId, false, user.id, NOW),
+      );
+
+      expect(body.code).toBe(CheckoutBlockCode.ALREADY_CHECKED_OUT);
+      await expect(
+        service.registerEntry(reservationId, charge(100), author(), NOW),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('404 si la reserva no existe', async () => {
+      await expect(
+        service.checkout(randomUUID(), false, user.id, NOW),
       ).rejects.toThrow(NotFoundException);
     });
   });

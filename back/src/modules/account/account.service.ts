@@ -1,3 +1,6 @@
+import { getCheckoutBlock } from './checkout.model';
+import { zonedDateKey } from '../../common/date.util';
+import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   ConflictException,
@@ -33,6 +36,7 @@ import {
 import { ReservationAccountDto } from './dto/account.dto';
 
 const NO_ACCOUNT = 'La reserva no tiene una cuenta abierta';
+const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
 export interface PaymentData {
   /** Clave de idempotencia que genera el panel por cada pago confirmado. */
@@ -64,7 +68,10 @@ export interface RefundData {
 export class AccountService {
   private readonly logger = new Logger(AccountService.name);
 
-  constructor(private readonly accountRepository: AccountRepository) {}
+  constructor(
+    private readonly accountRepository: AccountRepository,
+    private readonly config: ConfigService,
+  ) {}
 
   async getForReservation(
     reservationId: string,
@@ -76,6 +83,34 @@ export class AccountService {
     const account =
       await this.accountRepository.findByReservationId(reservationId);
     return ReservationAccountDto.from(reservation, account);
+  }
+
+  /**
+   * US-30: checkout de la estadía. Exige la cuenta en $0 y avisa los consumos en curso (se puede
+   * seguir con `force`). Registra cuándo y quién, marca la estadía como finalizada y cierra la
+   * cuenta. Lo rechazado vuelve como 409 con un `code` para el panel.
+   */
+  async checkout(
+    reservationId: string,
+    force: boolean,
+    userId: string,
+    now: Date = new Date(),
+  ): Promise<ReservationAccountDto> {
+    const today = zonedDateKey(
+      now,
+      this.config.get<string>('SUPPORT_TIMEZONE') ?? DEFAULT_TIMEZONE,
+    );
+    const done = await this.accountRepository.checkout(
+      reservationId,
+      today,
+      { userId, at: now },
+      (state) => {
+        const block = getCheckoutBlock(state, force);
+        if (block) throw new ConflictException(block);
+      },
+    );
+    if (!done) throw new NotFoundException('Reserva no encontrada');
+    return this.getForReservation(reservationId);
   }
 
   /** US-27: si se le pueden cargar consumos (Chamber ofrece "Cargar a la habitación"). */

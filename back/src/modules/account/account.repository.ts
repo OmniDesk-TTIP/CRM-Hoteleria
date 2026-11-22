@@ -1,3 +1,14 @@
+import {
+  ActiveService,
+  CheckoutState,
+  describeActiveOrder,
+  describeSpaTurn,
+} from './checkout.model';
+import { OPEN_STATUSES } from '../roomService/roomService.model';
+import {
+  SpaReservation,
+  SpaReservationStatus,
+} from '../../infrastructure/database/entities/SpaReservation.entity';
 import { Injectable } from '@nestjs/common';
 import {
   EntityManager,
@@ -40,7 +51,10 @@ export class AccountRepository {
     const reservation = await this.em.findOne(
       Reservation,
       { id: reservationId },
-      { populate: ['room', 'room.category'], refresh: true },
+      {
+        populate: ['room', 'room.category', 'checkedOutBy'],
+        refresh: true,
+      },
     );
     if (!reservation) return null;
 
@@ -56,7 +70,103 @@ export class AccountRepository {
       categoryName: reservation.room.category?.name ?? '',
       checkIn: toDateKey(reservation.checkIn),
       checkOut: toDateKey(reservation.checkOut),
+      checkedOutAt: reservation.checkedOutAt ?? null,
+      checkedOutByName: reservation.checkedOutBy?.fullName ?? null,
     };
+  }
+
+  /**
+   * US-30: hace el checkout con la reserva y la cuenta bloqueadas. `decide` mira el estado al día
+   * (saldo, consumos en curso) y lanza si no se puede; si no lanza, se marca la estadía como
+   * finalizada y se cierra la cuenta en la misma transacción. Devuelve false si la reserva no
+   * existe.
+   */
+  async checkout(
+    reservationId: string,
+    today: string,
+    checkedOut: { userId: string; at: Date },
+    decide: (state: CheckoutState) => void,
+  ): Promise<boolean> {
+    return this.em.transactional(async (em) => {
+      const reservation = await em.findOne(
+        Reservation,
+        { id: reservationId },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
+      );
+      if (!reservation) return false;
+
+      const accountRow = await em.findOne(
+        Account,
+        { reservation: reservationId },
+        { lockMode: LockMode.PESSIMISTIC_WRITE, refresh: true },
+      );
+      const account = accountRow
+        ? await this.loadAccount(em, reservationId)
+        : null;
+
+      decide({
+        reservationStatus: reservation.status,
+        checkedOutAt: reservation.checkedOutAt ?? null,
+        account,
+        activeServices: await this.findActiveServices(em, reservationId, today),
+      });
+
+      reservation.checkedOutAt = checkedOut.at;
+      reservation.checkedOutBy = em.getReference(User, checkedOut.userId);
+      if (accountRow) {
+        accountRow.status = AccountStatus.CLOSED;
+        accountRow.closedAt = checkedOut.at;
+      }
+      return true;
+    });
+  }
+
+  /** Pedidos de room service sin entregar y turnos de spa del huésped que todavía no pasaron. */
+  private async findActiveServices(
+    em: EntityManager,
+    reservationId: string,
+    today: string,
+  ): Promise<ActiveService[]> {
+    const orders = await em.find(
+      RoomServiceOrder,
+      {
+        roomReservation: reservationId,
+        status: { $in: OPEN_STATUSES },
+      },
+      { orderBy: { confirmedAt: 'asc' } },
+    );
+    const spa = await em.find(
+      SpaReservation,
+      {
+        roomReservation: reservationId,
+        status: {
+          $in: [SpaReservationStatus.PENDING, SpaReservationStatus.CONFIRMED],
+        },
+        requestedDate: { $gte: today },
+      },
+      { orderBy: { requestedDate: 'asc', requestedTime: 'asc' } },
+    );
+
+    return [
+      ...orders.map((order) => ({
+        kind: 'ROOM_SERVICE' as const,
+        id: order.id,
+        description: describeActiveOrder({
+          status: order.status,
+          items: order.items,
+        }),
+      })),
+      ...spa.map((turn) => ({
+        kind: 'SPA' as const,
+        id: turn.id,
+        description: describeSpaTurn({
+          status: turn.status,
+          serviceName: turn.serviceName,
+          requestedDate: turn.requestedDate,
+          requestedTime: turn.requestedTime,
+        }),
+      })),
+    ];
   }
 
   async hasOpenAccount(reservationId: string): Promise<boolean> {
