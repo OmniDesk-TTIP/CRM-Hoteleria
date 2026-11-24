@@ -1,8 +1,9 @@
-# Flujos del bot que ya existían: handover, reserva de habitación, pago, spa, restaurante,
-# cancelación y cartas en PDF. Mismo formato que faq.yaml.
+# Flujos del bot: handover, reserva de habitación, pago, spa, restaurante, cancelación, cartas en
+# PDF y room service con la cuenta corriente. Mismo formato que faq.yaml.
 #
-# Cada caso arranca con un huésped nuevo (sin historial ni reservas). Para los casos de varios
-# turnos, cada línea de `mensajes` es un mensaje distinto, en orden.
+# Cada caso arranca con un huésped nuevo (sin historial ni reservas), salvo que use `huesped`
+# (ver README). Para los casos de varios turnos, cada línea de `mensajes` es un mensaje distinto,
+# en orden; una línea `[botón] Etiqueta` toca ese botón de la respuesta anterior.
 #
 # En `context.metadata` está lo que devolvió POST /eval/conversation:
 #   final.action  → acción que eligió Gemini en el último turno (REPLY, SEARCH_AVAILABILITY, ...)
@@ -10,6 +11,7 @@
 #   final.document → nombre del PDF enviado, si hubo
 #   state.chatStatus    → BOT | WAITING_HUMAN | HUMAN
 #   state.activeBooking → reserva en curso (step, checkIn, checkOut, capacity) o null
+#   state.account       → con `huesped`: saldo y movimientos de la cuenta corriente, o null
 
 # ---------- Handover ----------
 
@@ -145,3 +147,94 @@
     - type: icontains
       value: huésped
       metric: correctitud
+
+# ---------- Room service y cuenta corriente (US-27) ----------
+
+# Estos casos usan `huesped` para arrancar con una estadía en curso (ver README). Necesitan el
+# room service habilitado y en horario, con al menos un plato en la carta de room service.
+# Una línea `[botón] Etiqueta` toca ese botón de la respuesta anterior.
+
+- description: 'Room service: con la cuenta abierta ofrece pagar ahora o cargar a la habitación'
+  vars:
+    huesped: alojado con cuenta
+    mensajes: Quiero pedir por room service una unidad del primer plato de la carta
+  assert:
+    - type: javascript
+      value: context.metadata.final.action === 'PREPARE_ROOM_SERVICE_ORDER'
+      metric: accion
+    - type: javascript
+      value: >-
+        ['Pagar ahora', 'Cargar a la habitación'].every((label) =>
+        context.metadata.final.buttons.includes(label))
+      metric: correctitud
+
+- description: 'Room service: sin cuenta abierta solo ofrece pagar ahora'
+  vars:
+    huesped: alojado
+    mensajes: Quiero pedir por room service una unidad del primer plato de la carta
+  assert:
+    - type: javascript
+      value: context.metadata.final.action === 'PREPARE_ROOM_SERVICE_ORDER'
+      metric: accion
+    - type: javascript
+      value: >-
+        context.metadata.final.buttons.includes('Pagar ahora') &&
+        !context.metadata.final.buttons.includes('Cargar a la habitación')
+      metric: correctitud
+
+- description: 'Room service: "Cargar a la habitación" confirma sin link y genera el cargo'
+  vars:
+    huesped: alojado con cuenta
+    mensajes: |
+      Quiero pedir por room service una unidad del primer plato de la carta
+      [botón] Cargar a la habitación
+  assert:
+    - type: icontains
+      value: cuenta de tu habitación
+      metric: correctitud
+    - type: not-icontains
+      value: http
+      metric: correctitud
+    - type: javascript
+      value: >-
+        context.metadata.state.account.entries.some((entry) =>
+        entry.type === 'CHARGE' && entry.origin === 'ROOM_SERVICE') &&
+        context.metadata.state.account.balance > 0
+      metric: accion
+
+- description: 'Room service: "Pagar ahora" confirma, no lo carga a la habitación y genera el cargo'
+  vars:
+    huesped: alojado con cuenta
+    mensajes: |
+      Quiero pedir por room service una unidad del primer plato de la carta
+      [botón] Pagar ahora
+  assert:
+    # Si Mercado Pago no genera el link, el bot igual confirma y dice que lo paga en recepción.
+    - type: icontains
+      value: Recibimos tu pedido
+      metric: correctitud
+    - type: not-icontains
+      value: cuenta de tu habitación
+      metric: correctitud
+    - type: javascript
+      value: >-
+        context.metadata.state.account.entries.some((entry) =>
+        entry.type === 'CHARGE' && entry.origin === 'ROOM_SERVICE')
+      metric: accion
+
+- description: 'Room service: pedir por escrito cargarlo a la habitación no lo confirma solo'
+  vars:
+    huesped: alojado con cuenta
+    mensajes: |
+      Quiero pedir por room service una unidad del primer plato de la carta
+      Dale, cargalo a mi habitación
+  assert:
+    - type: javascript
+      value: >-
+        context.metadata.state.account.entries.length === 0
+      metric: accion
+    - type: llm-rubric
+      value: >-
+        Le pide que toque el botón "Cargar a la habitación" (o uno de los botones del resumen) para
+        confirmar. No dice que el pedido ya quedó registrado ni que ya lo cargó a la habitación.
+      metric: alucinacion

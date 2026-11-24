@@ -95,6 +95,14 @@ export function describeRoomServiceHours(hours: RoomServiceHours): string {
   return `todos los días de ${hours.opensAt} a ${hours.closesAt}`;
 }
 
+/** US-27: cómo eligió pagar el huésped al confirmar el pedido. */
+export enum RoomServicePaymentOption {
+  /** Con el link de Mercado Pago, como hasta ahora. */
+  PAY_NOW = 'PAY_NOW',
+  /** A la cuenta corriente de la reserva: lo paga al terminar la estadía. */
+  CHARGE_TO_ROOM = 'CHARGE_TO_ROOM',
+}
+
 export interface RoomServiceOrderProps {
   id: string;
   status: RoomServiceOrderStatus;
@@ -108,6 +116,8 @@ export interface RoomServiceOrderProps {
   total: number;
   confirmedAt: Date | null;
   mpInitPoint: string | null;
+  /** Id del pago en Mercado Pago, cuando se pagó con el link. */
+  mpPaymentId?: string | null;
   createdAt?: Date;
 }
 
@@ -132,6 +142,7 @@ export class RoomServiceOrderModel {
   readonly total: number;
   confirmedAt: Date | null;
   mpInitPoint: string | null;
+  mpPaymentId: string | null;
   readonly createdAt?: Date;
 
   constructor(props: RoomServiceOrderProps) {
@@ -147,6 +158,7 @@ export class RoomServiceOrderModel {
     this.total = props.total;
     this.confirmedAt = props.confirmedAt;
     this.mpInitPoint = props.mpInitPoint;
+    this.mpPaymentId = props.mpPaymentId ?? null;
     this.createdAt = props.createdAt;
   }
 

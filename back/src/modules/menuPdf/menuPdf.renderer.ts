@@ -1,5 +1,14 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- pdfkit se exporta con `export =`
-import PDFDocument = require('pdfkit');
+import {
+  cleanPdfText as clean,
+  contentWidth,
+  createHotelPdf,
+  Doc,
+  drawBrandHeader,
+  drawPageFooters,
+  ensureSpace,
+  PDF_COLORS as COLORS,
+  PDF_FONTS as FONTS,
+} from '../../common/hotelPdf';
 import {
   formatDuration,
   formatPrice,
@@ -8,45 +17,10 @@ import {
   MenuPdfSection,
 } from './menuPdf.model';
 
-type Doc = PDFKit.PDFDocument;
-
-const COLORS = {
-  background: '#14110f',
-  text: '#ece3d7',
-  muted: '#a8998a',
-  accent: '#c8a27a',
-};
-
-const FONTS = {
-  display: 'Times-Roman',
-  displayBold: 'Times-Bold',
-  displayItalic: 'Times-Italic',
-  body: 'Helvetica',
-  bodyBold: 'Helvetica-Bold',
-};
-
 const MARGINS = { top: 34, bottom: 52, left: 32, right: 32 };
-const LOGO_RADIUS = 17;
 const PRICE_GAP = 14;
 const ITEM_GAP = 10;
 const SECTION_HEADER_HEIGHT = 44;
-
-const EXTRA_GLYPHS = '–—…•’‘“”';
-
-const isDrawable = (char: string): boolean => {
-  const code = char.charCodeAt(0);
-  return (
-    (code >= 0x20 && code <= 0x7e) ||
-    (code >= 0xa0 && code <= 0xff) ||
-    EXTRA_GLYPHS.includes(char)
-  );
-};
-
-const clean = (text: string): string =>
-  [...text.split(/\s+/).join(' ')].filter(isDrawable).join('').trim();
-
-const contentWidth = (doc: Doc): number =>
-  doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
 const itemDetails = (item: MenuPdfItem): string =>
   [
@@ -57,92 +31,31 @@ const itemDetails = (item: MenuPdfItem): string =>
     .join(' · ');
 
 export function renderMenuPdf(content: MenuPdfContent): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
+  return createHotelPdf(
+    {
       size: 'A5',
       margins: MARGINS,
-      bufferPages: true,
       info: {
         Title: `${content.title} · ${content.hotelName}`,
         Author: content.hotelName,
       },
-    });
-    const buffers: Buffer[] = [];
-    doc.on('data', (chunk: Buffer) => buffers.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(buffers)));
-    doc.on('error', reject);
-    doc.on('pageAdded', () => paintBackground(doc));
-
-    paintBackground(doc);
-    drawHeader(doc, content);
-    content.sections.forEach((section) => drawSection(doc, section));
-    drawFooters(doc, content);
-
-    doc.end();
-  });
-}
-
-function paintBackground(doc: Doc): void {
-  doc
-    .save()
-    .rect(0, 0, doc.page.width, doc.page.height)
-    .fill(COLORS.background)
-    .restore();
-}
-
-function drawHeader(doc: Doc, content: MenuPdfContent): void {
-  const { left, top } = doc.page.margins;
-  const width = contentWidth(doc);
-  const centerX = doc.page.width / 2;
-  const centered = { width, align: 'center' as const };
-  const hotelName = clean(content.hotelName);
-
-  doc
-    .circle(centerX, top + LOGO_RADIUS, LOGO_RADIUS)
-    .lineWidth(0.8)
-    .stroke(COLORS.accent);
-  doc
-    .font(FONTS.display)
-    .fontSize(20)
-    .fillColor(COLORS.text)
-    .text(hotelName.charAt(0).toUpperCase(), left, top + 7.5, centered);
-
-  doc
-    .font(FONTS.body)
-    .fontSize(8)
-    .fillColor(COLORS.accent)
-    .text(hotelName.toUpperCase(), left, top + LOGO_RADIUS * 2 + 10, {
-      ...centered,
-      characterSpacing: 3,
-    });
-
-  doc
-    .moveDown(1.4)
-    .font(FONTS.display)
-    .fontSize(27)
-    .fillColor(COLORS.text)
-    .text(content.title, centered);
-
-  const subtitles = [
-    { text: content.schedule, font: FONTS.body },
-    { text: content.note, font: FONTS.displayItalic },
-  ].filter((line): line is { text: string; font: string } => !!line.text);
-  subtitles.forEach((line) =>
-    doc
-      .moveDown(0.35)
-      .font(line.font)
-      .fontSize(9)
-      .fillColor(COLORS.muted)
-      .text(clean(line.text), centered),
+    },
+    (doc) => {
+      drawBrandHeader(doc, {
+        hotelName: content.hotelName,
+        title: content.title,
+        subtitles: [
+          { text: content.schedule ?? '' },
+          { text: content.note ?? '', italic: true },
+        ],
+      });
+      content.sections.forEach((section) => drawSection(doc, section));
+      drawPageFooters(
+        doc,
+        `${clean(content.hotelName)} · Actualización: ${content.updatedOn}`,
+      );
+    },
   );
-
-  const ruleY = doc.y + 12;
-  doc
-    .moveTo(centerX - 20, ruleY)
-    .lineTo(centerX + 20, ruleY)
-    .lineWidth(0.8)
-    .stroke(COLORS.accent);
-  doc.y = ruleY + 6;
 }
 
 function drawSection(doc: Doc, section: MenuPdfSection): void {
@@ -224,29 +137,4 @@ function itemHeight(doc: Doc, item: MenuPdfItem): number {
     : 0;
 
   return nameHeight + detailsHeight + ITEM_GAP;
-}
-
-function ensureSpace(doc: Doc, height: number): void {
-  const bottom = doc.page.height - doc.page.margins.bottom;
-  if (doc.y + height > bottom) doc.addPage();
-}
-
-function drawFooters(doc: Doc, content: MenuPdfContent): void {
-  const { count } = doc.bufferedPageRange();
-  const base = `${clean(content.hotelName)} · Actualización: ${content.updatedOn}`;
-
-  for (let page = 0; page < count; page++) {
-    doc.switchToPage(page);
-    doc.page.margins.bottom = 0;
-    doc
-      .font(FONTS.body)
-      .fontSize(7.5)
-      .fillColor(COLORS.muted)
-      .text(
-        count > 1 ? `${base} · ${page + 1}/${count}` : base,
-        doc.page.margins.left,
-        doc.page.height - 30,
-        { width: contentWidth(doc), align: 'center' },
-      );
-  }
 }

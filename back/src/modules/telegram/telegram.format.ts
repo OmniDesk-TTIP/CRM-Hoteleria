@@ -26,32 +26,57 @@ export const expiredRecoveryKeyboard = (reservationId: string) =>
     ),
   ]);
 
+/** Botón de los resúmenes anteriores a US-27: sigue funcionando como "Pagar ahora". */
 export const ROOM_SERVICE_CONFIRM_LABEL = 'Confirmar pedido';
+export const ROOM_SERVICE_PAY_NOW_LABEL = 'Pagar ahora';
+export const ROOM_SERVICE_CHARGE_LABEL = 'Cargar a la habitación';
 export const ROOM_SERVICE_DISCARD_LABEL = 'No, gracias';
 export const ROOM_SERVICE_CANCEL_LABEL = 'Sí, cancelar';
 export const ROOM_SERVICE_KEEP_LABEL = 'No, mantenerlo';
 export const ROOM_SERVICE_CALLBACK =
-  /^roomservice:(confirm|discard|cancel|keep):([0-9a-f-]{36})$/;
+  /^roomservice:(confirm|pay|charge|discard|cancel|keep):([0-9a-f-]{36})$/;
 
-export type RoomServiceButton = 'confirm' | 'discard' | 'cancel' | 'keep';
+export type RoomServiceButton =
+  'confirm' | 'pay' | 'charge' | 'discard' | 'cancel' | 'keep';
 
 export const ROOM_SERVICE_BUTTON_LABELS: Record<RoomServiceButton, string> = {
   confirm: ROOM_SERVICE_CONFIRM_LABEL,
+  pay: ROOM_SERVICE_PAY_NOW_LABEL,
+  charge: ROOM_SERVICE_CHARGE_LABEL,
   discard: ROOM_SERVICE_DISCARD_LABEL,
   cancel: ROOM_SERVICE_CANCEL_LABEL,
   keep: ROOM_SERVICE_KEEP_LABEL,
 };
 
-export const roomServiceConfirmKeyboard = (orderId: string) =>
+/**
+ * US-27: el huésped confirma eligiendo cómo pagar. "Cargar a la habitación" solo aparece si su
+ * reserva tiene la cuenta corriente abierta.
+ */
+export const roomServiceConfirmKeyboard = (
+  orderId: string,
+  canChargeToRoom: boolean,
+) =>
   Markup.inlineKeyboard([
-    Markup.button.callback(
-      ROOM_SERVICE_CONFIRM_LABEL,
-      `roomservice:confirm:${orderId}`,
-    ),
-    Markup.button.callback(
-      ROOM_SERVICE_DISCARD_LABEL,
-      `roomservice:discard:${orderId}`,
-    ),
+    [
+      Markup.button.callback(
+        ROOM_SERVICE_PAY_NOW_LABEL,
+        `roomservice:pay:${orderId}`,
+      ),
+      ...(canChargeToRoom
+        ? [
+            Markup.button.callback(
+              ROOM_SERVICE_CHARGE_LABEL,
+              `roomservice:charge:${orderId}`,
+            ),
+          ]
+        : []),
+    ],
+    [
+      Markup.button.callback(
+        ROOM_SERVICE_DISCARD_LABEL,
+        `roomservice:discard:${orderId}`,
+      ),
+    ],
   ]);
 
 export const roomServiceCancelKeyboard = (orderId: string) =>

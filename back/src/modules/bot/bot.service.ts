@@ -17,7 +17,11 @@ import { RequestSpaBookingDto } from '../spaReservation/dto/requestSpaBooking.dt
 import { RestaurantService } from '../restaurant/restaurant.service';
 import { RestaurantReservationService } from '../restaurantReservation/restaurantReservation.service';
 import { RequestTableBookingDto } from '../restaurantReservation/dto/restaurantReservation.dto';
-import { RoomServiceService } from '../roomService/roomService.service';
+import {
+  RoomServiceChatResult,
+  RoomServiceService,
+} from '../roomService/roomService.service';
+import { RoomServicePaymentOption } from '../roomService/roomService.model';
 import { PrepareRoomServiceOrderDto } from '../roomService/roomService.dto';
 import { PromotionService } from '../promotion/promotion.service';
 import { GuestLanguageService } from '../guestLanguage/guestLanguage.service';
@@ -44,6 +48,7 @@ import {
   formatAlternativesFallback,
   roomServiceCancelKeyboard,
   roomServiceConfirmKeyboard,
+  RoomServiceButton,
 } from '../telegram/telegram.format';
 
 const HISTORY_SIZE = 6;
@@ -438,9 +443,56 @@ export class BotService {
     return result.orderId
       ? {
           text: result.reply,
-          keyboard: roomServiceConfirmKeyboard(result.orderId),
+          keyboard: roomServiceConfirmKeyboard(
+            result.orderId,
+            result.canChargeToRoom ?? false,
+          ),
         }
       : result.reply;
+  }
+
+  /**
+   * Botones del resumen y de la cancelación de room service. Vive acá (y no en el adaptador de
+   * Telegram) para que el endpoint de evals pueda tocarlos igual que el huésped.
+   */
+  async resolveRoomServiceButton(
+    telegramUserId: string,
+    button: RoomServiceButton,
+    orderId: string,
+  ): Promise<string> {
+    let result: RoomServiceChatResult;
+    switch (button) {
+      case 'confirm':
+      case 'pay':
+        result = await this.roomServiceService.confirmOrder(
+          telegramUserId,
+          orderId,
+          RoomServicePaymentOption.PAY_NOW,
+        );
+        break;
+      case 'charge':
+        result = await this.roomServiceService.confirmOrder(
+          telegramUserId,
+          orderId,
+          RoomServicePaymentOption.CHARGE_TO_ROOM,
+        );
+        break;
+      case 'discard':
+        result = await this.roomServiceService.discardDraft(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'cancel':
+        result = await this.roomServiceService.cancelOrder(
+          telegramUserId,
+          orderId,
+        );
+        break;
+      case 'keep':
+        return 'Perfecto, tu pedido sigue en curso.';
+    }
+    return result.ok ? result.reply : escapeHtml(result.reason);
   }
 
   private async resolveCancelRoomService(

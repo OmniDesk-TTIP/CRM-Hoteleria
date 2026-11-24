@@ -100,6 +100,24 @@ export class PaymentService {
     });
   }
 
+  /**
+   * US-30: vence un link de pago ya creado: desde `at`, Mercado Pago deja de aceptar pagos con él.
+   * Se usa al hacer el checkout, para que no se pague dos veces lo que ya se cobró en recepción.
+   */
+  async expirePreference(preferenceId: string, at: Date): Promise<void> {
+    const preference = new Preference(this.client);
+    // el SDK pide los ítems en el update: se reenvían los mismos, solo cambia el vencimiento
+    const current = await preference.get({ preferenceId });
+    await preference.update({
+      id: preferenceId,
+      updatePreferenceRequest: {
+        items: current.items ?? [],
+        expires: true,
+        expiration_date_to: at.toISOString(),
+      },
+    });
+  }
+
   private async createCheckout(checkout: {
     itemId: string;
     title: string;

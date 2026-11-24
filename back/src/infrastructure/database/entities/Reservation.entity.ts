@@ -10,6 +10,7 @@ import { v4 } from 'uuid';
 import { Room } from './Room.entity';
 import { Promotion } from './Promotion.entity';
 import { CustomBaseEntity } from './CustomBase.entity';
+import { User } from './User.entity';
 
 export enum ReservationStatus {
   PENDING_PAYMENT = 'PENDING_PAYMENT',
@@ -132,4 +133,15 @@ export class Reservation extends CustomBaseEntity {
   /** Nombre del titular de esa cuenta. */
   @Property({ type: 'varchar', length: 150, nullable: true })
   refundAccountHolder?: string;
+
+  /**
+   * US-30: cuándo se hizo el checkout. La reserva sigue CONFIRMED (las encuestas, estadísticas y
+   * campañas cuentan las estadías confirmadas); esto es lo que marca la estadía como finalizada.
+   */
+  @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })
+  checkedOutAt?: Date | null;
+
+  /** Quién hizo el checkout. Sin `set null`: borrar un usuario no puede borrar el registro. */
+  @ManyToOne(() => User, { nullable: true, deleteRule: 'no action' })
+  checkedOutBy?: User | null;
 }

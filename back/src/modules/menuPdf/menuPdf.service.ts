@@ -20,12 +20,11 @@ import {
   spaSections,
 } from './menuPdf.model';
 import { renderMenuPdf } from './menuPdf.renderer';
+import { DEFAULT_HOTEL_NAME } from '../../common/hotelPdf';
 
 export type GuestMenuPdfResult =
   | { ok: true; reply: string; document: MenuPdfFile }
   | { ok: false; reason: string };
-
-const DEFAULT_HOTEL_NAME = 'Alma Hotel';
 
 @Injectable()
 export class MenuPdfService {

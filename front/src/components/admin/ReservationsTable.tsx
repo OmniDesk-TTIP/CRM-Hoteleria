@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { AdminReservation, ReservationListFilters, ReservationSortBy } from '@/config/types';
 import { CancellationNote, ExpirationNote, OriginBadge, PromotionNote, StatusBadge } from './Badges';
 
@@ -28,6 +29,10 @@ const formatCurrency = (value: number) =>
 const isExpired = (reservation: AdminReservation) => reservation.status === 'EXPIRED';
 const isCancellable = (reservation: AdminReservation) =>
   reservation.status !== 'CANCELLED' && !isExpired(reservation);
+
+/** La cuenta corriente (US-32) solo existe en reservas confirmadas. */
+const hasAccountView = (reservation: AdminReservation) => reservation.status === 'CONFIRMED';
+const accountPath = (reservation: AdminReservation) => `/admin/reservations/${reservation.id}/account`;
 
 const editButtonClasses =
   'rounded-full border border-goldLight/25 px-3 py-1.5 text-xs font-medium text-goldLight transition hover:bg-goldLight/10 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none';
@@ -111,6 +116,11 @@ export default function ReservationsTable({
                 </td>
                 <td className="px-4 py-3 sm:px-5">
                   <div className="flex justify-end gap-2">
+                    {hasAccountView(reservation) && (
+                      <Link to={accountPath(reservation)} className={editButtonClasses}>
+                        Cuenta
+                      </Link>
+                    )}
                     <button
                       type="button"
                       onClick={() => onEdit(reservation)}
@@ -188,6 +198,11 @@ export default function ReservationsTable({
                 </dl>
 
                 <div className="flex gap-2">
+                  {hasAccountView(reservation) && (
+                    <Link to={accountPath(reservation)} className={`${editButtonClasses} flex-1 py-2 text-center`}>
+                      Cuenta
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => onEdit(reservation)}

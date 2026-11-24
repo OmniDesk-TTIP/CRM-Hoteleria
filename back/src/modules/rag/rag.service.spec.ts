@@ -569,7 +569,8 @@ describe('RagService', () => {
         const { systemInstruction } = readChatConfig();
         expect(systemInstruction).toContain('- id=1 | Café | $1500');
         expect(systemInstruction).toContain('REGLA PARA ROOM SERVICE');
-        expect(systemInstruction).toContain('Confirmar pedido');
+        expect(systemInstruction).toContain('Pagar ahora');
+        expect(systemInstruction).toContain('Cargar a la habitación');
       });
 
       it('declara cada tool solo cuando corresponde (CA1/CA5/CA8)', async () => {

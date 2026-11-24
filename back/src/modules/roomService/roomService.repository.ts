@@ -31,9 +31,14 @@ export class RoomServiceRepository {
     telegramUserId: string,
     today: string,
   ): Promise<CurrentStay | null> {
+    // US-30: con el checkout hecho deja de ser huésped alojado, aunque la fecha de salida no pasó
     const reservations = await this.em.find(
       Reservation,
-      { telegramUserId, status: ReservationStatus.CONFIRMED },
+      {
+        telegramUserId,
+        status: ReservationStatus.CONFIRMED,
+        checkedOutAt: null,
+      },
       { populate: ['room'] },
     );
 
@@ -193,6 +198,7 @@ export class RoomServiceRepository {
       total: Number(entity.total),
       confirmedAt: entity.confirmedAt ?? null,
       mpInitPoint: entity.mpInitPoint ?? null,
+      mpPaymentId: entity.mpPaymentId ?? null,
       createdAt: entity.createdAt,
     });
   }
