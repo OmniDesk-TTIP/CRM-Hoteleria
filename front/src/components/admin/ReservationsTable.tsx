@@ -30,7 +30,7 @@ const isExpired = (reservation: AdminReservation) => reservation.status === 'EXP
 const isCancellable = (reservation: AdminReservation) =>
   reservation.status !== 'CANCELLED' && !isExpired(reservation);
 
-/** La cuenta corriente (US-32) solo existe en reservas confirmadas. */
+/** La cuenta corriente (US-26) solo existe en reservas confirmadas. */
 const hasAccountView = (reservation: AdminReservation) => reservation.status === 'CONFIRMED';
 const accountPath = (reservation: AdminReservation) => `/admin/reservations/${reservation.id}/account`;
 

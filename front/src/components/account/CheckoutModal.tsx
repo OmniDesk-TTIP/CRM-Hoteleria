@@ -13,7 +13,7 @@ interface CheckoutModalProps {
 }
 
 /**
- * US-30: confirma el checkout. Si el back lo rechaza muestra por qué: saldo pendiente (con acceso al
+ * US-28: confirma el checkout. Si el back lo rechaza muestra por qué: saldo pendiente (con acceso al
  * cobro), consumos en curso (con "Hacer checkout igual") u otro motivo.
  */
 export default function CheckoutModal({ guestFullName, roomNumber, onCheckout, onClose, onCollect }: CheckoutModalProps) {

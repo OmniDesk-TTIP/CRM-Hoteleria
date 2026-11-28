@@ -24,7 +24,7 @@ interface CollectPaymentModalProps {
 }
 
 /**
- * Cobro del saldo pendiente en recepción (US-28). El cobro en sí lo hace el posnet del hotel;
+ * Cobro del saldo pendiente en recepción (US-27). El cobro en sí lo hace el posnet del hotel;
  * acá se registra en la cuenta. Se puede cobrar menos que el saldo (pago parcial).
  */
 export default function CollectPaymentModal({ balance, onClose, onSubmit }: CollectPaymentModalProps) {

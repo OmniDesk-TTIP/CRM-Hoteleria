@@ -31,7 +31,7 @@ export class RoomServiceRepository {
     telegramUserId: string,
     today: string,
   ): Promise<CurrentStay | null> {
-    // US-30: con el checkout hecho deja de ser huésped alojado, aunque la fecha de salida no pasó
+    // US-28: con el checkout hecho deja de ser huésped alojado, aunque la fecha de salida no pasó
     const reservations = await this.em.find(
       Reservation,
       {

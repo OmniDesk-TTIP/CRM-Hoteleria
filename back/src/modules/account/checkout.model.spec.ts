@@ -61,7 +61,7 @@ const buildState = (overrides: Partial<CheckoutState> = {}): CheckoutState => ({
   ...overrides,
 });
 
-describe('getCheckoutBlock (US-30)', () => {
+describe('getCheckoutBlock (US-28)', () => {
   it('con la cuenta en $0 y sin consumos en curso se puede hacer', () => {
     expect(getCheckoutBlock(buildState(), false)).toBeNull();
   });

@@ -79,7 +79,7 @@ const formatAmount = (amount: number): string =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
- * US-30: el checkout solo se hace con la cuenta en $0. Los consumos en curso no lo frenan del
+ * US-28: el checkout solo se hace con la cuenta en $0. Los consumos en curso no lo frenan del
  * todo: se avisan y recepción decide (`force`), porque un pedido que se cancele después del
  * checkout ya no puede anular su cargo en una cuenta cerrada.
  */

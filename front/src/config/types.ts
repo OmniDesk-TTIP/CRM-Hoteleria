@@ -834,7 +834,7 @@ export interface PromotionListFilters {
   pageSize: number;
 }
 
-/** US-26/US-32: cuenta corriente de una reserva. Espejo de los enums del back. */
+/** US-26: cuenta corriente de una reserva. Espejo de los enums del back. */
 export type AccountStatus = 'OPEN' | 'CLOSED';
 export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MERCADO_PAGO';
 export type AccountEntryType = 'CHARGE' | 'PAYMENT' | 'CHARGE_REVERSAL' | 'PAYMENT_REVERSAL' | 'REFUND';
@@ -895,7 +895,7 @@ export interface ReservationAccount {
     depositAmount: number;
     /** Resto de la estadía (total − seña): se cobra para abrir la cuenta. */
     stayBalance: number;
-    /** US-30: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
+    /** US-28: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
     checkedOutAt: string | null;
     checkedOutByName: string | null;
   };
@@ -915,7 +915,7 @@ export interface ManualChargeData {
   detail?: string;
 }
 
-/** US-28: pago del saldo registrado en recepción (posnet, efectivo, etc.). */
+/** US-27: pago del saldo registrado en recepción (posnet, efectivo, etc.). */
 export interface AccountPaymentData {
   /** Clave de idempotencia: la genera el formulario. */
   operationId: string;
@@ -925,7 +925,7 @@ export interface AccountPaymentData {
   reference?: string;
 }
 
-/** US-30: consumo todavía en curso que el checkout avisa (room service o turno de spa). */
+/** US-28: consumo todavía en curso que el checkout avisa (room service o turno de spa). */
 export interface CheckoutActiveService {
   kind: 'ROOM_SERVICE' | 'SPA';
   id: string;

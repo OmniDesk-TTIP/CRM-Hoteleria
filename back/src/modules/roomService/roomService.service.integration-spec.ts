@@ -1117,7 +1117,7 @@ describe('RoomServiceService (integración)', () => {
       });
     });
 
-    describe('después del checkout (US-30)', () => {
+    describe('después del checkout (US-28)', () => {
       it('ya no es huésped alojado: Chamber no le toma pedidos', async () => {
         const guest = await seedGuest();
         await openAccount(guest.reservationId);

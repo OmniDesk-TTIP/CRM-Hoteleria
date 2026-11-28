@@ -38,7 +38,7 @@ import {
 const PAYMENT_METHOD_MESSAGE =
   'El medio de pago debe ser CASH, CARD, TRANSFER o MERCADO_PAGO';
 
-/** Body de `POST /reservations/:id/account/checkout` (US-30). */
+/** Body de `POST /reservations/:id/account/checkout` (US-28). */
 export class CheckoutDto {
   /** true para hacer el checkout aunque haya consumos en curso (recepción ya vio el aviso). */
   @IsOptional()
@@ -231,7 +231,7 @@ export class ReservationAccountDto {
     depositAmount: number;
     /** Lo que se cobra para abrir la cuenta: total − seña. */
     stayBalance: number;
-    /** US-30: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
+    /** US-28: cuándo y quién hizo el checkout; null mientras la estadía siga en curso. */
     checkedOutAt: Date | null;
     checkedOutByName: string | null;
   };

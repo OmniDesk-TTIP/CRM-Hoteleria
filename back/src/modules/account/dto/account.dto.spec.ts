@@ -25,7 +25,7 @@ const messageOf = async (metatype: new () => object, body: unknown) => {
   }
 };
 
-describe('DTOs de pagos (US-28)', () => {
+describe('DTOs de pagos (US-27)', () => {
   it('acepta un pago con referencia y la recorta', async () => {
     await expect(
       validate(RegisterPaymentDto, {

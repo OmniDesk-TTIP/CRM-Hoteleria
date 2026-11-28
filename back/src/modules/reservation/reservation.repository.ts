@@ -62,7 +62,7 @@ export class ReservationRepository {
     );
   }
 
-  /** Reservas confirmadas del huésped sin checkout (US-30): las que todavía lo habilitan como huésped. */
+  /** Reservas confirmadas del huésped sin checkout (US-28): las que todavía lo habilitan como huésped. */
   async findConfirmedByTelegramUserId(
     telegramUserId: string,
   ): Promise<Reservation[]> {

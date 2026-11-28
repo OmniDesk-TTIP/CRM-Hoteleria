@@ -4,7 +4,7 @@ import PDFDocument = require('pdfkit');
 /**
  * Diseño común de los PDF del hotel (US-25): fondo oscuro, tipografías clásicas, el logo con la
  * inicial y el nombre del hotel arriba, y un pie centrado en cada página. Lo usan las cartas y el
- * estado de cuenta (US-30), así todos los documentos se ven iguales.
+ * estado de cuenta (US-28), así todos los documentos se ven iguales.
  */
 export type Doc = PDFKit.PDFDocument;
 
