@@ -85,7 +85,7 @@ const build = (
   );
 
 // los montos llevan espacio duro después del $ (así los formatea Intl en es-AR)
-describe('Estado de cuenta (US-30)', () => {
+describe('Estado de cuenta (US-28)', () => {
   const roomService = entry(
     AccountEntryType.CHARGE,
     7500,

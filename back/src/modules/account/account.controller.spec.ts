@@ -15,7 +15,7 @@ const rolesOf = (handler: keyof AccountController) => ({
   ) as unknown[] | undefined,
 });
 
-/** US-28: quién puede hacer qué con la cuenta. ADMIN y EMPLOYEE pasan el guard global. */
+/** US-27: quién puede hacer qué con la cuenta. ADMIN y EMPLOYEE pasan el guard global. */
 describe('AccountController (roles)', () => {
   it.each(['reversePayment', 'registerRefund', 'reverseCharge'] as const)(
     '%s es solo para administradores',

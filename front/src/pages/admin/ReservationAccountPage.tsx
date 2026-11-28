@@ -39,7 +39,7 @@ const ORIGIN_OPTIONS = Object.entries(ENTRY_ORIGIN_LABELS) as [AccountEntryOrigi
 const selectClasses =
   'rounded-xl border border-goldLight/20 bg-surface px-3 py-2 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60';
 
-/** US-32: cuenta corriente de una reserva confirmada. */
+/** US-26: cuenta corriente de una reserva confirmada. */
 export default function ReservationAccountPage() {
   const { reservationId = '' } = useParams<{ reservationId: string }>();
   const [data, setData] = useState<ReservationAccount | null>(null);

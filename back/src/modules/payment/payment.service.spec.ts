@@ -235,7 +235,7 @@ describe('PaymentService', () => {
     });
   });
 
-  describe('expirePreference (US-30)', () => {
+  describe('expirePreference (US-28)', () => {
     it('vence el link desde ese momento y reenvía los mismos ítems', async () => {
       const items = [
         { id: 'order-1', title: 'Room service', quantity: 1, unit_price: 3000 },

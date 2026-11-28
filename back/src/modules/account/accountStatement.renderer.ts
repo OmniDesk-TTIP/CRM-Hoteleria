@@ -42,7 +42,7 @@ function layout(doc: Doc): ColumnLayout {
   };
 }
 
-/** US-30: dibuja el estado de cuenta con el diseño de los PDF del hotel (US-25). */
+/** US-28: dibuja el estado de cuenta con el diseño de los PDF del hotel (US-25). */
 export function renderAccountStatement(
   statement: AccountStatement,
 ): Promise<Buffer> {

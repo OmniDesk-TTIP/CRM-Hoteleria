@@ -340,7 +340,7 @@ describe('AccountModel', () => {
     });
   });
 
-  describe('pagos y reintegros (US-28)', () => {
+  describe('pagos y reintegros (US-27)', () => {
     // cargos por 10.000: el huésped debe 10.000
     const owing = () =>
       buildAccount({ entries: [buildEntry({ amount: 10000 })] });

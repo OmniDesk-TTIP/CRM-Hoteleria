@@ -484,7 +484,7 @@ describe('AccountService (integración)', () => {
     });
   });
 
-  describe('pagos en recepción (US-28)', () => {
+  describe('pagos en recepción (US-27)', () => {
     const pay = (
       reservationId: string,
       amount: number,
@@ -947,7 +947,7 @@ describe('AccountService (integración)', () => {
     });
   });
 
-  describe('checkout (US-30)', () => {
+  describe('checkout (US-28)', () => {
     /** Error 409 del checkout: el cuerpo trae `code` y, según el caso, `balance` o `activeServices`. */
     const checkoutError = async (promise: Promise<unknown>) => {
       try {
@@ -1183,7 +1183,7 @@ describe('AccountService (integración)', () => {
     });
   });
 
-  describe('estado de cuenta en PDF (US-30)', () => {
+  describe('estado de cuenta en PDF (US-28)', () => {
     it('genera el PDF de la cuenta con el nombre por habitación y fecha', async () => {
       const reservationId = await seedOpenAccount();
       await service.registerEntry(reservationId, charge(5000), author(), NOW);

@@ -25,7 +25,7 @@ import {
   ReverseEntryDto,
 } from './dto/account.dto';
 
-// Cuenta corriente de una reserva (US-26/US-28/US-32). Como el resto del panel de reservas, la
+// Cuenta corriente de una reserva (US-26/US-27). Como el resto del panel de reservas, la
 // usan ADMIN y EMPLOYEE: solo la protege el guard global. Anular pagos y reintegrar es de ADMIN.
 @Controller('reservations/:reservationId/account')
 export class AccountController {
@@ -48,7 +48,7 @@ export class AccountController {
     return this.accountService.open(reservationId, body.paymentMethod, user.id);
   }
 
-  /** US-30: estado de cuenta en PDF (ADMIN y EMPLOYEE). 404 si la reserva no tiene cuenta. */
+  /** US-28: estado de cuenta en PDF (ADMIN y EMPLOYEE). 404 si la reserva no tiene cuenta. */
   @Get('statement')
   async statement(
     @Param('reservationId', ParseUUIDPipe) reservationId: string,
@@ -63,7 +63,7 @@ export class AccountController {
   }
 
   /**
-   * US-30: checkout de la estadía (ADMIN y EMPLOYEE). 409 con `code` si el saldo no es $0
+   * US-28: checkout de la estadía (ADMIN y EMPLOYEE). 409 con `code` si el saldo no es $0
    * (`balance`) o si hay consumos en curso (`activeServices`; se confirma con `force`).
    */
   @Post('checkout')

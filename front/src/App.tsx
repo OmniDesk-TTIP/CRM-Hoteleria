@@ -89,7 +89,7 @@ function App() {
                     </Route>
                     <Route path="refunds" element={<RefundsPage />} />
                   </Route>
-                  {/* US-32: cuenta corriente de una reserva, fuera de las pestañas */}
+                  {/* US-26: cuenta corriente de una reserva, fuera de las pestañas */}
                   <Route path="/admin/reservations/:reservationId/account" element={<ReservationAccountPage />} />
                   <Route
                     path="/admin/services"

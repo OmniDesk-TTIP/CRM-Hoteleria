@@ -47,7 +47,7 @@ export const reverseAccountCharge = async (
   return data;
 };
 
-/** US-28: registra un pago (total o parcial) del saldo pendiente. */
+/** US-27: registra un pago (total o parcial) del saldo pendiente. */
 export const registerAccountPayment = async (
   reservationId: string,
   payment: AccountPaymentData,
@@ -63,7 +63,7 @@ const isCheckoutBlock = (data: unknown): data is CheckoutBlock =>
   (data as { code: string }).code.startsWith('CHECKOUT_');
 
 /**
- * US-30: hace el checkout. Si el back lo rechaza por una regla (saldo, consumos en curso, etc.)
+ * US-28: hace el checkout. Si el back lo rechaza por una regla (saldo, consumos en curso, etc.)
  * devuelve el motivo para que el panel lo muestre; cualquier otro error se propaga.
  */
 export const checkoutReservation = async (reservationId: string, force = false): Promise<CheckoutResult> => {
@@ -94,7 +94,7 @@ const readBlobError = async (error: unknown): Promise<string> => {
   }
 };
 
-/** US-30: estado de cuenta en PDF, con el nombre de archivo que propone el back. */
+/** US-28: estado de cuenta en PDF, con el nombre de archivo que propone el back. */
 export const fetchAccountStatement = async (reservationId: string): Promise<{ blob: Blob; filename: string }> => {
   try {
     const response = await apiClient.get<Blob>(`/reservations/${reservationId}/account/statement`, {

@@ -77,7 +77,7 @@ export class AccountRepository {
   }
 
   /**
-   * US-30: hace el checkout con la reserva y la cuenta bloqueadas. `decide` mira el estado al día
+   * US-28: hace el checkout con la reserva y la cuenta bloqueadas. `decide` mira el estado al día
    * (saldo, consumos en curso) y lanza si no se puede; si no lanza, se marca la estadía como
    * finalizada y se cierra la cuenta en la misma transacción. Devuelve false si la reserva no
    * existe.
@@ -170,7 +170,7 @@ export class AccountRepository {
     ];
   }
 
-  /** US-30: links de Mercado Pago de pedidos de room service de la reserva que siguen sin pagar. */
+  /** US-28: links de Mercado Pago de pedidos de room service de la reserva que siguen sin pagar. */
   async findPendingPaymentLinks(
     reservationId: string,
   ): Promise<{ orderId: string; preferenceId: string }[]> {

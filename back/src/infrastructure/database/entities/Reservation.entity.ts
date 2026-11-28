@@ -135,7 +135,7 @@ export class Reservation extends CustomBaseEntity {
   refundAccountHolder?: string;
 
   /**
-   * US-30: cuándo se hizo el checkout. La reserva sigue CONFIRMED (las encuestas, estadísticas y
+   * US-28: cuándo se hizo el checkout. La reserva sigue CONFIRMED (las encuestas, estadísticas y
    * campañas cuentan las estadías confirmadas); esto es lo que marca la estadía como finalizada.
    */
   @Property({ type: 'datetime', columnType: 'timestamp(6)', nullable: true })

@@ -101,7 +101,7 @@ export class PaymentService {
   }
 
   /**
-   * US-30: vence un link de pago ya creado: desde `at`, Mercado Pago deja de aceptar pagos con él.
+   * US-28: vence un link de pago ya creado: desde `at`, Mercado Pago deja de aceptar pagos con él.
    * Se usa al hacer el checkout, para que no se pague dos veces lo que ya se cobró en recepción.
    */
   async expirePreference(preferenceId: string, at: Date): Promise<void> {

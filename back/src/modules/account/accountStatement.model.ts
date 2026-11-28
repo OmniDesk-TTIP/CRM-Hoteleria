@@ -9,7 +9,7 @@ import {
 } from './account.model';
 
 export const STATEMENT_TITLE = 'Estado de cuenta';
-/** US-30: el estado de cuenta no reemplaza a la factura. */
+/** US-28: el estado de cuenta no reemplaza a la factura. */
 export const STATEMENT_LEGAL_NOTE =
   'Comprobante interno, no válido como factura';
 
@@ -139,7 +139,7 @@ const slug = (text: string): string =>
     .replace(/^-|-$/g, '')
     .toLowerCase();
 
-/** US-30: contenido del estado de cuenta de una reserva. Puro: el renderer lo dibuja. */
+/** US-28: contenido del estado de cuenta de una reserva. Puro: el renderer lo dibuja. */
 export function buildAccountStatement(
   reservation: AccountReservationInfo,
   account: AccountModel,

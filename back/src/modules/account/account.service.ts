@@ -91,7 +91,7 @@ export class AccountService {
   }
 
   /**
-   * US-30: checkout de la estadía. Exige la cuenta en $0 y avisa los consumos en curso (se puede
+   * US-28: checkout de la estadía. Exige la cuenta en $0 y avisa los consumos en curso (se puede
    * seguir con `force`). Registra cuándo y quién, marca la estadía como finalizada y cierra la
    * cuenta. Lo rechazado vuelve como 409 con un `code` para el panel.
    */
@@ -118,7 +118,7 @@ export class AccountService {
   }
 
   /**
-   * US-30: con el checkout hecho, los links de room service que quedaron sin pagar dejan de servir:
+   * US-28: con el checkout hecho, los links de room service que quedaron sin pagar dejan de servir:
    * ese consumo ya se cobró en recepción (el saldo estaba en $0). Si Mercado Pago no responde, el
    * checkout ya quedó hecho igual: se avisa en el log para vencerlo a mano.
    */
@@ -141,7 +141,7 @@ export class AccountService {
   }
 
   /**
-   * US-30: estado de cuenta en PDF, con el diseño de los PDF del hotel. Se puede pedir en cualquier
+   * US-28: estado de cuenta en PDF, con el diseño de los PDF del hotel. Se puede pedir en cualquier
    * momento: mientras la cuenta está abierta muestra el saldo que queda.
    */
   async buildStatement(
@@ -213,7 +213,7 @@ export class AccountService {
   }
 
   /**
-   * US-28: recepción registra un pago (total o parcial) y devuelve la cuenta con el saldo que
+   * US-27: recepción registra un pago (total o parcial) y devuelve la cuenta con el saldo que
    * queda.
    */
   async registerPayment(
@@ -239,7 +239,7 @@ export class AccountService {
     return this.getForReservation(reservationId);
   }
 
-  /** US-28: devuelve al huésped su saldo a favor, sin pasarse de $0. */
+  /** US-27: devuelve al huésped su saldo a favor, sin pasarse de $0. */
   async registerRefund(
     reservationId: string,
     data: RefundData,
@@ -262,7 +262,7 @@ export class AccountService {
     return this.getForReservation(reservationId);
   }
 
-  /** US-28: anula un pago registrado por error; `reason` queda como descripción. */
+  /** US-27: anula un pago registrado por error; `reason` queda como descripción. */
   async reversePayment(
     reservationId: string,
     entryId: string,
